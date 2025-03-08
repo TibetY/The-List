@@ -13,11 +13,14 @@ export default function Navbar() {
     <nav className="bg-gray-900 text-white p-4">
       <div className="container mx-auto flex justify-between items-center">
         <Link to="/dashboard" className="text-xl font-bold">
-          My App
+          The List
         </Link>
         <div className="space-x-4">
-          <Link to="/dashboard" className="hover:underline">
-            Dashboard
+          <Link
+            to="/dashboard"
+            className="inline-block px-4 py-2 bg-blue-600 text-white font-semibold rounded hover:bg-blue-700"
+          >
+            Add Spot
           </Link>
           <Link to="/profile" className="hover:underline">
             Profile
