@@ -1,4 +1,15 @@
-import { Link } from "@remix-run/react";
+import { LoaderFunction } from "@remix-run/node";
+import { Link, redirect } from "@remix-run/react";
+import { getSession } from "~/session.server";
+
+export const loader: LoaderFunction = async ({ request }) => {
+  const session = await getSession(request.headers.get("Cookie"));
+  const token = session.get("token");
+  if (token) {
+    return redirect("/dashboard");
+  }
+  return {};
+};
 
 export default function Index() {
   return (
@@ -17,7 +28,7 @@ export default function Index() {
           </Link>
           <span className="text-primary text-xl">|</span>
           <Link
-            to="/sign-up"
+            to="/signup"
             className="text-accent text-xl underline hover:text-accent-hover transition duration-200"
           >
             Sign Up

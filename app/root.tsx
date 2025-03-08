@@ -22,13 +22,12 @@ export const links: LinksFunction = () => [
   },
 ];
 
-
 export const meta: MetaFunction = () => {
   return [
     { charset: "utf-8" },
     { title: "The List" },
     { name: "description", content: "Welcome to The List!" },
-    {  viewport: "width=device-width,initial-scale=1" },
+    { viewport: "width=device-width,initial-scale=1" },
   ];
 };
 
