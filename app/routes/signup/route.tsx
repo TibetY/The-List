@@ -47,9 +47,14 @@ export const action: ActionFunction = async ({ request }) => {
     return redirect("/dashboard", {
       headers: { "Set-Cookie": await commitSession(session) },
     });
-  } catch (err: any) {
-    console.error("Sign Up error:", err.message);
-    return { error: err.message } as ActionData;
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      console.error("Login error:", err.message);
+      return { error: err.message } as ActionData;
+    } else {
+      console.error("Login error:", err);
+      return { error: "An unknown error occurred" } as ActionData;
+    }
   }
 };
 
