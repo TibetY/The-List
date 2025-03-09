@@ -1,40 +1,69 @@
-import { LoaderFunction } from "@remix-run/node";
-import { Link, redirect } from "@remix-run/react";
-import { getSession } from "~/session.server";
-
-export const loader: LoaderFunction = async ({ request }) => {
-  const session = await getSession(request.headers.get("Cookie"));
-  const token = session.get("token");
-  if (token) {
-    return redirect("/dashboard");
-  }
-  return {};
-};
+import { Box, Container, Typography, Link as MuiLink } from "@mui/material";
+import { Link } from "@remix-run/react";
+import Logo from "~/components/Logo";
 
 export default function Index() {
   return (
-    <div className="flex items-center justify-center min-h-screen bg-dark text-primary">
-      <div className="text-center">
-        <h1 className="text-6xl font-extrabold mb-4">The List</h1>
-        <p className="text-xl font-light mb-8 animate-fadeIn">
+    <Container
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: "100vh",
+        backgroundColor: "bg-dark",
+        color: "white",
+        textAlign: "center",
+      }}
+    >
+      <Box>
+        <Logo />
+        <Typography
+          variant="h5"
+          sx={{
+            fontWeight: 300,
+            mb: 4,
+            animation: "fadeIn 1s",
+          }}
+        >
           Discover. Taste. Remember.
-        </p>
-        <div className="flex items-center justify-center space-x-6">
-          <Link
+        </Typography>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 3,
+          }}
+        >
+          <MuiLink
+            component={Link}
             to="/login"
-            className="text-accent text-xl underline hover:text-accent-hover transition duration-200"
+            sx={{
+              fontSize: "1.25rem",
+              textDecoration: "underline",
+              color: "accent.main",
+              transition: "color 200ms",
+              "&:hover": { color: "accentHover.main" },
+            }}
           >
             Login
-          </Link>
-          <span className="text-primary text-xl">|</span>
-          <Link
+          </MuiLink>
+          <Typography sx={{ fontSize: "1.25rem" }}>|</Typography>
+          <MuiLink
+            component={Link}
             to="/signup"
-            className="text-accent text-xl underline hover:text-accent-hover transition duration-200"
+            sx={{
+              fontSize: "1.25rem",
+              textDecoration: "underline",
+              color: "accent.main",
+              transition: "color 200ms",
+              "&:hover": { color: "accentHover.main" },
+            }}
           >
             Sign Up
-          </Link>
-        </div>
-      </div>
-    </div>
+          </MuiLink>
+        </Box>
+      </Box>
+    </Container>
   );
 }

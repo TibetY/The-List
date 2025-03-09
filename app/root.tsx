@@ -5,17 +5,23 @@ import type {
 } from "@remix-run/node";
 import {
   Links,
+  LiveReload,
   Meta,
   Outlet,
   Scripts,
   ScrollRestoration,
 } from "@remix-run/react";
 
-import "./tailwind.css";
+import { CacheProvider } from "@emotion/react";
+import createEmotionCache from "./createEmotionCache";
+
+import { ThemeProvider, CssBaseline } from "@mui/material";
+import theme from "./theme";
 
 import { json } from "@remix-run/node";
 import { getSession } from "~/session.server";
 import Navbar from "./components/Navbar";
+// import Navbar from "./components/Navbar";
 
 export const links: LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -45,25 +51,27 @@ export const loader: LoaderFunction = async ({ request }) => {
   return json({ token });
 };
 
-export function Layout({ children }: { children: React.ReactNode }) {
+export default function App() {
+  const clientSideEmotionCache = createEmotionCache();
+
   return (
     <html lang="en">
       <head>
-        <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
         <Links />
       </head>
       <body>
-        <Navbar />
-        {children}
+        <CacheProvider value={clientSideEmotionCache}>
+          <ThemeProvider theme={theme}>
+            <CssBaseline />
+            <Navbar />
+            <Outlet />
+          </ThemeProvider>
+        </CacheProvider>
         <ScrollRestoration />
         <Scripts />
+        <LiveReload />
       </body>
     </html>
   );
-}
-
-export default function App() {
-  return <Outlet />;
 }

@@ -1,8 +1,18 @@
-import { ActionFunction, LoaderFunction, redirect } from "@remix-run/node";
-import { useActionData, Form } from "@remix-run/react";
+import {
+  Box,
+  Container,
+  Typography,
+  TextField,
+  Button,
+  Alert,
+  Link,
+} from "@mui/material";
+import type { LoaderFunction, ActionFunction } from "@remix-run/node";
+import { Form, useActionData, redirect } from "@remix-run/react";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "~/firebase"; // adjust the import path
+import { auth } from "~/firebase";
 import { getSession, commitSession } from "~/session.server";
+import GoogleIcon from "@mui/icons-material/Google";
 
 type ActionData = {
   error?: string;
@@ -28,10 +38,8 @@ export const action: ActionFunction = async ({ request }) => {
       password
     );
     console.log("Logged in user:", userCredential.user);
-    // Get the Firebase ID token from the user
     const token = await userCredential.user.getIdToken();
 
-    // Create or get a session and store the token
     const session = await getSession(request.headers.get("Cookie"));
     session.set("token", token);
 
@@ -53,51 +61,111 @@ export const action: ActionFunction = async ({ request }) => {
 
 export default function LoginPage() {
   const actionData = useActionData<ActionData>();
+
   return (
-    <div className="flex items-center justify-center min-h-screen bg-dark text-primary">
-      <div className="w-full max-w-md p-8 bg-gray-800 rounded-lg shadow-md">
-        <h2 className="text-3xl font-bold mb-6 text-center">Login</h2>
+    <Container
+      sx={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        p: 2,
+      }}
+    >
+      <Box
+        sx={{
+          width: "400px",
+          backgroundColor: "#2D3748", // Soft teal
+          p: 4,
+          borderRadius: 2,
+          color: "white", // White text stands out on teal
+        }}
+      >
+        <Typography variant="h5" sx={{ fontWeight: "bold", mb: 1 }}>
+          Welcome Back!
+        </Typography>
+        <Typography variant="body2" sx={{ mb: 3 }}>
+          Don’t have an account?{" "}
+          <Link href="/signup" sx={{ color: "white" }}>
+            Create a new one now
+          </Link>
+        </Typography>
         {actionData?.error && (
-          <p className="mb-4 text-red-500 text-center">{actionData.error}</p>
+          <Alert severity="error" sx={{ width: "100%", mb: 2 }}>
+            {actionData.error}
+          </Alert>
         )}
-        <Form method="post" className="space-y-4">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium mb-1">
-              Email
-            </label>
-            <input
-              type="email"
-              name="email"
-              id="email"
-              className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="you@example.com"
-              required
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="password"
-              className="block text-sm font-medium mb-1"
-            >
-              Password
-            </label>
-            <input
-              type="password"
-              name="password"
-              id="password"
-              className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="********"
-              required
-            />
-          </div>
-          <button
+        <Form method="post">
+          <TextField
+            variant="filled"
+            margin="normal"
+            required
+            fullWidth
+            id="email"
+            name="email"
+            placeholder="Email Address"
+            autoComplete="email"
+            sx={{
+              mb: 2,
+              "& .MuiFilledInput-root": {
+                backgroundColor: "rgba(255,255,255,0.1)",
+                color: "white",
+              },
+              "& .MuiInputLabel-root": { color: "white" },
+            }}
+          />
+          <TextField
+            variant="filled"
+            margin="normal"
+            required
+            fullWidth
+            name="password"
+            id="password"
+            placeholder="Password"
+            type="password"
+            autoComplete="current-password"
+            sx={{
+              mb: 2,
+              "& .MuiFilledInput-root": {
+                backgroundColor: "rgba(255,255,255,0.1)",
+                color: "white",
+              },
+              "& .MuiInputLabel-root": { color: "white" },
+            }}
+          />
+          <Button
             type="submit"
-            className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded"
+            variant="contained"
+            fullWidth
+            sx={{
+              backgroundColor: "white",
+              color: "#2D3748",
+              fontWeight: "bold",
+            }}
           >
             Login
-          </button>
+          </Button>
+          <Typography
+            variant="body1"
+            sx={{ textAlign: "center", mb: 2, mt: 2 }}
+          >
+            or
+          </Typography>
+          <Button
+            variant="outlined"
+            fullWidth
+            size="large"
+            startIcon={<GoogleIcon />}
+            // onClick={handleGoogleSignIn}
+            sx={{
+              textTransform: "none",
+              fontWeight: 600,
+            }}
+          >
+            Login with Google
+          </Button>
         </Form>
-      </div>
-    </div>
+      </Box>
+    </Container>
   );
 }
