@@ -42,6 +42,7 @@ export const action: ActionFunction = async ({ request }) => {
 
     const session = await getSession(request.headers.get("Cookie"));
     session.set("token", token);
+    session.set("userId", userCredential.user.uid);
 
     return redirect("/dashboard", {
       headers: {
