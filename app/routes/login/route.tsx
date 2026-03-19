@@ -5,10 +5,9 @@ import {
   TextField,
   Button,
   Alert,
-  Link,
 } from "@mui/material";
 import type { LoaderFunction, ActionFunction } from "@remix-run/node";
-import { Form, useActionData, redirect } from "@remix-run/react";
+import { Form, useActionData, redirect, Link } from "@remix-run/react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "~/firebase";
 import { getSession, commitSession } from "~/session.server";
@@ -37,7 +36,6 @@ export const action: ActionFunction = async ({ request }) => {
       email,
       password
     );
-    console.log("Logged in user:", userCredential.user);
     const token = await userCredential.user.getIdToken();
 
     const session = await getSession(request.headers.get("Cookie"));
@@ -65,105 +63,136 @@ export default function LoginPage() {
 
   return (
     <Container
+      maxWidth="sm"
       sx={{
         minHeight: "100vh",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        p: 2,
+        px: { xs: 3, sm: 4 },
+        pt: 8,
       }}
     >
       <Box
         sx={{
-          width: "400px",
-          backgroundColor: "#2D3748", // Soft teal
-          p: 4,
-          borderRadius: 2,
-          color: "white", // White text stands out on teal
+          width: "100%",
+          maxWidth: 440,
+          p: { xs: 3, sm: 5 },
+          borderRadius: "24px",
+          background: "rgba(255, 255, 255, 0.03)",
+          backdropFilter: "blur(20px)",
+          border: "1px solid rgba(255, 255, 255, 0.08)",
         }}
+        className="animate-fade-in-up"
       >
-        <Typography variant="h5" sx={{ fontWeight: "bold", mb: 1 }}>
-          Welcome Back!
+        <Typography
+          variant="h4"
+          component="h1"
+          sx={{ fontWeight: 800, mb: 1, letterSpacing: "-0.02em" }}
+        >
+          Welcome back
         </Typography>
-        <Typography variant="body2" sx={{ mb: 3 }}>
-          Don’t have an account?{" "}
-          <Link href="/signup" sx={{ color: "white" }}>
-            Create a new one now
-          </Link>
+        <Typography variant="body1" sx={{ color: "text.secondary", mb: 4 }}>
+          Don&apos;t have an account?{" "}
+          <Box
+            component={Link}
+            to="/signup"
+            sx={{
+              color: "primary.main",
+              textDecoration: "none",
+              fontWeight: 600,
+              "&:hover": { textDecoration: "underline" },
+            }}
+          >
+            Create one free
+          </Box>
         </Typography>
+
         {actionData?.error && (
-          <Alert severity="error" sx={{ width: "100%", mb: 2 }}>
+          <Alert severity="error" sx={{ mb: 3 }} role="alert">
             {actionData.error}
           </Alert>
         )}
-        <Form method="post">
+
+        <Form method="post" noValidate>
           <TextField
-            variant="filled"
+            variant="outlined"
             margin="normal"
             required
             fullWidth
             id="email"
             name="email"
-            placeholder="Email Address"
+            label="Email Address"
             autoComplete="email"
-            sx={{
-              mb: 2,
-              "& .MuiFilledInput-root": {
-                backgroundColor: "rgba(255,255,255,0.1)",
-                color: "white",
-              },
-              "& .MuiInputLabel-root": { color: "white" },
-            }}
+            autoFocus
+            aria-required="true"
+            sx={{ mb: 2 }}
           />
           <TextField
-            variant="filled"
+            variant="outlined"
             margin="normal"
             required
             fullWidth
             name="password"
             id="password"
-            placeholder="Password"
+            label="Password"
             type="password"
             autoComplete="current-password"
-            sx={{
-              mb: 2,
-              "& .MuiFilledInput-root": {
-                backgroundColor: "rgba(255,255,255,0.1)",
-                color: "white",
-              },
-              "& .MuiInputLabel-root": { color: "white" },
-            }}
+            aria-required="true"
+            sx={{ mb: 3 }}
           />
           <Button
             type="submit"
             variant="contained"
             fullWidth
+            size="large"
+            sx={{ mb: 2, py: 1.5 }}
+          >
+            Sign In
+          </Button>
+
+          <Box
             sx={{
-              backgroundColor: "white",
-              color: "#2D3748",
-              fontWeight: "bold",
+              display: "flex",
+              alignItems: "center",
+              gap: 2,
+              mb: 2,
             }}
           >
-            Login
-          </Button>
-          <Typography
-            variant="body1"
-            sx={{ textAlign: "center", mb: 2, mt: 2 }}
-          >
-            or
-          </Typography>
+            <Box
+              sx={{
+                flex: 1,
+                height: "1px",
+                background: "rgba(255,255,255,0.1)",
+              }}
+              aria-hidden="true"
+            />
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
+              or
+            </Typography>
+            <Box
+              sx={{
+                flex: 1,
+                height: "1px",
+                background: "rgba(255,255,255,0.1)",
+              }}
+              aria-hidden="true"
+            />
+          </Box>
+
           <Button
             variant="outlined"
             fullWidth
             size="large"
             startIcon={<GoogleIcon />}
-            // onClick={handleGoogleSignIn}
+            disabled
             sx={{
-              textTransform: "none",
-              fontWeight: 600,
+              py: 1.5,
+              color: "text.secondary",
+              borderColor: "rgba(255,255,255,0.1)",
             }}
           >
-            Login with Google
+            Continue with Google
           </Button>
         </Form>
       </Box>

@@ -12,6 +12,23 @@ export default defineConfig({
   ssr: {
     noExternal: ['@mui/icons-material']
   },
+  optimizeDeps: {
+    include: [
+      '@mui/icons-material',
+      '@mui/material',
+      '@emotion/react',
+      '@emotion/styled',
+    ],
+  },
+  server: {
+    hmr: {
+      overlay: false,
+    },
+    watch: {
+      // Reduce file watchers to avoid EMFILE on Windows
+      usePolling: false,
+    },
+  },
   plugins: [
     remix({
       future: {
