@@ -12,6 +12,14 @@ export default defineConfig({
   ssr: {
     noExternal: ['@mui/icons-material']
   },
+  optimizeDeps: {
+    include: [
+      '@mui/icons-material',
+      '@mui/material',
+      '@emotion/react',
+      '@emotion/styled',
+    ],
+  },
   plugins: [
     remix({
       future: {
