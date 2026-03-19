@@ -7,7 +7,7 @@ import {
   Typography,
   Box,
 } from '@mui/material';
-import { WarningAmber } from '@mui/icons-material';
+import WarningAmber from '@mui/icons-material/WarningAmber';
 
 interface DeleteConfirmDialogProps {
   open: boolean;

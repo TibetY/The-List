@@ -16,7 +16,8 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import { CloudUpload, Close } from '@mui/icons-material';
+import CloudUpload from '@mui/icons-material/CloudUpload';
+import Close from '@mui/icons-material/Close';
 import type { Restaurant } from '~/types/restaurant';
 
 interface RestaurantFormDialogProps {

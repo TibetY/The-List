@@ -11,7 +11,8 @@ import {
   IconButton,
   Box,
 } from '@mui/material';
-import { Close, Email } from '@mui/icons-material';
+import Close from '@mui/icons-material/Close';
+import Email from '@mui/icons-material/Email';
 
 interface EmailDialogProps {
   open: boolean;

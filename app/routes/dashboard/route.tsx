@@ -25,15 +25,13 @@ import {
   ListItemIcon,
   ListItemText,
 } from '@mui/material';
-import {
-  Add,
-  Email,
-  Logout,
-  Search,
-  Restaurant as RestaurantIcon,
-  Menu as MenuIcon,
-  Close as CloseIcon,
-} from '@mui/icons-material';
+import Add from '@mui/icons-material/Add';
+import Email from '@mui/icons-material/Email';
+import Logout from '@mui/icons-material/Logout';
+import Search from '@mui/icons-material/Search';
+import RestaurantIcon from '@mui/icons-material/Restaurant';
+import MenuIcon from '@mui/icons-material/Menu';
+import CloseIcon from '@mui/icons-material/Close';
 import { getSession, destroySession } from '~/session.server';
 import { getRestaurantsByUser } from '~/services/restaurants.server';
 import type { Restaurant } from '~/types/restaurant';

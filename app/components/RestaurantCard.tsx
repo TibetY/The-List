@@ -9,14 +9,12 @@ import {
   Rating,
   Tooltip,
 } from '@mui/material';
-import {
-  Edit,
-  Delete,
-  Language,
-  Facebook,
-  Instagram,
-  Twitter,
-} from '@mui/icons-material';
+import Edit from '@mui/icons-material/Edit';
+import Delete from '@mui/icons-material/Delete';
+import Language from '@mui/icons-material/Language';
+import Facebook from '@mui/icons-material/Facebook';
+import Instagram from '@mui/icons-material/Instagram';
+import Twitter from '@mui/icons-material/Twitter';
 import type { Restaurant } from '~/types/restaurant';
 
 interface RestaurantCardProps {
