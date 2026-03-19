@@ -19,13 +19,16 @@ export default defineConfig({
       '@emotion/react',
       '@emotion/styled',
     ],
+    // Force Vite to pre-bundle everything in one pass rather than on-demand
+    force: false,
   },
   server: {
     hmr: {
       overlay: false,
     },
     watch: {
-      // Reduce file watchers to avoid EMFILE on Windows
+      // Ignore node_modules entirely — this is the main cause of EMFILE on Windows
+      ignored: ['**/node_modules/**', '**/.git/**'],
       usePolling: false,
     },
   },
