@@ -1,12 +1,18 @@
-// app/routes/sign-up.tsx
 import type { ActionFunction, LoaderFunction } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
-import { Form, useActionData } from "@remix-run/react";
+import { Form, useActionData, Link } from "@remix-run/react";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { auth } from "~/firebase"; // adjust the path as needed
+import { auth } from "~/firebase";
 import { getSession, commitSession } from "~/session.server";
+import {
+  Box,
+  Container,
+  Typography,
+  TextField,
+  Button,
+  Alert,
+} from "@mui/material";
 
-// Loader: if token exists, redirect to /dashboard
 export const loader: LoaderFunction = async ({ request }) => {
   const session = await getSession(request.headers.get("Cookie"));
   const token = session.get("token");
@@ -20,7 +26,6 @@ type ActionData = {
   error?: string;
 };
 
-// Action: handle sign-up form submission, create user, store token in cookie
 export const action: ActionFunction = async ({ request }) => {
   const formData = await request.formData();
   const email = formData.get("email") as string;
@@ -37,10 +42,8 @@ export const action: ActionFunction = async ({ request }) => {
       email,
       password
     );
-    // Get the Firebase ID token from the newly created user
     const token = await userCredential.user.getIdToken();
 
-    // Create or retrieve the session and set the token
     const session = await getSession(request.headers.get("Cookie"));
     session.set("token", token);
     session.set("userId", userCredential.user.uid);
@@ -50,10 +53,10 @@ export const action: ActionFunction = async ({ request }) => {
     });
   } catch (err: unknown) {
     if (err instanceof Error) {
-      console.error("Login error:", err.message);
+      console.error("Signup error:", err.message);
       return { error: err.message } as ActionData;
     } else {
-      console.error("Login error:", err);
+      console.error("Signup error:", err);
       return { error: "An unknown error occurred" } as ActionData;
     }
   }
@@ -63,72 +66,124 @@ export default function SignUpPage() {
   const actionData = useActionData<ActionData>();
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-dark text-primary">
-      <div className="w-full max-w-md p-8 bg-gray-800 rounded-lg shadow-md">
-        <h2 className="text-3xl font-bold mb-6 text-center">Sign Up</h2>
-        {actionData?.error && (
-          <p className="mb-4 text-red-500 text-center">{actionData.error}</p>
-        )}
-        <Form method="post" className="space-y-4">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium mb-1">
-              Email
-            </label>
-            <input
-              type="email"
-              name="email"
-              id="email"
-              placeholder="you@example.com"
-              className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="password"
-              className="block text-sm font-medium mb-1"
-            >
-              Password
-            </label>
-            <input
-              type="password"
-              name="password"
-              id="password"
-              placeholder="********"
-              className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="confirmPassword"
-              className="block text-sm font-medium mb-1"
-            >
-              Confirm Password
-            </label>
-            <input
-              type="password"
-              name="confirmPassword"
-              id="confirmPassword"
-              placeholder="********"
-              className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
-          <button
-            type="submit"
-            className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded"
-          >
-            Sign Up
-          </button>
-        </Form>
-        <p className="mt-4 text-center text-sm">
+    <Container
+      maxWidth="sm"
+      sx={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        px: { xs: 3, sm: 4 },
+        pt: 8,
+      }}
+    >
+      <Box
+        sx={{
+          width: "100%",
+          maxWidth: 440,
+          p: { xs: 3, sm: 5 },
+          borderRadius: "24px",
+          background: "rgba(255, 255, 255, 0.03)",
+          backdropFilter: "blur(20px)",
+          border: "1px solid rgba(255, 255, 255, 0.08)",
+        }}
+        className="animate-fade-in-up"
+      >
+        <Typography
+          variant="h4"
+          component="h1"
+          sx={{ fontWeight: 800, mb: 1, letterSpacing: "-0.02em" }}
+        >
+          Create account
+        </Typography>
+        <Typography variant="body1" sx={{ color: "text.secondary", mb: 4 }}>
           Already have an account?{" "}
-          <a href="/login" className="text-blue-400 hover:underline">
-            Login
-          </a>
-        </p>
-      </div>
-    </div>
+          <Box
+            component={Link}
+            to="/login"
+            sx={{
+              color: "primary.main",
+              textDecoration: "none",
+              fontWeight: 600,
+              "&:hover": { textDecoration: "underline" },
+            }}
+          >
+            Sign in
+          </Box>
+        </Typography>
+
+        {actionData?.error && (
+          <Alert severity="error" sx={{ mb: 3 }} role="alert">
+            {actionData.error}
+          </Alert>
+        )}
+
+        <Form method="post" noValidate>
+          <TextField
+            variant="outlined"
+            margin="normal"
+            required
+            fullWidth
+            id="email"
+            name="email"
+            label="Email Address"
+            type="email"
+            autoComplete="email"
+            autoFocus
+            aria-required="true"
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            variant="outlined"
+            margin="normal"
+            required
+            fullWidth
+            name="password"
+            id="password"
+            label="Password"
+            type="password"
+            autoComplete="new-password"
+            aria-required="true"
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            variant="outlined"
+            margin="normal"
+            required
+            fullWidth
+            name="confirmPassword"
+            id="confirmPassword"
+            label="Confirm Password"
+            type="password"
+            autoComplete="new-password"
+            aria-required="true"
+            sx={{ mb: 3 }}
+          />
+          <Button
+            type="submit"
+            variant="contained"
+            fullWidth
+            size="large"
+            sx={{ py: 1.5 }}
+          >
+            Create Account
+          </Button>
+        </Form>
+
+        <Typography
+          variant="caption"
+          sx={{
+            display: "block",
+            textAlign: "center",
+            mt: 3,
+            color: "text.secondary",
+            lineHeight: 1.6,
+          }}
+        >
+          By creating an account, you agree to keep your restaurant opinions
+          honest and your taste buds adventurous.
+        </Typography>
+      </Box>
+    </Container>
   );
 }

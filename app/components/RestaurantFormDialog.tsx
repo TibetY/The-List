@@ -12,8 +12,11 @@ import {
   Typography,
   Box,
   CircularProgress,
+  IconButton,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
-import { CloudUpload } from '@mui/icons-material';
+import { CloudUpload, Close } from '@mui/icons-material';
 import type { Restaurant } from '~/types/restaurant';
 
 interface RestaurantFormDialogProps {
@@ -48,6 +51,9 @@ export default function RestaurantFormDialog({
   onClose,
   onSave,
 }: RestaurantFormDialogProps) {
+  const theme = useTheme();
+  const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
+
   const [formData, setFormData] = useState<Partial<Restaurant>>({
     name: '',
     url: '',
@@ -117,7 +123,6 @@ export default function RestaurantFormDialog({
 
   const handleSubmit = async () => {
     if (!formData.name?.trim()) {
-      alert('Restaurant name is required');
       return;
     }
 
@@ -127,34 +132,68 @@ export default function RestaurantFormDialog({
       onClose();
     } catch (error) {
       console.error('Error saving restaurant:', error);
-      alert('Failed to save restaurant. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
+  const dialogTitle = restaurant ? 'Edit Restaurant' : 'Add New Restaurant';
+
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>{restaurant ? 'Edit Restaurant' : 'Add New Restaurant'}</DialogTitle>
-      <DialogContent>
-        <Grid container spacing={2} sx={{ mt: 1 }}>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="md"
+      fullWidth
+      fullScreen={fullScreen}
+      aria-labelledby="restaurant-form-title"
+    >
+      <DialogTitle
+        id="restaurant-form-title"
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          fontWeight: 700,
+          pb: 1,
+        }}
+      >
+        {dialogTitle}
+        <IconButton
+          onClick={onClose}
+          aria-label="Close dialog"
+          sx={{ color: 'text.secondary' }}
+        >
+          <Close />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent dividers sx={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+        <Grid container spacing={2.5} sx={{ mt: 0 }}>
+          {/* Restaurant Name */}
           <Grid item xs={12}>
             <TextField
               fullWidth
               required
               label="Restaurant Name"
               value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, name: e.target.value })
+              }
+              aria-required="true"
+              autoFocus
             />
           </Grid>
 
+          {/* Cuisine + Price */}
           <Grid item xs={12} sm={6}>
             <TextField
               fullWidth
               select
               label="Cuisine Type"
               value={formData.cuisineType}
-              onChange={(e) => setFormData({ ...formData, cuisineType: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, cuisineType: e.target.value })
+              }
             >
               <MenuItem value="">None</MenuItem>
               {cuisineTypes.map((type) => (
@@ -164,14 +203,15 @@ export default function RestaurantFormDialog({
               ))}
             </TextField>
           </Grid>
-
           <Grid item xs={12} sm={6}>
             <TextField
               fullWidth
               select
               label="Price Range"
               value={formData.priceRange}
-              onChange={(e) => setFormData({ ...formData, priceRange: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, priceRange: e.target.value })
+              }
             >
               {priceRanges.map((range) => (
                 <MenuItem key={range} value={range}>
@@ -181,42 +221,77 @@ export default function RestaurantFormDialog({
             </TextField>
           </Grid>
 
+          {/* Rating */}
           <Grid item xs={12}>
-            <Typography component="legend">Rating</Typography>
+            <Typography
+              component="label"
+              id="rating-label"
+              sx={{
+                display: 'block',
+                mb: 0.5,
+                fontWeight: 500,
+                color: 'text.secondary',
+                fontSize: '0.875rem',
+              }}
+            >
+              Rating
+            </Typography>
             <Rating
               value={formData.rating || 0}
-              onChange={(_, value) => setFormData({ ...formData, rating: value || 0 })}
+              onChange={(_, value) =>
+                setFormData({ ...formData, rating: value || 0 })
+              }
               precision={0.5}
+              size="large"
+              aria-labelledby="rating-label"
             />
           </Grid>
 
+          {/* Website URL */}
           <Grid item xs={12}>
             <TextField
               fullWidth
               label="Website URL"
               value={formData.url}
-              onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, url: e.target.value })
+              }
               placeholder="https://..."
+              type="url"
             />
           </Grid>
 
+          {/* Comment */}
           <Grid item xs={12}>
             <TextField
               fullWidth
               multiline
               rows={3}
-              label="Comment / Notes"
+              label="Notes"
               value={formData.comment}
-              onChange={(e) => setFormData({ ...formData, comment: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, comment: e.target.value })
+              }
+              placeholder="What did you think? Any must-try dishes?"
             />
           </Grid>
 
+          {/* Social Media */}
           <Grid item xs={12}>
-            <Typography variant="subtitle1" gutterBottom>
-              Social Media Links
+            <Typography
+              variant="subtitle2"
+              sx={{
+                fontWeight: 600,
+                color: 'text.secondary',
+                mb: 1,
+                textTransform: 'uppercase',
+                fontSize: '0.75rem',
+                letterSpacing: '0.05em',
+              }}
+            >
+              Social Media
             </Typography>
           </Grid>
-
           <Grid item xs={12} sm={6}>
             <TextField
               fullWidth
@@ -225,13 +300,15 @@ export default function RestaurantFormDialog({
               onChange={(e) =>
                 setFormData({
                   ...formData,
-                  socialMedia: { ...formData.socialMedia, facebook: e.target.value },
+                  socialMedia: {
+                    ...formData.socialMedia,
+                    facebook: e.target.value,
+                  },
                 })
               }
               placeholder="https://facebook.com/..."
             />
           </Grid>
-
           <Grid item xs={12} sm={6}>
             <TextField
               fullWidth
@@ -240,28 +317,32 @@ export default function RestaurantFormDialog({
               onChange={(e) =>
                 setFormData({
                   ...formData,
-                  socialMedia: { ...formData.socialMedia, instagram: e.target.value },
+                  socialMedia: {
+                    ...formData.socialMedia,
+                    instagram: e.target.value,
+                  },
                 })
               }
               placeholder="https://instagram.com/..."
             />
           </Grid>
-
           <Grid item xs={12} sm={6}>
             <TextField
               fullWidth
-              label="Twitter"
+              label="Twitter / X"
               value={formData.socialMedia?.twitter}
               onChange={(e) =>
                 setFormData({
                   ...formData,
-                  socialMedia: { ...formData.socialMedia, twitter: e.target.value },
+                  socialMedia: {
+                    ...formData.socialMedia,
+                    twitter: e.target.value,
+                  },
                 })
               }
-              placeholder="https://twitter.com/..."
+              placeholder="https://x.com/..."
             />
           </Grid>
-
           <Grid item xs={12} sm={6}>
             <TextField
               fullWidth
@@ -270,44 +351,92 @@ export default function RestaurantFormDialog({
               onChange={(e) =>
                 setFormData({
                   ...formData,
-                  socialMedia: { ...formData.socialMedia, tiktok: e.target.value },
+                  socialMedia: {
+                    ...formData.socialMedia,
+                    tiktok: e.target.value,
+                  },
                 })
               }
               placeholder="https://tiktok.com/@..."
             />
           </Grid>
 
+          {/* Image Upload */}
           <Grid item xs={12}>
             <Button
               variant="outlined"
               component="label"
               startIcon={<CloudUpload />}
               fullWidth
+              sx={{
+                py: 2,
+                borderStyle: 'dashed',
+                borderColor: 'rgba(255,255,255,0.15)',
+                color: 'text.secondary',
+                '&:hover': {
+                  borderColor: 'primary.main',
+                  backgroundColor: 'rgba(232, 115, 74, 0.04)',
+                },
+              }}
             >
-              Upload Image
-              <input type="file" hidden accept="image/*" onChange={handleImageChange} />
+              {imagePreview ? 'Change Image' : 'Upload Image'}
+              <input
+                type="file"
+                hidden
+                accept="image/*"
+                onChange={handleImageChange}
+                aria-label="Upload restaurant image"
+              />
             </Button>
           </Grid>
 
           {imagePreview && (
             <Grid item xs={12}>
-              <Box sx={{ textAlign: 'center' }}>
+              <Box
+                sx={{
+                  textAlign: 'center',
+                  borderRadius: '16px',
+                  overflow: 'hidden',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                }}
+              >
                 <img
                   src={imagePreview}
-                  alt="Preview"
-                  style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '8px' }}
+                  alt="Restaurant preview"
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '250px',
+                    objectFit: 'cover',
+                    display: 'block',
+                    width: '100%',
+                  }}
                 />
               </Box>
             </Grid>
           )}
         </Grid>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={loading}>
+      <DialogActions sx={{ px: 3, py: 2 }}>
+        <Button
+          onClick={onClose}
+          disabled={loading}
+          sx={{ color: 'text.secondary' }}
+        >
           Cancel
         </Button>
-        <Button onClick={handleSubmit} variant="contained" disabled={loading}>
-          {loading ? <CircularProgress size={24} /> : restaurant ? 'Update' : 'Add'}
+        <Button
+          onClick={handleSubmit}
+          variant="contained"
+          disabled={loading || !formData.name?.trim()}
+          sx={{ minWidth: 120 }}
+        >
+          {loading ? (
+            <CircularProgress size={24} color="inherit" />
+          ) : restaurant ? (
+            'Save Changes'
+          ) : (
+            'Add Restaurant'
+          )}
         </Button>
       </DialogActions>
     </Dialog>

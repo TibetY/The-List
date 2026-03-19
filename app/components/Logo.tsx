@@ -3,28 +3,33 @@ import { Box, Typography } from "@mui/material";
 export default function Logo() {
   return (
     <Box
-      style={{
+      sx={{
         display: "flex",
         alignItems: "center",
-        gap: "0.5rem",
+        gap: "0.35rem",
+        userSelect: "none",
       }}
     >
       <Typography
-        variant="h4"
-        style={{
-          fontWeight: "bold",
-          color: "#F59E0B",
-          letterSpacing: "0.1em",
-          textShadow: "2px 2px 4px rgba(0,0,0,0.3)",
+        variant="h5"
+        component="span"
+        sx={{
+          fontWeight: 800,
+          background: "linear-gradient(135deg, #E8734A, #F2956F)",
+          WebkitBackgroundClip: "text",
+          WebkitTextFillColor: "transparent",
+          letterSpacing: "-0.02em",
         }}
       >
         The
       </Typography>
       <Typography
-        variant="h4"
-        style={{
-          fontWeight: "300",
-          letterSpacing: "0.1em",
+        variant="h5"
+        component="span"
+        sx={{
+          fontWeight: 300,
+          color: "text.primary",
+          letterSpacing: "-0.02em",
         }}
       >
         List

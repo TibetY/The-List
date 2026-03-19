@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { LoaderFunction, ActionFunction, redirect, json } from '@remix-run/node';
-import { useLoaderData, useNavigate, useRevalidator } from '@remix-run/react';
+import { useLoaderData, useRevalidator } from '@remix-run/react';
 import {
   Container,
   Box,
@@ -12,8 +12,28 @@ import {
   IconButton,
   Snackbar,
   Alert,
+  Chip,
+  TextField,
+  InputAdornment,
+  useMediaQuery,
+  useTheme,
+  Tooltip,
+  Drawer,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material';
-import { Add, Email, Logout } from '@mui/icons-material';
+import {
+  Add,
+  Email,
+  Logout,
+  Search,
+  Restaurant as RestaurantIcon,
+  Menu as MenuIcon,
+  Close as CloseIcon,
+} from '@mui/icons-material';
 import { getSession, destroySession } from '~/session.server';
 import { getRestaurantsByUser } from '~/services/restaurants.server';
 import type { Restaurant } from '~/types/restaurant';
@@ -23,8 +43,8 @@ import DeleteConfirmDialog from '~/components/DeleteConfirmDialog';
 import EmailDialog from '~/components/EmailDialog';
 import { uploadRestaurantImage } from '~/services/storage.client';
 import { sendRestaurantListViaMailto } from '~/services/email.client';
+import Logo from '~/components/Logo';
 
-// Import Firebase on client-side for real-time operations
 import {
   collection,
   addDoc,
@@ -45,13 +65,7 @@ export const loader: LoaderFunction = async ({ request }) => {
   const token = session.get('token');
   const userId = session.get('userId');
 
-  // If there's no token, redirect to login.
-  if (!token) {
-    return redirect('/login');
-  }
-
-  // If no userId in session, redirect to login (they need to re-login)
-  if (!userId) {
+  if (!token || !userId) {
     return redirect('/login');
   }
 
@@ -82,17 +96,22 @@ export const action: ActionFunction = async ({ request }) => {
 
 export default function Dashboard() {
   const { restaurants: initialRestaurants, userId } = useLoaderData<LoaderData>();
-  const navigate = useNavigate();
   const revalidator = useRevalidator();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>(initialRestaurants);
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
-  const [restaurantToDelete, setRestaurantToDelete] = useState<{ id: string; name: string } | null>(
-    null
-  );
+  const [restaurantToDelete, setRestaurantToDelete] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterCuisine, setFilterCuisine] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
@@ -103,10 +122,25 @@ export default function Dashboard() {
     severity: 'success',
   });
 
-  // Update restaurants when loader data changes
   useEffect(() => {
     setRestaurants(initialRestaurants);
   }, [initialRestaurants]);
+
+  // Filtered restaurants
+  const filteredRestaurants = restaurants.filter((r) => {
+    const matchesSearch =
+      !searchQuery ||
+      r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      r.cuisineType?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      r.comment?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCuisine = !filterCuisine || r.cuisineType === filterCuisine;
+    return matchesSearch && matchesCuisine;
+  });
+
+  // Get unique cuisine types for filter chips
+  const cuisineTypes = [
+    ...new Set(restaurants.map((r) => r.cuisineType).filter(Boolean)),
+  ] as string[];
 
   const handleAddRestaurant = () => {
     setSelectedRestaurant(null);
@@ -125,7 +159,6 @@ export default function Dashboard() {
     try {
       let imageUrl = restaurantData.image;
 
-      // Upload image if provided
       if (imageFile) {
         imageUrl = await uploadRestaurantImage(imageFile, userId);
       }
@@ -137,7 +170,6 @@ export default function Dashboard() {
       };
 
       if (selectedRestaurant?.id) {
-        // Update existing restaurant
         const docRef = doc(db, 'restaurants', selectedRestaurant.id);
         await updateDoc(docRef, {
           ...dataToSave,
@@ -150,7 +182,6 @@ export default function Dashboard() {
           severity: 'success',
         });
       } else {
-        // Add new restaurant
         await addDoc(collection(db, 'restaurants'), {
           ...dataToSave,
           createdAt: Timestamp.now(),
@@ -164,7 +195,6 @@ export default function Dashboard() {
         });
       }
 
-      // Refresh the data
       revalidator.revalidate();
       setFormOpen(false);
     } catch (error) {
@@ -199,7 +229,6 @@ export default function Dashboard() {
         severity: 'success',
       });
 
-      // Refresh the data
       revalidator.revalidate();
       setDeleteOpen(false);
       setRestaurantToDelete(null);
@@ -239,70 +268,327 @@ export default function Dashboard() {
   };
 
   return (
-    <Box sx={{ flexGrow: 1, minHeight: '100vh', bgcolor: 'background.default' }}>
-      {/* App Bar */}
-      <AppBar position="static">
-        <Toolbar>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            The List - My Restaurants
-          </Typography>
-          <Button
-            color="inherit"
-            startIcon={<Email />}
-            onClick={handleEmailList}
-            disabled={restaurants.length === 0}
-            sx={{ mr: 2 }}
-          >
-            Email List
-          </Button>
-          <IconButton color="inherit" onClick={handleLogout}>
-            <Logout />
-          </IconButton>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+      {/* Dashboard App Bar */}
+      <AppBar
+        position="fixed"
+        component="nav"
+        aria-label="Dashboard navigation"
+      >
+        <Toolbar
+          sx={{
+            maxWidth: '1400px',
+            width: '100%',
+            mx: 'auto',
+            px: { xs: 2, sm: 3 },
+          }}
+        >
+          <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Logo />
+            {!isMobile && (
+              <Chip
+                icon={<RestaurantIcon sx={{ fontSize: 16 }} />}
+                label={`${restaurants.length} restaurant${restaurants.length !== 1 ? 's' : ''}`}
+                size="small"
+                sx={{
+                  backgroundColor: 'rgba(232, 115, 74, 0.12)',
+                  color: '#E8734A',
+                  fontWeight: 600,
+                  border: '1px solid rgba(232, 115, 74, 0.2)',
+                }}
+              />
+            )}
+          </Box>
+
+          {isMobile ? (
+            <>
+              <IconButton
+                color="inherit"
+                onClick={() => setMobileMenuOpen(true)}
+                aria-label="Open menu"
+              >
+                <MenuIcon />
+              </IconButton>
+              <Drawer
+                anchor="right"
+                open={mobileMenuOpen}
+                onClose={() => setMobileMenuOpen(false)}
+                PaperProps={{
+                  sx: {
+                    width: 280,
+                    background: '#141420',
+                    borderLeft: '1px solid rgba(255,255,255,0.08)',
+                  },
+                }}
+              >
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', p: 1 }}>
+                  <IconButton
+                    onClick={() => setMobileMenuOpen(false)}
+                    aria-label="Close menu"
+                    sx={{ color: 'text.primary' }}
+                  >
+                    <CloseIcon />
+                  </IconButton>
+                </Box>
+                <List>
+                  <ListItem disablePadding>
+                    <ListItemButton
+                      onClick={() => {
+                        handleAddRestaurant();
+                        setMobileMenuOpen(false);
+                      }}
+                    >
+                      <ListItemIcon sx={{ color: '#E8734A', minWidth: 40 }}>
+                        <Add />
+                      </ListItemIcon>
+                      <ListItemText primary="Add Restaurant" />
+                    </ListItemButton>
+                  </ListItem>
+                  <ListItem disablePadding>
+                    <ListItemButton
+                      onClick={() => {
+                        handleEmailList();
+                        setMobileMenuOpen(false);
+                      }}
+                      disabled={restaurants.length === 0}
+                    >
+                      <ListItemIcon sx={{ color: 'text.secondary', minWidth: 40 }}>
+                        <Email />
+                      </ListItemIcon>
+                      <ListItemText primary="Email List" />
+                    </ListItemButton>
+                  </ListItem>
+                  <ListItem disablePadding>
+                    <ListItemButton onClick={handleLogout}>
+                      <ListItemIcon sx={{ color: 'text.secondary', minWidth: 40 }}>
+                        <Logout />
+                      </ListItemIcon>
+                      <ListItemText primary="Sign Out" />
+                    </ListItemButton>
+                  </ListItem>
+                </List>
+              </Drawer>
+            </>
+          ) : (
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              <Button
+                variant="contained"
+                startIcon={<Add />}
+                onClick={handleAddRestaurant}
+                size="small"
+              >
+                Add Restaurant
+              </Button>
+              <Tooltip title="Email your list">
+                <IconButton
+                  color="inherit"
+                  onClick={handleEmailList}
+                  disabled={restaurants.length === 0}
+                  aria-label="Email restaurant list"
+                >
+                  <Email />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Sign out">
+                <IconButton
+                  color="inherit"
+                  onClick={handleLogout}
+                  aria-label="Sign out"
+                >
+                  <Logout />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          )}
         </Toolbar>
       </AppBar>
 
       {/* Main Content */}
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4" component="h1">
-            My Restaurant Collection
+      <Container
+        maxWidth="lg"
+        sx={{ pt: { xs: 10, sm: 12 }, pb: 6, px: { xs: 2, sm: 3 } }}
+      >
+        {/* Header + Search */}
+        <Box sx={{ mb: 4 }}>
+          <Typography
+            variant="h3"
+            component="h1"
+            sx={{
+              fontWeight: 800,
+              mb: 1,
+              fontSize: { xs: '1.8rem', sm: '2.4rem' },
+              letterSpacing: '-0.02em',
+            }}
+          >
+            My Collection
           </Typography>
-          <Button variant="contained" startIcon={<Add />} onClick={handleAddRestaurant} size="large">
-            Add Restaurant
-          </Button>
+          <Typography
+            variant="body1"
+            sx={{ color: 'text.secondary', mb: 3 }}
+          >
+            Your curated list of restaurants worth remembering.
+          </Typography>
+
+          {/* Search Bar */}
+          <TextField
+            fullWidth
+            placeholder="Search restaurants, cuisines, or notes..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            variant="outlined"
+            size="small"
+            aria-label="Search restaurants"
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search sx={{ color: 'text.secondary' }} />
+                </InputAdornment>
+              ),
+            }}
+            sx={{
+              maxWidth: 500,
+              mb: 2,
+            }}
+          />
+
+          {/* Cuisine filter chips */}
+          {cuisineTypes.length > 0 && (
+            <Box
+              sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}
+              role="group"
+              aria-label="Filter by cuisine type"
+            >
+              <Chip
+                label="All"
+                size="small"
+                onClick={() => setFilterCuisine(null)}
+                variant={filterCuisine === null ? 'filled' : 'outlined'}
+                sx={{
+                  fontWeight: 600,
+                  ...(filterCuisine === null
+                    ? {
+                        backgroundColor: 'rgba(232, 115, 74, 0.15)',
+                        color: '#E8734A',
+                        border: '1px solid rgba(232, 115, 74, 0.3)',
+                      }
+                    : {
+                        borderColor: 'rgba(255,255,255,0.15)',
+                      }),
+                }}
+              />
+              {cuisineTypes.map((cuisine) => (
+                <Chip
+                  key={cuisine}
+                  label={cuisine}
+                  size="small"
+                  onClick={() =>
+                    setFilterCuisine(filterCuisine === cuisine ? null : cuisine)
+                  }
+                  variant={filterCuisine === cuisine ? 'filled' : 'outlined'}
+                  sx={{
+                    fontWeight: 500,
+                    ...(filterCuisine === cuisine
+                      ? {
+                          backgroundColor: 'rgba(232, 115, 74, 0.15)',
+                          color: '#E8734A',
+                          border: '1px solid rgba(232, 115, 74, 0.3)',
+                        }
+                      : {
+                          borderColor: 'rgba(255,255,255,0.1)',
+                        }),
+                  }}
+                />
+              ))}
+            </Box>
+          )}
         </Box>
 
-        {restaurants.length === 0 ? (
+        {/* Restaurant Grid */}
+        {filteredRestaurants.length === 0 ? (
           <Box
             sx={{
               textAlign: 'center',
-              py: 8,
-              bgcolor: 'background.paper',
-              borderRadius: 2,
+              py: { xs: 6, sm: 10 },
+              px: 3,
+              borderRadius: '24px',
+              background: 'rgba(255, 255, 255, 0.02)',
+              border: '1px solid rgba(255, 255, 255, 0.06)',
             }}
           >
-            <Typography variant="h6" color="text.secondary" gutterBottom>
-              No restaurants yet
+            <RestaurantIcon
+              sx={{
+                fontSize: 48,
+                color: 'text.secondary',
+                mb: 2,
+                opacity: 0.5,
+              }}
+            />
+            <Typography
+              variant="h5"
+              sx={{ fontWeight: 700, mb: 1 }}
+            >
+              {searchQuery || filterCuisine
+                ? 'No matches found'
+                : 'No restaurants yet'}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Start building your list by adding your favorite restaurants!
+            <Typography
+              variant="body1"
+              sx={{ color: 'text.secondary', mb: 4, maxWidth: 400, mx: 'auto' }}
+            >
+              {searchQuery || filterCuisine
+                ? 'Try adjusting your search or filter.'
+                : 'Start building your list by adding your favorite restaurants!'}
             </Typography>
-            <Button variant="contained" startIcon={<Add />} onClick={handleAddRestaurant}>
-              Add Your First Restaurant
-            </Button>
+            {!searchQuery && !filterCuisine && (
+              <Button
+                variant="contained"
+                startIcon={<Add />}
+                onClick={handleAddRestaurant}
+                size="large"
+              >
+                Add Your First Restaurant
+              </Button>
+            )}
           </Box>
         ) : (
           <Grid container spacing={3}>
-            {restaurants.map((restaurant) => (
+            {filteredRestaurants.map((restaurant, index) => (
               <Grid item xs={12} sm={6} md={4} key={restaurant.id}>
-                <RestaurantCard
-                  restaurant={restaurant}
-                  onEdit={handleEditRestaurant}
-                  onDelete={handleDeleteClick}
-                />
+                <Box
+                  className="animate-fade-in-up"
+                  sx={{ animationDelay: `${index * 60}ms` }}
+                >
+                  <RestaurantCard
+                    restaurant={restaurant}
+                    onEdit={handleEditRestaurant}
+                    onDelete={handleDeleteClick}
+                  />
+                </Box>
               </Grid>
             ))}
           </Grid>
+        )}
+
+        {/* Mobile FAB */}
+        {isMobile && (
+          <Button
+            variant="contained"
+            onClick={handleAddRestaurant}
+            aria-label="Add restaurant"
+            sx={{
+              position: 'fixed',
+              bottom: 24,
+              right: 24,
+              width: 60,
+              height: 60,
+              minWidth: 'unset',
+              borderRadius: '50%',
+              boxShadow: '0 8px 24px rgba(232, 115, 74, 0.4)',
+              zIndex: 1000,
+            }}
+          >
+            <Add sx={{ fontSize: 28 }} />
+          </Button>
         )}
       </Container>
 
@@ -313,30 +599,29 @@ export default function Dashboard() {
         onClose={() => setFormOpen(false)}
         onSave={handleSaveRestaurant}
       />
-
       <DeleteConfirmDialog
         open={deleteOpen}
         restaurantName={restaurantToDelete?.name || ''}
         onClose={() => setDeleteOpen(false)}
         onConfirm={handleConfirmDelete}
       />
-
       <EmailDialog
         open={emailOpen}
         onClose={() => setEmailOpen(false)}
         onSend={handleSendEmail}
       />
 
-      {/* Snackbar for notifications */}
+      {/* Snackbar */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={4000}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
         <Alert
           onClose={() => setSnackbar({ ...snackbar, open: false })}
           severity={snackbar.severity}
+          variant="filled"
           sx={{ width: '100%' }}
         >
           {snackbar.message}
