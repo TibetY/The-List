@@ -4,14 +4,12 @@ import { Form, useActionData, Link } from "@remix-run/react";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth } from "~/firebase";
 import { getSession, commitSession } from "~/session.server";
-import {
-  Box,
-  Container,
-  Typography,
-  TextField,
-  Button,
-  Alert,
-} from "@mui/material";
+import Box from "@mui/material/Box";
+import Container from "@mui/material/Container";
+import Typography from "@mui/material/Typography";
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
+import Alert from "@mui/material/Alert";
 
 export const loader: LoaderFunction = async ({ request }) => {
   const session = await getSession(request.headers.get("Cookie"));

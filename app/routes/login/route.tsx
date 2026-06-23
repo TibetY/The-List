@@ -1,11 +1,9 @@
-import {
-  Box,
-  Container,
-  Typography,
-  TextField,
-  Button,
-  Alert,
-} from "@mui/material";
+import Box from "@mui/material/Box";
+import Container from "@mui/material/Container";
+import Typography from "@mui/material/Typography";
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
+import Alert from "@mui/material/Alert";
 import type { LoaderFunction, ActionFunction } from "@remix-run/node";
 import { Form, useActionData, redirect, Link } from "@remix-run/react";
 import { signInWithEmailAndPassword } from "firebase/auth";

@@ -15,7 +15,8 @@ import {
 import { CacheProvider } from "@emotion/react";
 import createEmotionCache from "./createEmotionCache";
 
-import { ThemeProvider, CssBaseline } from "@mui/material";
+import ThemeProvider from "@mui/material/styles/ThemeProvider";
+import CssBaseline from "@mui/material/CssBaseline";
 import theme from "./theme";
 
 import { json } from "@remix-run/node";

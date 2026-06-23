@@ -1,14 +1,12 @@
-import {
-  Card,
-  CardContent,
-  CardMedia,
-  Typography,
-  Box,
-  IconButton,
-  Chip,
-  Rating,
-  Tooltip,
-} from '@mui/material';
+import Card from '@mui/material/Card';
+import CardContent from '@mui/material/CardContent';
+import CardMedia from '@mui/material/CardMedia';
+import Typography from '@mui/material/Typography';
+import Box from '@mui/material/Box';
+import IconButton from '@mui/material/IconButton';
+import Chip from '@mui/material/Chip';
+import Rating from '@mui/material/Rating';
+import Tooltip from '@mui/material/Tooltip';
 import Edit from '@mui/icons-material/Edit';
 import Delete from '@mui/icons-material/Delete';
 import Language from '@mui/icons-material/Language';
