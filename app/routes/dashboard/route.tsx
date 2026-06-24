@@ -1,153 +1,295 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { LoaderFunction, ActionFunction, redirect, json } from '@remix-run/node';
-import { useLoaderData, useRevalidator } from '@remix-run/react';
 import {
-  Container,
+  useLoaderData,
+  useRevalidator,
+  useSearchParams,
+  useNavigate,
+} from '@remix-run/react';
+import {
   Box,
-  Typography,
-  Button,
-  Grid,
-  AppBar,
-  Toolbar,
   IconButton,
-  Snackbar,
-  Alert,
-  Chip,
-  TextField,
-  InputAdornment,
-  useMediaQuery,
-  useTheme,
-  Tooltip,
-  Drawer,
-  List,
-  ListItem,
-  ListItemButton,
+  Menu,
+  MenuItem,
   ListItemIcon,
   ListItemText,
+  Snackbar,
+  Alert,
+  ThemeProvider,
+  Tooltip,
+  Badge,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  TextField,
 } from '@mui/material';
 import {
   Add,
   Email,
   Logout,
-  Search,
-  Restaurant as RestaurantIcon,
-  Menu as MenuIcon,
-  Close as CloseIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  PersonAddAlt1,
+  Person,
+  MailOutline,
 } from '@mui/icons-material';
-import { getSession, destroySession } from '~/session.server';
-import { getRestaurantsByUser } from '~/services/restaurants.server';
-import type { Restaurant } from '~/types/restaurant';
-import RestaurantCard from '~/components/RestaurantCard';
+import { createSupabaseServerClient } from '~/supabase.server';
+import { getRestaurants } from '~/services/restaurants.server';
+import {
+  getLists,
+  getListMembers,
+  getListInvites,
+  getPendingInvites,
+} from '~/services/lists.server';
+import { getProfile } from '~/services/profiles.server';
+import type {
+  Restaurant,
+  RestaurantList,
+  ListMember,
+  ListInvite,
+  Profile,
+} from '~/types/restaurant';
 import RestaurantFormDialog from '~/components/RestaurantFormDialog';
 import DeleteConfirmDialog from '~/components/DeleteConfirmDialog';
 import EmailDialog from '~/components/EmailDialog';
+import ListSwitcher from '~/components/ListSwitcher';
+import ShareListDialog from '~/components/ShareListDialog';
+import InvitesDialog from '~/components/InvitesDialog';
 import { uploadRestaurantImage } from '~/services/storage.client';
-import { sendRestaurantListViaMailto } from '~/services/email.client';
-import Logo from '~/components/Logo';
-
 import {
-  collection,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  Timestamp,
-} from 'firebase/firestore';
-import { db } from '~/firebase';
+  createRestaurant,
+  updateRestaurant,
+  deleteRestaurant,
+  setRestaurantStatus,
+} from '~/services/restaurants.client';
+import { createList } from '~/services/lists.client';
+import { sendRestaurantListViaMailto } from '~/services/email.client';
+import { listTokens, makeListTheme, type ListMode } from '~/listTheme';
 
 type LoaderData = {
-  restaurants: Restaurant[];
   userId: string;
+  lists: RestaurantList[];
+  activeList: RestaurantList | null;
+  restaurants: Restaurant[];
+  members: ListMember[];
+  listInvites: ListInvite[];
+  profile: Profile | null;
+  pendingInvites: ListInvite[];
 };
 
 export const loader: LoaderFunction = async ({ request }) => {
-  const session = await getSession(request.headers.get('Cookie'));
-  const token = session.get('token');
-  const userId = session.get('userId');
+  const { supabase, headers } = createSupabaseServerClient(request);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!token || !userId) {
+  if (!user) {
     return redirect('/login');
   }
 
+  const requestedListId = new URL(request.url).searchParams.get('list');
+
   try {
-    const restaurants = await getRestaurantsByUser(userId);
-    return json<LoaderData>({ restaurants, userId });
+    const lists = await getLists(supabase, user.id);
+    const activeList =
+      lists.find((l) => l.id === requestedListId) ||
+      lists.find((l) => l.isDefault) ||
+      lists[0] ||
+      null;
+
+    let restaurants: Restaurant[] = [];
+    let members: ListMember[] = [];
+    let listInvites: ListInvite[] = [];
+    if (activeList) {
+      restaurants = await getRestaurants(supabase, activeList.id);
+      members = await getListMembers(supabase, activeList.id);
+      if (activeList.role === 'owner') {
+        listInvites = await getListInvites(supabase, activeList.id);
+      }
+    }
+    const profile = await getProfile(supabase, user.id);
+    const pendingInvites = await getPendingInvites(supabase);
+
+    return json<LoaderData>(
+      {
+        userId: user.id,
+        lists,
+        activeList,
+        restaurants,
+        members,
+        listInvites,
+        profile,
+        pendingInvites,
+      },
+      { headers }
+    );
   } catch (error) {
-    console.error('Error loading restaurants:', error);
-    return json<LoaderData>({ restaurants: [], userId });
+    console.error('Error loading dashboard:', error);
+    return json<LoaderData>(
+      {
+        userId: user.id,
+        lists: [],
+        activeList: null,
+        restaurants: [],
+        members: [],
+        listInvites: [],
+        profile: null,
+        pendingInvites: [],
+      },
+      { headers }
+    );
   }
 };
 
 export const action: ActionFunction = async ({ request }) => {
-  const session = await getSession(request.headers.get('Cookie'));
+  const { supabase, headers } = createSupabaseServerClient(request);
   const formData = await request.formData();
-  const intent = formData.get('intent');
-
-  if (intent === 'logout') {
-    return redirect('/login', {
-      headers: {
-        'Set-Cookie': await destroySession(session),
-      },
-    });
+  if (formData.get('intent') === 'logout') {
+    await supabase.auth.signOut();
+    return redirect('/login', { headers });
   }
-
   return json({ success: true });
 };
 
+/** Display-decorated restaurant used by the dashboard views. */
+type DecoratedRestaurant = Restaurant & {
+  initial: string;
+  costStr: string;
+  rated: boolean;
+  ratingStr: string;
+  meta: string;
+  cuisine: string;
+  isBeen: boolean;
+  isWant: boolean;
+  px: number;
+  py: number;
+};
+
+type ViewMode = 'tile' | 'list' | 'map';
+type FilterMode = 'all' | 'been' | 'want';
+
+const STAR_FULL = '★★★★★';
+const STAR_EMPTY = '☆☆☆☆☆';
+
+/** Stable pseudo-random map coordinates derived from the restaurant id/name. */
+function mapPosition(seed: string): { px: number; py: number } {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) {
+    h = (h * 31 + seed.charCodeAt(i)) | 0;
+  }
+  const a = Math.abs(h);
+  return { px: 8 + (a % 84), py: 12 + (Math.floor(a / 84) % 72) };
+}
+
+function decorate(r: Restaurant): DecoratedRestaurant {
+  const rating = Math.round(r.rating ?? 0);
+  const rated = rating > 0;
+  const cuisine = r.cuisineType || 'Restaurant';
+  const status = r.status ?? 'want';
+  return {
+    ...r,
+    initial: (r.name.replace(/^The /i, '')[0] || '?').toUpperCase(),
+    costStr: r.priceRange || '',
+    rated,
+    ratingStr: rated
+      ? STAR_FULL.slice(0, rating) + STAR_EMPTY.slice(0, 5 - rating)
+      : '',
+    cuisine,
+    meta: cuisine,
+    isBeen: status === 'been',
+    isWant: status === 'want',
+    ...mapPosition(r.id || r.name),
+  };
+}
+
 export default function Dashboard() {
-  const { restaurants: initialRestaurants, userId } = useLoaderData<LoaderData>();
+  const data = useLoaderData<LoaderData>();
+  const {
+    userId,
+    lists,
+    activeList,
+    restaurants: initialRestaurants,
+    members,
+    listInvites,
+    profile,
+    pendingInvites,
+  } = data;
   const revalidator = useRevalidator();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>(initialRestaurants);
+  const [mode, setMode] = useState<ListMode>('light');
+  const [view, setView] = useState<ViewMode>('tile');
+  const [filter, setFilter] = useState<FilterMode>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [invitesOpen, setInvitesOpen] = useState(false);
+  const [newListOpen, setNewListOpen] = useState(false);
+  const [newListName, setNewListName] = useState('');
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
   const [restaurantToDelete, setRestaurantToDelete] = useState<{
     id: string;
     name: string;
   } | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterCuisine, setFilterCuisine] = useState<string | null>(null);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
     severity: 'success' | 'error';
-  }>({
-    open: false,
-    message: '',
-    severity: 'success',
-  });
+  }>({ open: false, message: '', severity: 'success' });
 
   useEffect(() => {
     setRestaurants(initialRestaurants);
   }, [initialRestaurants]);
 
-  // Filtered restaurants
-  const filteredRestaurants = restaurants.filter((r) => {
-    const matchesSearch =
-      !searchQuery ||
-      r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.cuisineType?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.comment?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCuisine = !filterCuisine || r.cuisineType === filterCuisine;
-    return matchesSearch && matchesCuisine;
-  });
+  const t = listTokens[mode];
+  const muiTheme = useMemo(() => makeListTheme(mode), [mode]);
 
-  // Get unique cuisine types for filter chips
-  const cuisineTypes = [
-    ...new Set(restaurants.map((r) => r.cuisineType).filter(Boolean)),
-  ] as string[];
+  const role = activeList?.role ?? 'viewer';
+  const canEdit = role === 'owner' || role === 'editor';
+  const canManage = role === 'owner';
 
+  const decorated = useMemo(() => restaurants.map(decorate), [restaurants]);
+
+  const filtered = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return decorated.filter((r) => {
+      const matchesStatus =
+        filter === 'all' ||
+        (filter === 'been' && r.isBeen) ||
+        (filter === 'want' && r.isWant);
+      const matchesSearch =
+        !q ||
+        r.name.toLowerCase().includes(q) ||
+        r.cuisine.toLowerCase().includes(q) ||
+        r.comment?.toLowerCase().includes(q);
+      return matchesStatus && matchesSearch;
+    });
+  }, [decorated, filter, searchQuery]);
+
+  const total = decorated.length;
+  const beenCount = decorated.filter((r) => r.isBeen).length;
+  const wantCount = decorated.filter((r) => r.isWant).length;
+
+  const shownMembers = members.slice(0, 3);
+  const extraMembers = members.length - shownMembers.length;
+
+  // --- handlers ------------------------------------------------------------
   const handleAddRestaurant = () => {
+    if (!canEdit) return;
     setSelectedRestaurant(null);
     setFormOpen(true);
   };
 
   const handleEditRestaurant = (restaurant: Restaurant) => {
+    if (!canEdit) return;
     setSelectedRestaurant(restaurant);
     setFormOpen(true);
   };
@@ -156,55 +298,38 @@ export default function Dashboard() {
     restaurantData: Partial<Restaurant>,
     imageFile?: File
   ) => {
+    if (!activeList) return;
     try {
       let imageUrl = restaurantData.image;
-
       if (imageFile) {
         imageUrl = await uploadRestaurantImage(imageFile, userId);
       }
-
-      const dataToSave = {
-        ...restaurantData,
-        image: imageUrl,
-        userId,
-      };
+      const dataToSave = { ...restaurantData, image: imageUrl };
 
       if (selectedRestaurant?.id) {
-        const docRef = doc(db, 'restaurants', selectedRestaurant.id);
-        await updateDoc(docRef, {
-          ...dataToSave,
-          updatedAt: Timestamp.now(),
-        });
-
-        setSnackbar({
-          open: true,
-          message: 'Restaurant updated successfully!',
-          severity: 'success',
-        });
+        await updateRestaurant(selectedRestaurant.id, dataToSave, activeList.id, userId);
+        setSnackbar({ open: true, message: 'Restaurant updated successfully!', severity: 'success' });
       } else {
-        await addDoc(collection(db, 'restaurants'), {
-          ...dataToSave,
-          createdAt: Timestamp.now(),
-          updatedAt: Timestamp.now(),
-        });
-
-        setSnackbar({
-          open: true,
-          message: 'Restaurant added successfully!',
-          severity: 'success',
-        });
+        await createRestaurant(dataToSave, activeList.id, userId);
+        setSnackbar({ open: true, message: 'Restaurant added successfully!', severity: 'success' });
       }
-
       revalidator.revalidate();
       setFormOpen(false);
     } catch (error) {
       console.error('Error saving restaurant:', error);
-      setSnackbar({
-        open: true,
-        message: 'Failed to save restaurant. Please try again.',
-        severity: 'error',
-      });
+      setSnackbar({ open: true, message: 'Failed to save restaurant. Please try again.', severity: 'error' });
       throw error;
+    }
+  };
+
+  const handleToggleStatus = async (r: DecoratedRestaurant) => {
+    if (!canEdit || !r.id) return;
+    try {
+      await setRestaurantStatus(r.id, r.isBeen ? 'want' : 'been');
+      revalidator.revalidate();
+    } catch (error) {
+      console.error('Error updating status:', error);
+      setSnackbar({ open: true, message: 'Failed to update status.', severity: 'error' });
     }
   };
 
@@ -218,41 +343,44 @@ export default function Dashboard() {
 
   const handleConfirmDelete = async () => {
     if (!restaurantToDelete) return;
-
     try {
-      const docRef = doc(db, 'restaurants', restaurantToDelete.id);
-      await deleteDoc(docRef);
-
-      setSnackbar({
-        open: true,
-        message: 'Restaurant deleted successfully!',
-        severity: 'success',
-      });
-
+      await deleteRestaurant(restaurantToDelete.id);
+      setSnackbar({ open: true, message: 'Restaurant deleted successfully!', severity: 'success' });
       revalidator.revalidate();
       setDeleteOpen(false);
       setRestaurantToDelete(null);
     } catch (error) {
       console.error('Error deleting restaurant:', error);
-      setSnackbar({
-        open: true,
-        message: 'Failed to delete restaurant. Please try again.',
-        severity: 'error',
-      });
+      setSnackbar({ open: true, message: 'Failed to delete restaurant. Please try again.', severity: 'error' });
     }
-  };
-
-  const handleEmailList = () => {
-    setEmailOpen(true);
   };
 
   const handleSendEmail = async (email: string) => {
     sendRestaurantListViaMailto(restaurants, email);
-    setSnackbar({
-      open: true,
-      message: 'Opening email client...',
-      severity: 'success',
-    });
+    setSnackbar({ open: true, message: 'Opening email client...', severity: 'success' });
+  };
+
+  const handleSelectList = (listId: string) => {
+    const params = new URLSearchParams(searchParams);
+    params.set('list', listId);
+    setSearchParams(params);
+  };
+
+  const handleCreateList = async () => {
+    const name = newListName.trim();
+    if (!name) return;
+    try {
+      const id = await createList(name, userId);
+      setNewListOpen(false);
+      setNewListName('');
+      const params = new URLSearchParams(searchParams);
+      params.set('list', id);
+      setSearchParams(params);
+      setSnackbar({ open: true, message: 'List created!', severity: 'success' });
+    } catch (error) {
+      console.error('Error creating list:', error);
+      setSnackbar({ open: true, message: 'Failed to create list.', severity: 'error' });
+    }
   };
 
   const handleLogout = () => {
@@ -267,366 +395,717 @@ export default function Dashboard() {
     form.submit();
   };
 
-  return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
-      {/* Dashboard App Bar */}
-      <AppBar
-        position="fixed"
-        component="nav"
-        aria-label="Dashboard navigation"
+  // --- style helpers --------------------------------------------------------
+  const seg = (val: ViewMode) => ({
+    background: view === val ? t.segBg : 'transparent',
+    color: view === val ? t.segFg : t.segIdle,
+  });
+  const pill = (val: FilterMode) => ({
+    background: filter === val ? t.pBg : 'transparent',
+    color: filter === val ? t.pFg : t.pIdle,
+  });
+  const themeBtn = (m: ListMode) => ({
+    background: mode === m ? t.accent : 'transparent',
+    color: mode === m ? t.accentText : t.faint,
+  });
+
+  const segBtnStyle = {
+    border: 'none',
+    cursor: 'pointer',
+    fontFamily: "'DM Sans',sans-serif",
+    fontSize: '13.5px',
+    fontWeight: 500,
+    padding: '7px 18px',
+    borderRadius: '999px',
+  } as const;
+
+  const filterBtnStyle = {
+    border: `1px solid ${t.pillBorder}`,
+    cursor: 'pointer',
+    fontFamily: "'DM Sans',sans-serif",
+    fontSize: '13px',
+    fontWeight: 500,
+    padding: '7px 15px',
+    borderRadius: '999px',
+  } as const;
+
+  const dropChipStyle = {
+    border: `1px solid ${t.pillBorder}`,
+    fontSize: '13px',
+    color: t.chip,
+    padding: '7px 14px',
+    borderRadius: '999px',
+  } as const;
+
+  const serif = "'Instrument Serif',serif";
+
+  const renderAvatar = (m: ListMember, idx: number) => {
+    const name = m.profile?.displayName?.trim();
+    const initial = (name?.[0] ?? '?').toUpperCase();
+    const bg = idx === 0 ? t.accent : idx === 1 ? t.avatar2 : t.avatar3;
+    const fg = idx === 0 ? t.accentText : idx === 1 ? '#fff' : t.muted;
+    return (
+      <Box
+        key={m.id}
+        title={name || 'Member'}
+        sx={{
+          width: 30,
+          height: 30,
+          borderRadius: '50%',
+          background: m.profile?.avatarUrl ? `center/cover url(${m.profile.avatarUrl})` : bg,
+          color: fg,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 12,
+          fontWeight: 600,
+          border: `2px solid ${t.panelBg}`,
+          ml: idx === 0 ? 0 : '-9px',
+        }}
       >
-        <Toolbar
+        {!m.profile?.avatarUrl && initial}
+      </Box>
+    );
+  };
+
+  return (
+    <ThemeProvider theme={muiTheme}>
+      <Box
+        sx={{
+          minHeight: '100vh',
+          background: t.pageBg,
+          color: t.ink,
+          fontFamily: "'DM Sans',sans-serif",
+          transition: 'background .25s',
+          '& *::-webkit-scrollbar': { width: 10, height: 10 },
+          '& *::-webkit-scrollbar-thumb': {
+            background: 'rgba(120,110,95,.3)',
+            borderRadius: 8,
+          },
+        }}
+      >
+        {/* header */}
+        <Box
+          component="header"
           sx={{
-            maxWidth: '1400px',
-            width: '100%',
-            mx: 'auto',
-            px: { xs: 2, sm: 3 },
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: { xs: '14px 18px', md: '18px 40px' },
+            borderBottom: `1px solid ${t.border}`,
+            background: t.panelBg,
+            gap: 2,
           }}
         >
-          <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Logo />
-            {!isMobile && (
-              <Chip
-                icon={<RestaurantIcon sx={{ fontSize: 16 }} />}
-                label={`${restaurants.length} restaurant${restaurants.length !== 1 ? 's' : ''}`}
-                size="small"
-                sx={{
-                  backgroundColor: 'rgba(232, 115, 74, 0.12)',
-                  color: '#E8734A',
-                  fontWeight: 600,
-                  border: '1px solid rgba(232, 115, 74, 0.2)',
-                }}
-              />
-            )}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: '11px' }}>
+            <Box
+              aria-hidden
+              sx={{
+                width: 27,
+                height: 27,
+                background: t.accent,
+                borderRadius: '50% 50% 50% 3px',
+                transform: 'rotate(45deg)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flex: 'none',
+              }}
+            >
+              <Box sx={{ width: 9, height: 9, background: t.panelBg, borderRadius: '50%', transform: 'rotate(-45deg)' }} />
+            </Box>
+            <Box component="span" sx={{ fontFamily: serif, fontSize: 26, letterSpacing: '.01em' }}>
+              The List
+            </Box>
           </Box>
 
-          {isMobile ? (
-            <>
-              <IconButton
-                color="inherit"
-                onClick={() => setMobileMenuOpen(true)}
-                aria-label="Open menu"
-              >
-                <MenuIcon />
-              </IconButton>
-              <Drawer
-                anchor="right"
-                open={mobileMenuOpen}
-                onClose={() => setMobileMenuOpen(false)}
-                PaperProps={{
-                  sx: {
-                    width: 280,
-                    background: '#141420',
-                    borderLeft: '1px solid rgba(255,255,255,0.08)',
-                  },
-                }}
-              >
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', p: 1 }}>
-                  <IconButton
-                    onClick={() => setMobileMenuOpen(false)}
-                    aria-label="Close menu"
-                    sx={{ color: 'text.primary' }}
-                  >
-                    <CloseIcon />
-                  </IconButton>
-                </Box>
-                <List>
-                  <ListItem disablePadding>
-                    <ListItemButton
-                      onClick={() => {
-                        handleAddRestaurant();
-                        setMobileMenuOpen(false);
-                      }}
-                    >
-                      <ListItemIcon sx={{ color: '#E8734A', minWidth: 40 }}>
-                        <Add />
-                      </ListItemIcon>
-                      <ListItemText primary="Add Restaurant" />
-                    </ListItemButton>
-                  </ListItem>
-                  <ListItem disablePadding>
-                    <ListItemButton
-                      onClick={() => {
-                        handleEmailList();
-                        setMobileMenuOpen(false);
-                      }}
-                      disabled={restaurants.length === 0}
-                    >
-                      <ListItemIcon sx={{ color: 'text.secondary', minWidth: 40 }}>
-                        <Email />
-                      </ListItemIcon>
-                      <ListItemText primary="Email List" />
-                    </ListItemButton>
-                  </ListItem>
-                  <ListItem disablePadding>
-                    <ListItemButton onClick={handleLogout}>
-                      <ListItemIcon sx={{ color: 'text.secondary', minWidth: 40 }}>
-                        <Logout />
-                      </ListItemIcon>
-                      <ListItemText primary="Sign Out" />
-                    </ListItemButton>
-                  </ListItem>
-                </List>
-              </Drawer>
-            </>
-          ) : (
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-              <Button
-                variant="contained"
-                startIcon={<Add />}
-                onClick={handleAddRestaurant}
-                size="small"
-              >
-                Add Restaurant
-              </Button>
-              <Tooltip title="Email your list">
-                <IconButton
-                  color="inherit"
-                  onClick={handleEmailList}
-                  disabled={restaurants.length === 0}
-                  aria-label="Email restaurant list"
-                >
-                  <Email />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Sign out">
-                <IconButton
-                  color="inherit"
-                  onClick={handleLogout}
-                  aria-label="Sign out"
-                >
-                  <Logout />
-                </IconButton>
-              </Tooltip>
-            </Box>
-          )}
-        </Toolbar>
-      </AppBar>
-
-      {/* Main Content */}
-      <Container
-        maxWidth="lg"
-        sx={{ pt: { xs: 10, sm: 12 }, pb: 6, px: { xs: 2, sm: 3 } }}
-      >
-        {/* Header + Search */}
-        <Box sx={{ mb: 4 }}>
-          <Typography
-            variant="h3"
-            component="h1"
-            sx={{
-              fontWeight: 800,
-              mb: 1,
-              fontSize: { xs: '1.8rem', sm: '2.4rem' },
-              letterSpacing: '-0.02em',
-            }}
+          <Box
+            component="nav"
+            sx={{ display: { xs: 'none', md: 'flex' }, gap: '30px', fontSize: '14.5px', color: t.muted }}
           >
-            My Collection
-          </Typography>
-          <Typography
-            variant="body1"
-            sx={{ color: 'text.secondary', mb: 3 }}
-          >
-            Your curated list of restaurants worth remembering.
-          </Typography>
+            <Box component="span" sx={{ color: t.ink, fontWeight: 500 }}>Restaurants</Box>
+            <Box component="span">Cities</Box>
+            <Box component="span">Map</Box>
+            <Box component="span">Wishlist</Box>
+          </Box>
 
-          {/* Search Bar */}
-          <TextField
-            fullWidth
-            placeholder="Search restaurants, cuisines, or notes..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            variant="outlined"
-            size="small"
-            aria-label="Search restaurants"
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search sx={{ color: 'text.secondary' }} />
-                </InputAdornment>
-              ),
-            }}
-            sx={{
-              maxWidth: 500,
-              mb: 2,
-            }}
-          />
-
-          {/* Cuisine filter chips */}
-          {cuisineTypes.length > 0 && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            {/* search */}
             <Box
-              sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}
-              role="group"
-              aria-label="Filter by cuisine type"
+              sx={{
+                display: { xs: 'none', sm: 'flex' },
+                alignItems: 'center',
+                gap: '8px',
+                background: t.searchBg,
+                border: `1px solid ${t.border}`,
+                borderRadius: '999px',
+                padding: '8px 14px',
+                width: 180,
+                color: t.faint,
+                fontSize: '13.5px',
+              }}
             >
-              <Chip
-                label="All"
-                size="small"
-                onClick={() => setFilterCuisine(null)}
-                variant={filterCuisine === null ? 'filled' : 'outlined'}
+              <Box aria-hidden sx={{ width: 13, height: 13, border: `1.6px solid ${t.faint}`, borderRadius: '50%', flex: 'none' }} />
+              <Box
+                component="input"
+                value={searchQuery}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+                placeholder="Search places…"
+                aria-label="Search places"
                 sx={{
-                  fontWeight: 600,
-                  ...(filterCuisine === null
-                    ? {
-                        backgroundColor: 'rgba(232, 115, 74, 0.15)',
-                        color: '#E8734A',
-                        border: '1px solid rgba(232, 115, 74, 0.3)',
-                      }
-                    : {
-                        borderColor: 'rgba(255,255,255,0.15)',
-                      }),
+                  border: 'none',
+                  outline: 'none',
+                  background: 'transparent',
+                  color: t.ink,
+                  fontFamily: "'DM Sans',sans-serif",
+                  fontSize: '13.5px',
+                  width: '100%',
+                  '::placeholder': { color: t.faint },
                 }}
               />
-              {cuisineTypes.map((cuisine) => (
-                <Chip
-                  key={cuisine}
-                  label={cuisine}
-                  size="small"
-                  onClick={() =>
-                    setFilterCuisine(filterCuisine === cuisine ? null : cuisine)
-                  }
-                  variant={filterCuisine === cuisine ? 'filled' : 'outlined'}
-                  sx={{
-                    fontWeight: 500,
-                    ...(filterCuisine === cuisine
-                      ? {
-                          backgroundColor: 'rgba(232, 115, 74, 0.15)',
-                          color: '#E8734A',
-                          border: '1px solid rgba(232, 115, 74, 0.3)',
-                        }
-                      : {
-                          borderColor: 'rgba(255,255,255,0.1)',
-                        }),
-                  }}
-                />
-              ))}
             </Box>
+
+            {/* theme toggle */}
+            <Box sx={{ display: 'flex', background: t.searchBg, border: `1px solid ${t.border}`, borderRadius: '999px', padding: '3px' }}>
+              <Box component="button" onClick={() => setMode('light')} title="Light" aria-label="Light theme"
+                sx={{ border: 'none', cursor: 'pointer', width: 30, height: 26, borderRadius: '999px', fontSize: 13, ...themeBtn('light') }}>☀</Box>
+              <Box component="button" onClick={() => setMode('dark')} title="Dark" aria-label="Dark theme"
+                sx={{ border: 'none', cursor: 'pointer', width: 30, height: 26, borderRadius: '999px', fontSize: 13, ...themeBtn('dark') }}>☾</Box>
+            </Box>
+
+            {/* add */}
+            {canEdit && (
+              <Tooltip title="Add a place">
+                <Box
+                  component="button"
+                  onClick={handleAddRestaurant}
+                  aria-label="Add restaurant"
+                  sx={{
+                    display: { xs: 'none', sm: 'inline-flex' },
+                    alignItems: 'center',
+                    gap: '6px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: t.accent,
+                    color: t.accentText,
+                    fontFamily: "'DM Sans',sans-serif",
+                    fontWeight: 600,
+                    fontSize: '13.5px',
+                    padding: '8px 16px',
+                    borderRadius: '999px',
+                  }}
+                >
+                  <Add sx={{ fontSize: 17 }} /> Add
+                </Box>
+              </Tooltip>
+            )}
+
+            {/* share */}
+            <Tooltip title="Share & members">
+              <IconButton onClick={() => setShareOpen(true)} aria-label="Share and members" sx={{ color: t.muted }}>
+                <PersonAddAlt1 />
+              </IconButton>
+            </Tooltip>
+
+            {/* avatar stack → account menu */}
+            <Badge color="error" variant="dot" invisible={pendingInvites.length === 0} overlap="circular">
+              <Box
+                component="button"
+                onClick={(e: React.MouseEvent<HTMLButtonElement>) => setMenuAnchor(e.currentTarget)}
+                aria-label="Account menu"
+                aria-haspopup="true"
+                sx={{ display: 'flex', border: 'none', background: 'transparent', cursor: 'pointer', p: 0 }}
+              >
+                {shownMembers.length > 0
+                  ? shownMembers.map((m, i) => renderAvatar(m, i))
+                  : (
+                    <Box sx={{ width: 30, height: 30, borderRadius: '50%', background: t.accent, color: t.accentText, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600 }}>
+                      {(profile?.displayName?.[0] ?? 'M').toUpperCase()}
+                    </Box>
+                  )}
+                {extraMembers > 0 && (
+                  <Box sx={{ width: 30, height: 30, borderRadius: '50%', background: t.avatar3, color: t.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, border: `2px solid ${t.panelBg}`, ml: '-9px' }}>
+                    +{extraMembers}
+                  </Box>
+                )}
+              </Box>
+            </Badge>
+            <Menu
+              anchorEl={menuAnchor}
+              open={Boolean(menuAnchor)}
+              onClose={() => setMenuAnchor(null)}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+            >
+              <MenuItem onClick={() => { setMenuAnchor(null); navigate('/profile'); }}>
+                <ListItemIcon><Person fontSize="small" sx={{ color: t.muted }} /></ListItemIcon>
+                <ListItemText>Profile</ListItemText>
+              </MenuItem>
+              <MenuItem onClick={() => { setMenuAnchor(null); setInvitesOpen(true); }}>
+                <ListItemIcon>
+                  <Badge color="error" badgeContent={pendingInvites.length} invisible={pendingInvites.length === 0}>
+                    <MailOutline fontSize="small" sx={{ color: t.muted }} />
+                  </Badge>
+                </ListItemIcon>
+                <ListItemText>Invitations</ListItemText>
+              </MenuItem>
+              <MenuItem onClick={() => { setMenuAnchor(null); setEmailOpen(true); }} disabled={restaurants.length === 0}>
+                <ListItemIcon><Email fontSize="small" sx={{ color: t.muted }} /></ListItemIcon>
+                <ListItemText>Email list</ListItemText>
+              </MenuItem>
+              <MenuItem onClick={() => { setMenuAnchor(null); handleLogout(); }}>
+                <ListItemIcon><Logout fontSize="small" sx={{ color: t.muted }} /></ListItemIcon>
+                <ListItemText>Sign out</ListItemText>
+              </MenuItem>
+            </Menu>
+          </Box>
+        </Box>
+
+        {/* body container */}
+        <Box sx={{ maxWidth: 1320, mx: 'auto', padding: { xs: '24px 18px 0', md: '30px 40px 0' } }}>
+          {/* title + view toggle */}
+          <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+            <Box>
+              <ListSwitcher
+                lists={lists}
+                activeList={activeList}
+                serifFont={serif}
+                onSelect={handleSelectList}
+                onCreate={() => setNewListOpen(true)}
+              />
+              <Box component="p" sx={{ color: t.muted, fontSize: 15, mt: '8px', mb: 0 }}>
+                {total} places · {beenCount} been · {wantCount} want to try
+                {activeList && role !== 'owner' && ` · ${role}`}
+              </Box>
+            </Box>
+            <Box sx={{ display: 'flex', background: t.searchBg, border: `1px solid ${t.border}`, borderRadius: '999px', padding: '4px' }}>
+              <Box component="button" onClick={() => setView('tile')} sx={{ ...segBtnStyle, ...seg('tile') }}>Tile</Box>
+              <Box component="button" onClick={() => setView('list')} sx={{ ...segBtnStyle, ...seg('list') }}>List</Box>
+              <Box component="button" onClick={() => setView('map')} sx={{ ...segBtnStyle, ...seg('map') }}>Map</Box>
+            </Box>
+          </Box>
+
+          {/* filters */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: '10px', mt: '22px', flexWrap: 'wrap' }}>
+            <Box component="button" onClick={() => setFilter('all')} sx={{ ...filterBtnStyle, ...pill('all') }}>All</Box>
+            <Box component="button" onClick={() => setFilter('been')} sx={{ ...filterBtnStyle, ...pill('been') }}>Been</Box>
+            <Box component="button" onClick={() => setFilter('want')} sx={{ ...filterBtnStyle, ...pill('want') }}>Want to try</Box>
+            <Box sx={{ width: '1px', height: 22, background: t.divider, mx: '4px' }} />
+            <Box sx={dropChipStyle}>Cuisine ▾</Box>
+            <Box sx={dropChipStyle}>Cost ▾</Box>
+            <Box sx={dropChipStyle}>Rating ▾</Box>
+            <Box sx={{ ml: 'auto', fontSize: 13, color: t.faint }}>{filtered.length} showing</Box>
+          </Box>
+
+          {/* empty state */}
+          {filtered.length === 0 ? (
+            <Box
+              sx={{
+                mt: '24px',
+                mb: '40px',
+                textAlign: 'center',
+                py: { xs: 6, md: 10 },
+                px: 3,
+                borderRadius: '16px',
+                border: `1px solid ${t.border}`,
+                background: t.cardBg,
+              }}
+            >
+              <Box sx={{ fontFamily: serif, fontSize: 30, mb: 1 }}>
+                {searchQuery || filter !== 'all' ? 'No matches' : 'This list is empty'}
+              </Box>
+              <Box sx={{ color: t.muted, fontSize: 15, mb: 3, maxWidth: 420, mx: 'auto' }}>
+                {searchQuery || filter !== 'all'
+                  ? 'Try a different search or filter.'
+                  : canEdit
+                  ? 'Add your first restaurant to start building the list.'
+                  : 'Nothing here yet.'}
+              </Box>
+              {!searchQuery && filter === 'all' && canEdit && (
+                <Box
+                  component="button"
+                  onClick={handleAddRestaurant}
+                  sx={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: t.accent,
+                    color: t.accentText,
+                    fontFamily: "'DM Sans',sans-serif",
+                    fontWeight: 600,
+                    fontSize: '14px',
+                    padding: '10px 20px',
+                    borderRadius: '999px',
+                  }}
+                >
+                  <Add sx={{ fontSize: 18 }} /> Add your first restaurant
+                </Box>
+              )}
+            </Box>
+          ) : (
+            <>
+              {/* TILE */}
+              {view === 'tile' && (
+                <Box sx={{ padding: '24px 0 40px' }}>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '20px' }}>
+                    {filtered.map((r) => (
+                      <Box
+                        key={r.id}
+                        onClick={() => handleEditRestaurant(r)}
+                        sx={{
+                          border: `1px solid ${t.border}`,
+                          borderRadius: '16px',
+                          overflow: 'hidden',
+                          background: t.cardBg,
+                          cursor: canEdit ? 'pointer' : 'default',
+                          transition: 'transform .15s, box-shadow .15s',
+                          '&:hover': canEdit
+                            ? { transform: 'translateY(-3px)', boxShadow: '0 12px 28px rgba(0,0,0,.12)' }
+                            : {},
+                          '&:hover .card-actions': { opacity: 1 },
+                        }}
+                      >
+                        <Box sx={{ position: 'relative', height: 158, background: t.monoGrad, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {r.image ? (
+                            <Box component="img" src={r.image} alt={r.name} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          ) : (
+                            <Box component="span" sx={{ fontFamily: serif, fontSize: 68, color: t.monoInitial, lineHeight: 1 }}>{r.initial}</Box>
+                          )}
+                          <Box
+                            component="span"
+                            onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleToggleStatus(r); }}
+                            title={canEdit ? 'Toggle been / want' : undefined}
+                            sx={{
+                              position: 'absolute',
+                              top: 12,
+                              right: 12,
+                              background: r.isBeen ? t.beenBg : t.wantBg,
+                              color: r.isBeen ? t.beenFg : t.wantFg,
+                              fontSize: '11.5px',
+                              fontWeight: 600,
+                              padding: '5px 11px',
+                              borderRadius: '999px',
+                              cursor: canEdit ? 'pointer' : 'default',
+                            }}
+                          >
+                            {r.isBeen ? '✓ Been' : 'Want to try'}
+                          </Box>
+                          {canEdit && (
+                            <Box className="card-actions" sx={{ position: 'absolute', top: 10, left: 10, display: 'flex', gap: '6px', opacity: 0, transition: 'opacity .15s' }}>
+                              <CardAction label={`Edit ${r.name}`} onClick={() => handleEditRestaurant(r)} tokens={t}>
+                                <EditIcon sx={{ fontSize: 15 }} />
+                              </CardAction>
+                              <CardAction label={`Delete ${r.name}`} onClick={() => r.id && handleDeleteClick(r.id)} tokens={t} danger>
+                                <DeleteIcon sx={{ fontSize: 15 }} />
+                              </CardAction>
+                            </Box>
+                          )}
+                        </Box>
+                        <Box sx={{ padding: '14px 16px 16px' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px' }}>
+                            <Box component="span" sx={{ fontFamily: serif, fontSize: 20 }}>{r.name}</Box>
+                            <Box component="span" sx={{ color: t.cost, fontSize: 14, fontWeight: 600, letterSpacing: '.03em' }}>{r.costStr}</Box>
+                          </Box>
+                          <Box sx={{ color: t.muted, fontSize: 13, mt: '4px' }}>{r.meta}</Box>
+                          <Box sx={{ mt: '11px', height: 18 }}>
+                            {r.rated ? (
+                              <Box component="span" sx={{ color: t.rating, fontSize: 15, letterSpacing: '2px' }}>{r.ratingStr}</Box>
+                            ) : (
+                              <Box component="span" sx={{ color: t.notRated, fontSize: 13, fontStyle: 'italic' }}>Not rated yet</Box>
+                            )}
+                          </Box>
+                        </Box>
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              )}
+
+              {/* LIST */}
+              {view === 'list' && (
+                <Box sx={{ padding: '24px 0 40px' }}>
+                  <Box sx={{ border: `1px solid ${t.border}`, borderRadius: '14px', overflow: 'hidden' }}>
+                    {filtered.map((r) => (
+                      <Box
+                        key={r.id}
+                        onClick={() => handleEditRestaurant(r)}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '16px',
+                          padding: '13px 18px',
+                          borderBottom: `1px solid ${t.borderSoft}`,
+                          background: t.cardBg,
+                          cursor: canEdit ? 'pointer' : 'default',
+                          '&:hover': canEdit ? { filter: 'brightness(0.98)' } : {},
+                          '&:hover .row-actions': { opacity: 1 },
+                          '&:last-of-type': { borderBottom: 'none' },
+                        }}
+                      >
+                        <Box sx={{ width: 46, height: 46, borderRadius: '11px', background: t.monoGrad, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', overflow: 'hidden' }}>
+                          {r.image ? (
+                            <Box component="img" src={r.image} alt={r.name} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          ) : (
+                            <Box component="span" sx={{ fontFamily: serif, fontSize: 24, color: t.monoInitial }}>{r.initial}</Box>
+                          )}
+                        </Box>
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Box sx={{ fontFamily: serif, fontSize: 18 }}>{r.name}</Box>
+                          <Box sx={{ color: t.muted, fontSize: 13, mt: '1px' }}>{r.meta}</Box>
+                        </Box>
+                        <Box sx={{ width: 90, color: t.cost, fontSize: 14, fontWeight: 600, display: { xs: 'none', sm: 'block' } }}>{r.costStr}</Box>
+                        <Box sx={{ width: 110, color: t.rating, fontSize: 14, letterSpacing: '1px', display: { xs: 'none', sm: 'block' } }}>{r.ratingStr}</Box>
+                        <Box
+                          component="span"
+                          onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleToggleStatus(r); }}
+                          sx={{
+                            width: 96,
+                            textAlign: 'center',
+                            background: r.isBeen ? t.beenBg : t.wantBg,
+                            color: r.isBeen ? t.beenFg : t.wantFg,
+                            fontSize: '11.5px',
+                            fontWeight: 600,
+                            padding: '5px 0',
+                            borderRadius: '999px',
+                            flex: 'none',
+                            cursor: canEdit ? 'pointer' : 'default',
+                          }}
+                        >
+                          {r.isBeen ? '✓ Been' : 'Want to try'}
+                        </Box>
+                        {canEdit && (
+                          <Box className="row-actions" sx={{ display: 'flex', gap: '4px', opacity: 0, transition: 'opacity .15s' }}>
+                            <CardAction label={`Edit ${r.name}`} onClick={() => handleEditRestaurant(r)} tokens={t} solid>
+                              <EditIcon sx={{ fontSize: 15 }} />
+                            </CardAction>
+                            <CardAction label={`Delete ${r.name}`} onClick={() => r.id && handleDeleteClick(r.id)} tokens={t} solid danger>
+                              <DeleteIcon sx={{ fontSize: 15 }} />
+                            </CardAction>
+                          </Box>
+                        )}
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              )}
+
+              {/* MAP */}
+              {view === 'map' && (
+                <Box sx={{ padding: '24px 0 40px', display: 'flex', gap: '18px', flexDirection: { xs: 'column', md: 'row' } }}>
+                  <Box
+                    sx={{
+                      flex: 1,
+                      position: 'relative',
+                      height: 540,
+                      borderRadius: '16px',
+                      border: `1px solid ${t.border}`,
+                      overflow: 'hidden',
+                      background: t.mapBg,
+                      backgroundImage: `linear-gradient(${t.mapGrid} 1px,transparent 1px),linear-gradient(90deg,${t.mapGrid} 1px,transparent 1px)`,
+                      backgroundSize: '48px 48px',
+                    }}
+                  >
+                    <Box sx={{ position: 'absolute', top: '38%', left: '-5%', width: '70%', height: 60, background: t.mapWater, transform: 'rotate(-8deg)' }} />
+                    <Box sx={{ position: 'absolute', top: '12%', left: '40%', width: 14, height: '90%', background: t.mapPark }} />
+                    {filtered.map((r) => (
+                      <Box
+                        key={r.id}
+                        onClick={() => handleEditRestaurant(r)}
+                        sx={{ position: 'absolute', left: `${r.px}%`, top: `${r.py}%`, transform: 'translate(-50%,-100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: canEdit ? 'pointer' : 'default' }}
+                      >
+                        <Box sx={{ background: t.pinLabelBg, border: `1px solid ${t.pinLabelBorder}`, color: t.pinLabelFg, boxShadow: '0 2px 8px rgba(0,0,0,.18)', fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: '7px', whiteSpace: 'nowrap', mb: '3px' }}>{r.name}</Box>
+                        <Box sx={{ width: 18, height: 18, background: t.accent, borderRadius: '50% 50% 50% 2px', transform: 'rotate(45deg)', border: `2px solid ${t.pinBorder}`, boxShadow: '0 2px 4px rgba(0,0,0,.25)' }} />
+                      </Box>
+                    ))}
+                  </Box>
+                  <Box sx={{ width: { xs: '100%', md: 330 }, flex: 'none', height: 540, overflowY: 'auto', border: `1px solid ${t.border}`, borderRadius: '16px', background: t.cardBg }}>
+                    {filtered.map((r) => (
+                      <Box
+                        key={r.id}
+                        onClick={() => handleEditRestaurant(r)}
+                        sx={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderBottom: `1px solid ${t.borderSoft}`, cursor: canEdit ? 'pointer' : 'default', '&:hover': canEdit ? { filter: 'brightness(0.98)' } : {} }}
+                      >
+                        <Box sx={{ width: 34, height: 34, borderRadius: '9px', background: t.monoGrad, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', overflow: 'hidden' }}>
+                          {r.image ? (
+                            <Box component="img" src={r.image} alt={r.name} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          ) : (
+                            <Box component="span" sx={{ fontFamily: serif, fontSize: 18, color: t.monoInitial }}>{r.initial}</Box>
+                          )}
+                        </Box>
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Box sx={{ fontSize: 14, fontWeight: 500 }}>{r.name}</Box>
+                          <Box sx={{ color: t.muted, fontSize: 12 }}>{r.cuisine}</Box>
+                        </Box>
+                        <Box component="span" sx={{ color: t.cost, fontSize: 13, fontWeight: 600 }}>{r.costStr}</Box>
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              )}
+            </>
           )}
         </Box>
 
-        {/* Restaurant Grid */}
-        {filteredRestaurants.length === 0 ? (
-          <Box
-            sx={{
-              textAlign: 'center',
-              py: { xs: 6, sm: 10 },
-              px: 3,
-              borderRadius: '24px',
-              background: 'rgba(255, 255, 255, 0.02)',
-              border: '1px solid rgba(255, 255, 255, 0.06)',
-            }}
-          >
-            <RestaurantIcon
-              sx={{
-                fontSize: 48,
-                color: 'text.secondary',
-                mb: 2,
-                opacity: 0.5,
-              }}
-            />
-            <Typography
-              variant="h5"
-              sx={{ fontWeight: 700, mb: 1 }}
-            >
-              {searchQuery || filterCuisine
-                ? 'No matches found'
-                : 'No restaurants yet'}
-            </Typography>
-            <Typography
-              variant="body1"
-              sx={{ color: 'text.secondary', mb: 4, maxWidth: 400, mx: 'auto' }}
-            >
-              {searchQuery || filterCuisine
-                ? 'Try adjusting your search or filter.'
-                : 'Start building your list by adding your favorite restaurants!'}
-            </Typography>
-            {!searchQuery && !filterCuisine && (
-              <Button
-                variant="contained"
-                startIcon={<Add />}
-                onClick={handleAddRestaurant}
-                size="large"
-              >
-                Add Your First Restaurant
-              </Button>
-            )}
+        {/* footer */}
+        <Box
+          component="footer"
+          sx={{
+            borderTop: `1px solid ${t.border}`,
+            background: t.footerBg,
+            padding: { xs: '20px 18px', md: '24px 40px' },
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 2,
+            flexWrap: 'wrap',
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: '9px', color: t.muted, fontSize: 13 }}>
+            <Box aria-hidden sx={{ width: 16, height: 16, background: t.accent, borderRadius: '50% 50% 50% 2px', transform: 'rotate(45deg)' }} />
+            <Box component="span" sx={{ fontFamily: serif, fontSize: 16, color: t.ink }}>The List</Box>
+            <Box component="span" sx={{ ml: '6px' }}>a shared table for a few good friends</Box>
           </Box>
-        ) : (
-          <Grid container spacing={3}>
-            {filteredRestaurants.map((restaurant, index) => (
-              <Grid item xs={12} sm={6} md={4} key={restaurant.id}>
-                <Box
-                  className="animate-fade-in-up"
-                  sx={{ animationDelay: `${index * 60}ms` }}
-                >
-                  <RestaurantCard
-                    restaurant={restaurant}
-                    onEdit={handleEditRestaurant}
-                    onDelete={handleDeleteClick}
-                  />
-                </Box>
-              </Grid>
-            ))}
-          </Grid>
-        )}
+          <Box sx={{ color: t.faint, fontSize: '12.5px' }}>Ottawa &amp; beyond · {total} spots and counting</Box>
+        </Box>
 
-        {/* Mobile FAB */}
-        {isMobile && (
-          <Button
-            variant="contained"
+        {/* mobile FAB */}
+        {canEdit && (
+          <Box
+            component="button"
             onClick={handleAddRestaurant}
             aria-label="Add restaurant"
             sx={{
+              display: { xs: 'flex', sm: 'none' },
+              alignItems: 'center',
+              justifyContent: 'center',
               position: 'fixed',
               bottom: 24,
               right: 24,
-              width: 60,
-              height: 60,
-              minWidth: 'unset',
+              width: 56,
+              height: 56,
+              border: 'none',
+              cursor: 'pointer',
               borderRadius: '50%',
-              boxShadow: '0 8px 24px rgba(232, 115, 74, 0.4)',
+              background: t.accent,
+              color: t.accentText,
+              boxShadow: '0 8px 24px rgba(0,0,0,.3)',
               zIndex: 1000,
             }}
           >
-            <Add sx={{ fontSize: 28 }} />
-          </Button>
+            <Add sx={{ fontSize: 26 }} />
+          </Box>
         )}
-      </Container>
 
-      {/* Dialogs */}
-      <RestaurantFormDialog
-        open={formOpen}
-        restaurant={selectedRestaurant}
-        onClose={() => setFormOpen(false)}
-        onSave={handleSaveRestaurant}
-      />
-      <DeleteConfirmDialog
-        open={deleteOpen}
-        restaurantName={restaurantToDelete?.name || ''}
-        onClose={() => setDeleteOpen(false)}
-        onConfirm={handleConfirmDelete}
-      />
-      <EmailDialog
-        open={emailOpen}
-        onClose={() => setEmailOpen(false)}
-        onSend={handleSendEmail}
-      />
+        {/* dialogs */}
+        <RestaurantFormDialog
+          open={formOpen}
+          restaurant={selectedRestaurant}
+          onClose={() => setFormOpen(false)}
+          onSave={handleSaveRestaurant}
+        />
+        <DeleteConfirmDialog
+          open={deleteOpen}
+          restaurantName={restaurantToDelete?.name || ''}
+          onClose={() => setDeleteOpen(false)}
+          onConfirm={handleConfirmDelete}
+        />
+        <EmailDialog open={emailOpen} onClose={() => setEmailOpen(false)} onSend={handleSendEmail} />
+        <ShareListDialog
+          open={shareOpen}
+          list={activeList}
+          members={members}
+          invites={listInvites}
+          currentUserId={userId}
+          canManage={canManage}
+          onClose={() => setShareOpen(false)}
+          onChanged={() => revalidator.revalidate()}
+        />
+        <InvitesDialog
+          open={invitesOpen}
+          invites={pendingInvites}
+          onClose={() => setInvitesOpen(false)}
+          onChanged={() => revalidator.revalidate()}
+        />
 
-      {/* Snackbar */}
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={4000}
-        onClose={() => setSnackbar({ ...snackbar, open: false })}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert
+        {/* new list dialog */}
+        <Dialog open={newListOpen} onClose={() => setNewListOpen(false)} maxWidth="xs" fullWidth>
+          <DialogTitle sx={{ fontWeight: 700 }}>New list</DialogTitle>
+          <DialogContent>
+            <TextField
+              fullWidth
+              label="List name"
+              value={newListName}
+              onChange={(e) => setNewListName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleCreateList(); }}
+              sx={{ mt: 1 }}
+            />
+          </DialogContent>
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button onClick={() => setNewListOpen(false)} sx={{ color: 'text.secondary' }}>Cancel</Button>
+            <Button onClick={handleCreateList} variant="contained" disabled={!newListName.trim()}>Create</Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* snackbar */}
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={4000}
           onClose={() => setSnackbar({ ...snackbar, open: false })}
-          severity={snackbar.severity}
-          variant="filled"
-          sx={{ width: '100%' }}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
         >
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
-    </Box>
+          <Alert
+            onClose={() => setSnackbar({ ...snackbar, open: false })}
+            severity={snackbar.severity}
+            variant="filled"
+            sx={{ width: '100%' }}
+          >
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
+      </Box>
+    </ThemeProvider>
+  );
+}
+
+/** Small circular hover action button used on cards and list rows. */
+function CardAction({
+  children,
+  label,
+  onClick,
+  tokens,
+  danger,
+  solid,
+}: {
+  children: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  tokens: (typeof listTokens)['light'];
+  danger?: boolean;
+  solid?: boolean;
+}) {
+  return (
+    <IconButton
+      size="small"
+      aria-label={label}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      sx={{
+        width: 28,
+        height: 28,
+        background: solid ? tokens.searchBg : 'rgba(255,255,255,0.9)',
+        border: `1px solid ${tokens.border}`,
+        color: danger ? '#C0492B' : tokens.chip,
+        '&:hover': {
+          background: solid ? tokens.pillBorder : '#fff',
+          color: danger ? '#C0492B' : tokens.accent,
+        },
+      }}
+    >
+      {children}
+    </IconButton>
   );
 }

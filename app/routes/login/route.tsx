@@ -7,10 +7,9 @@ import {
   Alert,
 } from "@mui/material";
 import type { LoaderFunction, ActionFunction } from "@remix-run/node";
-import { Form, useActionData, redirect, Link } from "@remix-run/react";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "~/firebase";
-import { getSession, commitSession } from "~/session.server";
+import { json, redirect } from "@remix-run/node";
+import { Form, useActionData, Link } from "@remix-run/react";
+import { createSupabaseServerClient } from "~/supabase.server";
 import GoogleIcon from "@mui/icons-material/Google";
 
 type ActionData = {
@@ -18,9 +17,11 @@ type ActionData = {
 };
 
 export const loader: LoaderFunction = async ({ request }) => {
-  const session = await getSession(request.headers.get("Cookie"));
-  const token = session.get("token");
-  if (token) {
+  const { supabase } = createSupabaseServerClient(request);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user) {
     return redirect("/dashboard");
   }
   return {};
@@ -30,32 +31,16 @@ export const action: ActionFunction = async ({ request }) => {
   const formData = await request.formData();
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
-  try {
-    const userCredential = await signInWithEmailAndPassword(
-      auth,
-      email,
-      password
-    );
-    const token = await userCredential.user.getIdToken();
 
-    const session = await getSession(request.headers.get("Cookie"));
-    session.set("token", token);
-    session.set("userId", userCredential.user.uid);
+  const { supabase, headers } = createSupabaseServerClient(request);
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
 
-    return redirect("/dashboard", {
-      headers: {
-        "Set-Cookie": await commitSession(session),
-      },
-    });
-  } catch (err: unknown) {
-    if (err instanceof Error) {
-      console.error("Login error:", err.message);
-      return { error: err.message } as ActionData;
-    } else {
-      console.error("Login error:", err);
-      return { error: "An unknown error occurred" } as ActionData;
-    }
+  if (error) {
+    console.error("Login error:", error.message);
+    return json<ActionData>({ error: error.message });
   }
+
+  return redirect("/dashboard", { headers });
 };
 
 export default function LoginPage() {

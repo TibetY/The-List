@@ -1,15 +1,15 @@
-import type { LoaderFunction } from "@remix-run/node";
+import type { ActionFunction, LoaderFunction } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
-import { getSession, destroySession } from "~/session.server";
+import { createSupabaseServerClient } from "~/supabase.server";
 
-export const loader: LoaderFunction = async ({ request }) => {
-  const session = await getSession(request.headers.get("Cookie"));
-  return redirect("/", {
-    headers: {
-      "Set-Cookie": await destroySession(session),
-    },
-  });
-};
+async function signOut(request: Request) {
+  const { supabase, headers } = createSupabaseServerClient(request);
+  await supabase.auth.signOut();
+  return redirect("/", { headers });
+}
+
+export const action: ActionFunction = ({ request }) => signOut(request);
+export const loader: LoaderFunction = ({ request }) => signOut(request);
 
 export default function Logout() {
   return null;

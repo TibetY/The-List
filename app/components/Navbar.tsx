@@ -19,8 +19,8 @@ import Logo from "./Logo";
 
 export default function Navbar() {
   const location = useLocation();
-  const rootData = useRouteLoaderData("root") as { token: string | null } | undefined;
-  const isLoggedIn = !!rootData?.token;
+  const rootData = useRouteLoaderData("root") as { isLoggedIn: boolean } | undefined;
+  const isLoggedIn = !!rootData?.isLoggedIn;
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -29,7 +29,11 @@ export default function Navbar() {
   if (location.pathname === "/dashboard") return null;
 
   const navLinks = isLoggedIn
-    ? [{ label: "Dashboard", to: "/dashboard" }]
+    ? [
+        { label: "Dashboard", to: "/dashboard" },
+        { label: "Invitations", to: "/invites" },
+        { label: "Profile", to: "/profile" },
+      ]
     : [
         { label: "Login", to: "/login" },
         { label: "Sign Up", to: "/signup" },

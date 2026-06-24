@@ -1,34 +1,47 @@
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { storage } from '~/firebase';
+import { getSupabaseBrowserClient } from '~/supabase.client';
+import { RESTAURANT_IMAGE_BUCKET } from '~/supabaseConfig';
 
 /**
- * Upload an image to Firebase Storage
- * @param file The image file to upload
- * @param userId The user ID to organize files
- * @returns The download URL of the uploaded image
+ * Upload an image to Supabase Storage and return its public URL.
+ * Files are stored under `{userId}/...` so the storage RLS policies (which key
+ * off the first path segment) allow each user to manage only their own images.
  */
-export async function uploadRestaurantImage(file: File, userId: string): Promise<string> {
-  const timestamp = Date.now();
-  const fileName = `${timestamp}_${file.name}`;
-  const storageRef = ref(storage, `restaurants/${userId}/${fileName}`);
+export async function uploadRestaurantImage(
+  file: File,
+  userId: string
+): Promise<string> {
+  const supabase = getSupabaseBrowserClient();
+  const ext = file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
+  const path = `${userId}/${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2)}.${ext}`;
 
-  await uploadBytes(storageRef, file);
-  const downloadURL = await getDownloadURL(storageRef);
+  const { error } = await supabase.storage
+    .from(RESTAURANT_IMAGE_BUCKET)
+    .upload(path, file, { cacheControl: '3600', upsert: false });
 
-  return downloadURL;
+  if (error) throw error;
+
+  const { data } = supabase.storage
+    .from(RESTAURANT_IMAGE_BUCKET)
+    .getPublicUrl(path);
+
+  return data.publicUrl;
 }
 
 /**
- * Delete an image from Firebase Storage
- * @param imageUrl The full URL of the image to delete
+ * Delete a previously uploaded image given its public URL. Best-effort:
+ * failures are logged but not thrown.
  */
 export async function deleteRestaurantImage(imageUrl: string): Promise<void> {
   try {
-    // Extract the path from the URL
-    const imageRef = ref(storage, imageUrl);
-    await deleteObject(imageRef);
+    const supabase = getSupabaseBrowserClient();
+    const marker = `/${RESTAURANT_IMAGE_BUCKET}/`;
+    const idx = imageUrl.indexOf(marker);
+    if (idx === -1) return;
+    const path = imageUrl.slice(idx + marker.length);
+    await supabase.storage.from(RESTAURANT_IMAGE_BUCKET).remove([path]);
   } catch (error) {
     console.error('Error deleting image:', error);
-    // Don't throw - image might already be deleted
   }
 }

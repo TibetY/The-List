@@ -19,7 +19,7 @@ import { ThemeProvider, CssBaseline } from "@mui/material";
 import theme from "./theme";
 
 import { json } from "@remix-run/node";
-import { getSession } from "~/session.server";
+import { createSupabaseServerClient } from "~/supabase.server";
 import Navbar from "./components/Navbar";
 
 export const links: LinksFunction = () => [
@@ -32,6 +32,10 @@ export const links: LinksFunction = () => [
   {
     rel: "stylesheet",
     href: "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap",
+  },
+  {
+    rel: "stylesheet",
+    href: "https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap",
   },
 ];
 
@@ -46,9 +50,11 @@ export const meta: MetaFunction = () => {
 };
 
 export const loader: LoaderFunction = async ({ request }) => {
-  const session = await getSession(request.headers.get("Cookie"));
-  const token = session.get("token") || null;
-  return json({ token });
+  const { supabase } = createSupabaseServerClient(request);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return json({ isLoggedIn: !!user });
 };
 
 export default function App() {
