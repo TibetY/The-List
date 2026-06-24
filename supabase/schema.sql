@@ -78,6 +78,11 @@ alter table public.restaurants
     check (status in ('been','want'));
 alter table public.restaurants
   add column if not exists added_by uuid references auth.users(id) on delete set null;
+-- Legacy user_id is no longer written by the app (added_by replaces it). On
+-- tables created by an older schema it may still be NOT NULL, which breaks every
+-- insert — relax it. (No-op if it's already nullable.)
+alter table public.restaurants
+  alter column user_id drop not null;
 -- Location for the map view: a human-entered address, geocoded to coordinates.
 alter table public.restaurants
   add column if not exists address text;
