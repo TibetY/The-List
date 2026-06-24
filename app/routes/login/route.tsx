@@ -19,10 +19,13 @@ type ActionData = {
 
 type LoaderData = {
   next: string;
+  error: string | null;
 };
 
 export const loader: LoaderFunction = async ({ request }) => {
-  const next = safeRedirect(new URL(request.url).searchParams.get("next"));
+  const url = new URL(request.url);
+  const next = safeRedirect(url.searchParams.get("next"));
+  const error = url.searchParams.get("error");
   const { supabase } = createSupabaseServerClient(request);
   const {
     data: { user },
@@ -30,7 +33,7 @@ export const loader: LoaderFunction = async ({ request }) => {
   if (user) {
     return redirect(next);
   }
-  return json<LoaderData>({ next });
+  return json<LoaderData>({ next, error });
 };
 
 export const action: ActionFunction = async ({ request }) => {
@@ -52,7 +55,7 @@ export const action: ActionFunction = async ({ request }) => {
 
 export default function LoginPage() {
   const actionData = useActionData<ActionData>();
-  const { next } = useLoaderData<LoaderData>();
+  const { next, error: loaderError } = useLoaderData<LoaderData>();
 
   return (
     <Container
@@ -101,9 +104,9 @@ export default function LoginPage() {
           </Box>
         </Typography>
 
-        {actionData?.error && (
+        {(actionData?.error || loaderError) && (
           <Alert severity="error" sx={{ mb: 3 }} role="alert">
-            {actionData.error}
+            {actionData?.error ?? loaderError}
           </Alert>
         )}
 

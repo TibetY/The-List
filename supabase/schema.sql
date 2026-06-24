@@ -86,9 +86,14 @@ create index if not exists restaurants_created_at_idx on public.restaurants (cre
 
 -- ============================================================
 -- HELPER FUNCTIONS (SECURITY DEFINER → bypass RLS, prevent policy recursion)
+-- These live in a `private` schema that is NOT exposed by PostgREST, so they
+-- cannot be called as RPCs over the API, but RLS policies can still use them.
 -- ============================================================
 
-create or replace function public.is_list_member(_list_id uuid)
+create schema if not exists private;
+grant usage on schema private to anon, authenticated;
+
+create or replace function private.is_list_member(_list_id uuid)
 returns boolean language sql security definer stable set search_path = public as $$
   select exists (
     select 1 from public.list_members
@@ -96,7 +101,7 @@ returns boolean language sql security definer stable set search_path = public as
   );
 $$;
 
-create or replace function public.can_edit_list(_list_id uuid)
+create or replace function private.can_edit_list(_list_id uuid)
 returns boolean language sql security definer stable set search_path = public as $$
   select exists (
     select 1 from public.list_members
@@ -105,18 +110,25 @@ returns boolean language sql security definer stable set search_path = public as
   );
 $$;
 
-create or replace function public.list_role(_list_id uuid)
+create or replace function private.list_role(_list_id uuid)
 returns text language sql security definer stable set search_path = public as $$
   select role from public.list_members
   where list_id = _list_id and user_id = auth.uid();
 $$;
+
+-- RLS runs these as whatever role issues the query, so both need EXECUTE.
+grant execute on function
+  private.is_list_member(uuid),
+  private.can_edit_list(uuid),
+  private.list_role(uuid)
+  to anon, authenticated;
 
 -- ============================================================
 -- updated_at maintenance
 -- ============================================================
 
 create or replace function public.set_updated_at()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql set search_path = '' as $$
 begin new.updated_at = now(); return new; end; $$;
 
 drop trigger if exists profiles_set_updated_at on public.profiles;
@@ -225,7 +237,7 @@ drop policy if exists "insert own list" on public.lists;
 drop policy if exists "update own list" on public.lists;
 drop policy if exists "delete own list" on public.lists;
 create policy "read member lists" on public.lists
-  for select using (public.is_list_member(id) or owner_id = auth.uid());
+  for select using (private.is_list_member(id) or owner_id = auth.uid());
 create policy "insert own list" on public.lists
   for insert with check (owner_id = auth.uid());
 create policy "update own list" on public.lists
@@ -239,13 +251,13 @@ drop policy if exists "owner adds members" on public.list_members;
 drop policy if exists "owner updates members" on public.list_members;
 drop policy if exists "owner removes or self leaves" on public.list_members;
 create policy "read co-members" on public.list_members
-  for select using (public.is_list_member(list_id));
+  for select using (private.is_list_member(list_id));
 create policy "owner adds members" on public.list_members
-  for insert with check (public.list_role(list_id) = 'owner');
+  for insert with check (private.list_role(list_id) = 'owner');
 create policy "owner updates members" on public.list_members
-  for update using (public.list_role(list_id) = 'owner');
+  for update using (private.list_role(list_id) = 'owner');
 create policy "owner removes or self leaves" on public.list_members
-  for delete using (public.list_role(list_id) = 'owner' or user_id = auth.uid());
+  for delete using (private.list_role(list_id) = 'owner' or user_id = auth.uid());
 
 -- list_invite_links: only the list owner can see / manage join links.
 -- (Redemption happens via the redeem_invite_link RPC, which is SECURITY DEFINER
@@ -255,13 +267,13 @@ drop policy if exists "owner creates links" on public.list_invite_links;
 drop policy if exists "owner updates links" on public.list_invite_links;
 drop policy if exists "owner deletes links" on public.list_invite_links;
 create policy "owner reads links" on public.list_invite_links
-  for select using (public.list_role(list_id) = 'owner');
+  for select using (private.list_role(list_id) = 'owner');
 create policy "owner creates links" on public.list_invite_links
-  for insert with check (public.list_role(list_id) = 'owner');
+  for insert with check (private.list_role(list_id) = 'owner');
 create policy "owner updates links" on public.list_invite_links
-  for update using (public.list_role(list_id) = 'owner');
+  for update using (private.list_role(list_id) = 'owner');
 create policy "owner deletes links" on public.list_invite_links
-  for delete using (public.list_role(list_id) = 'owner');
+  for delete using (private.list_role(list_id) = 'owner');
 
 -- restaurants: members read; editors/owners write; rows are scoped to a list
 drop policy if exists "read list restaurants" on public.restaurants;
@@ -269,17 +281,23 @@ drop policy if exists "editors add restaurants" on public.restaurants;
 drop policy if exists "editors update restaurants" on public.restaurants;
 drop policy if exists "editors delete restaurants" on public.restaurants;
 create policy "read list restaurants" on public.restaurants
-  for select using (public.is_list_member(list_id));
+  for select using (private.is_list_member(list_id));
 create policy "editors add restaurants" on public.restaurants
-  for insert with check (public.can_edit_list(list_id) and added_by = auth.uid());
+  for insert with check (private.can_edit_list(list_id) and added_by = auth.uid());
 create policy "editors update restaurants" on public.restaurants
-  for update using (public.can_edit_list(list_id));
+  for update using (private.can_edit_list(list_id));
 create policy "editors delete restaurants" on public.restaurants
-  for delete using (public.can_edit_list(list_id));
+  for delete using (private.can_edit_list(list_id));
 
 -- ============================================================
 -- STORAGE BUCKETS + POLICIES
 -- ============================================================
+-- Both buckets are PUBLIC: objects are served via their public URL
+-- (storage/v1/object/public/...) without consulting storage.objects RLS, and
+-- the app only ever uses getPublicUrl()/upload(). We therefore do NOT add a
+-- broad SELECT policy on storage.objects — that would let clients enumerate
+-- every file via the list API. Only write policies (scoped to the user's own
+-- <uid>/ folder) are needed.
 
 insert into storage.buckets (id, name, public)
 values ('restaurant-images', 'restaurant-images', true)
@@ -289,12 +307,15 @@ insert into storage.buckets (id, name, public)
 values ('avatars', 'avatars', true)
 on conflict (id) do nothing;
 
+-- Drop any broad public-read SELECT policies (incl. legacy names) so buckets
+-- can't be listed. Public object URLs keep working without them.
 drop policy if exists "public read restaurant images" on storage.objects;
+drop policy if exists "public read images" on storage.objects;
+drop policy if exists "public read avatars" on storage.objects;
+
 drop policy if exists "upload own restaurant images" on storage.objects;
 drop policy if exists "update own restaurant images" on storage.objects;
 drop policy if exists "delete own restaurant images" on storage.objects;
-create policy "public read restaurant images" on storage.objects
-  for select using (bucket_id = 'restaurant-images');
 create policy "upload own restaurant images" on storage.objects
   for insert with check (
     bucket_id = 'restaurant-images'
@@ -308,12 +329,9 @@ create policy "delete own restaurant images" on storage.objects
     bucket_id = 'restaurant-images'
     and auth.uid()::text = (storage.foldername(name))[1]);
 
-drop policy if exists "public read avatars" on storage.objects;
 drop policy if exists "upload own avatar" on storage.objects;
 drop policy if exists "update own avatar" on storage.objects;
 drop policy if exists "delete own avatar" on storage.objects;
-create policy "public read avatars" on storage.objects
-  for select using (bucket_id = 'avatars');
 create policy "upload own avatar" on storage.objects
   for insert with check (
     bucket_id = 'avatars'
@@ -326,3 +344,42 @@ create policy "delete own avatar" on storage.objects
   for delete using (
     bucket_id = 'avatars'
     and auth.uid()::text = (storage.foldername(name))[1]);
+
+-- ============================================================
+-- HARDENING (security linter)
+-- ============================================================
+
+-- Remove obsolete email-invite RPCs (replaced by invite links).
+drop function if exists public.accept_invite(uuid);
+drop function if exists public.decline_invite(uuid);
+drop function if exists public.my_pending_invites();
+
+-- Remove the old public copies of the RLS helpers now that policies reference
+-- the private schema. (Safe: nothing depends on them anymore.)
+drop function if exists public.is_list_member(uuid);
+drop function if exists public.can_edit_list(uuid);
+drop function if exists public.list_role(uuid);
+
+-- Trigger functions must never be callable as RPCs. Revoking EXECUTE does not
+-- affect triggers (the trigger system runs them regardless of grants).
+revoke execute on function public.handle_new_user()  from anon, authenticated;
+revoke execute on function public.handle_new_list()  from anon, authenticated;
+revoke execute on function public.set_updated_at()   from anon, authenticated;
+
+-- redeem_invite_link is a genuine RPC, but only signed-in users can join
+-- (anon has no auth.uid()), so keep it off the anon role.
+revoke execute on function public.redeem_invite_link(text) from anon;
+grant  execute on function public.redeem_invite_link(text) to authenticated;
+
+-- Defensive: if an rls_auto_enable() helper exists from an earlier setup,
+-- take it off the public API roles too (no-op if it isn't present).
+do $$
+begin
+  if exists (
+    select 1 from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'rls_auto_enable'
+  ) then
+    execute 'revoke execute on function public.rls_auto_enable() from anon, authenticated';
+  end if;
+end $$;

@@ -37,8 +37,8 @@ export function rowToRestaurant(row: RestaurantRow): Restaurant {
     comment: row.comment ?? undefined,
     cuisineType: row.cuisine_type ?? undefined,
     status: row.status ?? 'want',
-    createdAt: row.created_at ? new Date(row.created_at) : undefined,
-    updatedAt: row.updated_at ? new Date(row.updated_at) : undefined,
+    createdAt: row.created_at ?? undefined,
+    updatedAt: row.updated_at ?? undefined,
   };
 }
 

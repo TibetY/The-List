@@ -19,8 +19,8 @@ export interface Restaurant {
   comment?: string;
   cuisineType?: string;
   status?: RestaurantStatus; // 'been' (visited) or 'want' (want to try)
-  createdAt?: Date;
-  updatedAt?: Date;
+  createdAt?: string; // ISO timestamp from the DB (serialized over the wire)
+  updatedAt?: string;
   addedBy?: string; // User who added this entry
 }
 
@@ -45,7 +45,7 @@ export interface RestaurantList {
   isDefault: boolean;
   role: ListRole; // The current user's role on this list
   memberCount?: number;
-  createdAt?: Date;
+  createdAt?: string; // ISO timestamp from the DB (serialized over the wire)
 }
 
 export interface ListMember {
