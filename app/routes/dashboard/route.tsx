@@ -438,6 +438,8 @@ export default function Dashboard() {
       <Box
         key={m.id}
         title={name || 'Member'}
+        role="img"
+        aria-label={name || 'Member'}
         sx={{
           width: 30,
           height: 30,
@@ -476,6 +478,25 @@ export default function Dashboard() {
           },
         }}
       >
+        {/* Visually-hidden page heading for screen-reader / landmark navigation
+            (the visible list title is a button, not a heading). */}
+        <Box
+          component="h1"
+          sx={{
+            position: 'absolute',
+            width: 1,
+            height: 1,
+            p: 0,
+            m: '-1px',
+            overflow: 'hidden',
+            clip: 'rect(0 0 0 0)',
+            whiteSpace: 'nowrap',
+            border: 0,
+          }}
+        >
+          {(activeList?.name ?? 'My List') + ' — The List'}
+        </Box>
+
         {/* header */}
         <Box
           component="header"
@@ -750,7 +771,7 @@ export default function Dashboard() {
                           '&:hover': canEdit
                             ? { transform: 'translateY(-3px)', boxShadow: '0 12px 28px rgba(0,0,0,.12)' }
                             : {},
-                          '&:hover .card-actions': { opacity: 1 },
+                          '&:hover .card-actions, &:focus-within .card-actions': { opacity: 1 },
                         }}
                       >
                         <Box sx={{ position: 'relative', height: 158, background: t.monoGrad, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -760,9 +781,11 @@ export default function Dashboard() {
                             <Box component="span" sx={{ fontFamily: serif, fontSize: 68, color: t.monoInitial, lineHeight: 1 }}>{r.initial}</Box>
                           )}
                           <Box
-                            component="span"
-                            onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleToggleStatus(r); }}
+                            component={canEdit ? 'button' : 'span'}
+                            type={canEdit ? 'button' : undefined}
+                            onClick={canEdit ? (e: React.MouseEvent) => { e.stopPropagation(); handleToggleStatus(r); } : undefined}
                             title={canEdit ? 'Toggle been / want' : undefined}
+                            aria-label={canEdit ? `${r.name}: mark as ${r.isBeen ? 'want to try' : 'been'}` : undefined}
                             sx={{
                               position: 'absolute',
                               top: 12,
@@ -771,6 +794,8 @@ export default function Dashboard() {
                               color: r.isBeen ? t.beenFg : t.wantFg,
                               fontSize: '11.5px',
                               fontWeight: 600,
+                              fontFamily: 'inherit',
+                              border: 'none',
                               padding: '5px 11px',
                               borderRadius: '999px',
                               cursor: canEdit ? 'pointer' : 'default',
@@ -826,7 +851,7 @@ export default function Dashboard() {
                           background: t.cardBg,
                           cursor: canEdit ? 'pointer' : 'default',
                           '&:hover': canEdit ? { filter: 'brightness(0.98)' } : {},
-                          '&:hover .row-actions': { opacity: 1 },
+                          '&:hover .row-actions, &:focus-within .row-actions': { opacity: 1 },
                           '&:last-of-type': { borderBottom: 'none' },
                         }}
                       >
@@ -844,8 +869,10 @@ export default function Dashboard() {
                         <Box sx={{ width: 90, color: t.cost, fontSize: 14, fontWeight: 600, display: { xs: 'none', sm: 'block' } }}>{r.costStr}</Box>
                         <Box sx={{ width: 110, color: t.rating, fontSize: 14, letterSpacing: '1px', display: { xs: 'none', sm: 'block' } }}>{r.ratingStr}</Box>
                         <Box
-                          component="span"
-                          onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleToggleStatus(r); }}
+                          component={canEdit ? 'button' : 'span'}
+                          type={canEdit ? 'button' : undefined}
+                          onClick={canEdit ? (e: React.MouseEvent) => { e.stopPropagation(); handleToggleStatus(r); } : undefined}
+                          aria-label={canEdit ? `${r.name}: mark as ${r.isBeen ? 'want to try' : 'been'}` : undefined}
                           sx={{
                             width: 96,
                             textAlign: 'center',
@@ -853,6 +880,8 @@ export default function Dashboard() {
                             color: r.isBeen ? t.beenFg : t.wantFg,
                             fontSize: '11.5px',
                             fontWeight: 600,
+                            fontFamily: 'inherit',
+                            border: 'none',
                             padding: '5px 0',
                             borderRadius: '999px',
                             flex: 'none',

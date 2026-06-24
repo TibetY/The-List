@@ -184,7 +184,6 @@ export default function RestaurantFormDialog({
               onChange={(e) =>
                 setFormData({ ...formData, name: e.target.value })
               }
-              aria-required="true"
             />
           </Grid>
 

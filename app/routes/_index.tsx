@@ -201,6 +201,7 @@ export default function Index() {
                 <Box sx={{ mb: 2 }}>{feature.icon}</Box>
                 <Typography
                   variant="h6"
+                  component="h2"
                   sx={{ fontWeight: 700, mb: 1, fontSize: "1.1rem" }}
                 >
                   {feature.title}

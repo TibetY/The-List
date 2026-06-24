@@ -106,6 +106,7 @@ export default function EmailDialog({ open, onClose, onSend }: EmailDialogProps)
           restaurant list.
         </Typography>
         <TextField
+          required
           fullWidth
           label="Email Address"
           type="email"
@@ -117,7 +118,6 @@ export default function EmailDialog({ open, onClose, onSend }: EmailDialogProps)
           error={!!error}
           helperText={error}
           disabled={loading}
-          aria-required="true"
           placeholder="friend@example.com"
         />
       </DialogContent>

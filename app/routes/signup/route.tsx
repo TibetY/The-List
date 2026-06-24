@@ -151,7 +151,6 @@ export default function SignUpPage() {
             label="Email Address"
             type="email"
             autoComplete="email"
-            aria-required="true"
             sx={{ mb: 2 }}
           />
           <TextField
@@ -164,7 +163,6 @@ export default function SignUpPage() {
             label="Password"
             type="password"
             autoComplete="new-password"
-            aria-required="true"
             sx={{ mb: 2 }}
           />
           <TextField
@@ -177,7 +175,6 @@ export default function SignUpPage() {
             label="Confirm Password"
             type="password"
             autoComplete="new-password"
-            aria-required="true"
             sx={{ mb: 3 }}
           />
           <Button
