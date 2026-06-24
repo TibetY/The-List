@@ -3,7 +3,9 @@
   publish = "build/client"
 
 [build.environment]
-  NODE_VERSION = "20"
+  # Node 22+ has native WebSocket, required by @supabase/realtime-js (pulled in
+  # by supabase-js). On Node 20 the function crashes at createClient().
+  NODE_VERSION = "22"
 
 [dev]
   command = "npm run dev"
