@@ -218,6 +218,36 @@ begin
 end; $$;
 
 -- ============================================================
+-- Self-heal: ensure the caller has a default list
+-- ============================================================
+
+-- Accounts created before on_auth_user_created existed have no profile / list /
+-- membership. This idempotent RPC bootstraps them on demand (called from the
+-- dashboard loader when the user has no lists), so existing accounts recover
+-- without re-signing-up. Returns the caller's (existing or new) default list id.
+create or replace function public.ensure_default_list()
+returns uuid language plpgsql security definer set search_path = public as $$
+declare existing uuid; new_list_id uuid;
+begin
+  insert into public.profiles (id, display_name)
+  values (auth.uid(), split_part(coalesce(auth.jwt()->>'email', ''), '@', 1))
+  on conflict (id) do nothing;
+
+  select list_id into existing from public.list_members
+    where user_id = auth.uid() limit 1;
+  if existing is not null then return existing; end if;
+
+  insert into public.lists (owner_id, name, is_default)
+  values (auth.uid(), 'My List', true)
+  returning id into new_list_id;   -- on_list_created adds the owner membership
+  return new_list_id;
+end; $$;
+
+-- Only signed-in users can self-heal (anon has no auth.uid()).
+revoke execute on function public.ensure_default_list() from anon;
+grant  execute on function public.ensure_default_list() to authenticated;
+
+-- ============================================================
 -- ROW LEVEL SECURITY
 -- ============================================================
 

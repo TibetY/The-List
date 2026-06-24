@@ -68,6 +68,18 @@ export async function getLists(
     });
 }
 
+/**
+ * Ensure the current user has at least a default list (profile + "My List" +
+ * owner membership). Idempotent; safe to call when the user already has lists.
+ * Recovers accounts created before the new-user bootstrap trigger existed.
+ */
+export async function ensureDefaultList(
+  supabase: SupabaseClient
+): Promise<void> {
+  const { error } = await supabase.rpc('ensure_default_list');
+  if (error) throw error;
+}
+
 /** Members of a list, with their profiles. */
 export async function getListMembers(
   supabase: SupabaseClient,

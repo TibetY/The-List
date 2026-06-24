@@ -23,8 +23,10 @@ import { json } from "@remix-run/node";
 import { createSupabaseServerClient } from "~/supabase.server";
 import { getServerSupabaseEnv, type PublicEnv } from "~/supabaseConfig";
 import Navbar from "./components/Navbar";
+import tailwindHref from "~/tailwind.css?url";
 
 export const links: LinksFunction = () => [
+  { rel: "stylesheet", href: tailwindHref },
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
   {
     rel: "preconnect",

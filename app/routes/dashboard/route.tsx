@@ -40,6 +40,7 @@ import {
   getLists,
   getListMembers,
   getInviteLink,
+  ensureDefaultList,
 } from '~/services/lists.server';
 import { getProfile } from '~/services/profiles.server';
 import type {
@@ -81,6 +82,29 @@ export const links: LinksFunction = () => [
 import { sendRestaurantListViaMailto } from '~/services/email.client';
 import { listTokens, makeListTheme, getStoredMode, storeMode, type ListMode } from '~/listTheme';
 
+/**
+ * Turn whatever was thrown into a human-readable message. Supabase/PostgREST
+ * errors are plain objects (not Error instances), so `error.message` alone is
+ * lost behind a generic fallback — pull message/details/hint/code off them so
+ * the banner shows the real cause (missing table, RLS recursion, bad key, …).
+ */
+function describeError(e: unknown): string {
+  if (e && typeof e === 'object') {
+    const o = e as {
+      message?: string;
+      details?: string;
+      hint?: string;
+      code?: string;
+    };
+    const parts = [o.message, o.details, o.hint].filter(Boolean);
+    if (parts.length) {
+      return parts.join(' — ') + (o.code ? ` (${o.code})` : '');
+    }
+  }
+  if (e instanceof Error) return e.message;
+  return 'Could not load your lists. Please try again.';
+}
+
 type LoaderData = {
   userId: string;
   lists: RestaurantList[];
@@ -105,7 +129,13 @@ export const loader: LoaderFunction = async ({ request }) => {
   const requestedListId = new URL(request.url).searchParams.get('list');
 
   try {
-    const lists = await getLists(supabase, user.id);
+    let lists = await getLists(supabase, user.id);
+    // Recover accounts that predate the new-user bootstrap trigger: give them a
+    // default list once, then reload.
+    if (lists.length === 0) {
+      await ensureDefaultList(supabase);
+      lists = await getLists(supabase, user.id);
+    }
     const activeList =
       lists.find((l) => l.id === requestedListId) ||
       lists.find((l) => l.isDefault) ||
@@ -148,10 +178,7 @@ export const loader: LoaderFunction = async ({ request }) => {
         members: [],
         inviteLink: null,
         profile: null,
-        error:
-          error instanceof Error
-            ? error.message
-            : 'Could not load your lists. Please try again.',
+        error: describeError(error),
       },
       { headers }
     );
