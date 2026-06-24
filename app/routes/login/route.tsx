@@ -121,7 +121,6 @@ export default function LoginPage() {
             name="email"
             label="Email Address"
             autoComplete="email"
-            autoFocus
             aria-required="true"
             sx={{ mb: 2 }}
           />

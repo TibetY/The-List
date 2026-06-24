@@ -106,7 +106,6 @@ export default function EmailDialog({ open, onClose, onSend }: EmailDialogProps)
           restaurant list.
         </Typography>
         <TextField
-          autoFocus
           fullWidth
           label="Email Address"
           type="email"

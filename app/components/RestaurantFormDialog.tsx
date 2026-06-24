@@ -185,7 +185,6 @@ export default function RestaurantFormDialog({
                 setFormData({ ...formData, name: e.target.value })
               }
               aria-required="true"
-              autoFocus
             />
           </Grid>
 

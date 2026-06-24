@@ -151,7 +151,6 @@ export default function SignUpPage() {
             label="Email Address"
             type="email"
             autoComplete="email"
-            autoFocus
             aria-required="true"
             sx={{ mb: 2 }}
           />
