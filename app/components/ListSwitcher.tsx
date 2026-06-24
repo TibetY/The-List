@@ -40,7 +40,7 @@ export default function ListSwitcher({
         onClick={(e: React.MouseEvent<HTMLButtonElement>) =>
           setAnchor(e.currentTarget)
         }
-        aria-label="Switch list"
+        aria-label={`Current list: ${activeList?.name ?? 'My List'}. Switch list`}
         aria-haspopup="true"
         sx={{
           display: 'inline-flex',

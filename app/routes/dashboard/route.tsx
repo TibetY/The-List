@@ -462,7 +462,9 @@ export default function Dashboard() {
     <ThemeProvider theme={muiTheme}>
       <Box
         sx={{
-          minHeight: '100vh',
+          minHeight: '100dvh',
+          display: 'flex',
+          flexDirection: 'column',
           background: t.pageBg,
           color: t.ink,
           fontFamily: "'DM Sans',sans-serif",
@@ -646,7 +648,7 @@ export default function Dashboard() {
         </Box>
 
         {/* body container */}
-        <Box sx={{ maxWidth: 1320, mx: 'auto', padding: { xs: '24px 18px 0', md: '30px 40px 0' } }}>
+        <Box sx={{ flexGrow: 1, width: '100%', maxWidth: 1320, mx: 'auto', padding: { xs: '24px 18px 0', md: '30px 40px 0' } }}>
           {/* title + view toggle */}
           <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
             <Box>
