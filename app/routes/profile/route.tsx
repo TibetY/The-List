@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { LoaderFunction } from '@remix-run/node';
 import { json, redirect } from '@remix-run/node';
 import { useLoaderData, useNavigate } from '@remix-run/react';
@@ -18,7 +18,7 @@ import { PhotoCamera, ArrowBack } from '@mui/icons-material';
 import { createSupabaseServerClient } from '~/supabase.server';
 import { getProfile } from '~/services/profiles.server';
 import { updateProfile, uploadAvatar } from '~/services/profiles.client';
-import { makeListTheme } from '~/listTheme';
+import { makeListTheme, getStoredMode, type ListMode } from '~/listTheme';
 import type { Profile } from '~/types/restaurant';
 
 type LoaderData = { userId: string; profile: Profile | null };
@@ -37,7 +37,9 @@ export const loader: LoaderFunction = async ({ request }) => {
 export default function ProfilePage() {
   const { userId, profile } = useLoaderData<LoaderData>();
   const navigate = useNavigate();
-  const theme = makeListTheme('light');
+  const [mode, setMode] = useState<ListMode>('light');
+  useEffect(() => setMode(getStoredMode()), []);
+  const theme = makeListTheme(mode);
 
   const [displayName, setDisplayName] = useState(profile?.displayName ?? '');
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatarUrl ?? '');

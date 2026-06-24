@@ -62,7 +62,7 @@ import {
 } from '~/services/restaurants.client';
 import { createList } from '~/services/lists.client';
 import { sendRestaurantListViaMailto } from '~/services/email.client';
-import { listTokens, makeListTheme, type ListMode } from '~/listTheme';
+import { listTokens, makeListTheme, getStoredMode, storeMode, type ListMode } from '~/listTheme';
 
 type LoaderData = {
   userId: string;
@@ -72,6 +72,7 @@ type LoaderData = {
   members: ListMember[];
   inviteLink: InviteLink | null;
   profile: Profile | null;
+  error: string | null;
 };
 
 export const loader: LoaderFunction = async ({ request }) => {
@@ -115,6 +116,7 @@ export const loader: LoaderFunction = async ({ request }) => {
         members,
         inviteLink,
         profile,
+        error: null,
       },
       { headers }
     );
@@ -129,6 +131,10 @@ export const loader: LoaderFunction = async ({ request }) => {
         members: [],
         inviteLink: null,
         profile: null,
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Could not load your lists. Please try again.',
       },
       { headers }
     );
@@ -206,6 +212,7 @@ export default function Dashboard() {
     members,
     inviteLink,
     profile,
+    error,
   } = data;
   const revalidator = useRevalidator();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -213,6 +220,12 @@ export default function Dashboard() {
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>(initialRestaurants);
   const [mode, setMode] = useState<ListMode>('light');
+  // Load the saved theme after mount (avoids SSR/client hydration mismatch).
+  useEffect(() => setMode(getStoredMode()), []);
+  const changeMode = (m: ListMode) => {
+    setMode(m);
+    storeMode(m);
+  };
   const [view, setView] = useState<ViewMode>('tile');
   const [filter, setFilter] = useState<FilterMode>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -532,16 +545,6 @@ export default function Dashboard() {
             </Box>
           </Box>
 
-          <Box
-            component="nav"
-            sx={{ display: { xs: 'none', md: 'flex' }, gap: '30px', fontSize: '14.5px', color: t.muted }}
-          >
-            <Box component="span" sx={{ color: t.ink, fontWeight: 500 }}>Restaurants</Box>
-            <Box component="span">Cities</Box>
-            <Box component="span">Map</Box>
-            <Box component="span">Wishlist</Box>
-          </Box>
-
           <Box sx={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             {/* search */}
             <Box
@@ -580,9 +583,9 @@ export default function Dashboard() {
 
             {/* theme toggle */}
             <Box sx={{ display: 'flex', background: t.searchBg, border: `1px solid ${t.border}`, borderRadius: '999px', padding: '3px' }}>
-              <Box component="button" onClick={() => setMode('light')} title="Light" aria-label="Light theme"
+              <Box component="button" onClick={() => changeMode('light')} title="Light" aria-label="Light theme"
                 sx={{ border: 'none', cursor: 'pointer', width: 30, height: 26, borderRadius: '999px', fontSize: 13, ...themeBtn('light') }}>☀</Box>
-              <Box component="button" onClick={() => setMode('dark')} title="Dark" aria-label="Dark theme"
+              <Box component="button" onClick={() => changeMode('dark')} title="Dark" aria-label="Dark theme"
                 sx={{ border: 'none', cursor: 'pointer', width: 30, height: 26, borderRadius: '999px', fontSize: 13, ...themeBtn('dark') }}>☾</Box>
             </Box>
 
@@ -632,7 +635,7 @@ export default function Dashboard() {
                 ? shownMembers.map((m, i) => renderAvatar(m, i))
                 : (
                   <Box sx={{ width: 30, height: 30, borderRadius: '50%', background: t.accent, color: t.accentText, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600 }}>
-                    {(profile?.displayName?.[0] ?? 'M').toUpperCase()}
+                    {(profile?.displayName?.[0] ?? '?').toUpperCase()}
                   </Box>
                 )}
               {extraMembers > 0 && (
@@ -670,6 +673,12 @@ export default function Dashboard() {
 
         {/* body container */}
         <Box sx={{ flexGrow: 1, width: '100%', maxWidth: 1320, mx: 'auto', padding: { xs: '24px 18px 0', md: '30px 40px 0' } }}>
+          {error && (
+            <Alert severity="error" sx={{ mb: 3 }} role="alert">
+              Couldn&apos;t load your lists: {error}. If this persists, confirm the
+              database schema has been applied and the Supabase key is correct.
+            </Alert>
+          )}
           {/* title + view toggle */}
           <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
             <Box>
