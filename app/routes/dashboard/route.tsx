@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
-import { LoaderFunction, ActionFunction, redirect, json } from '@remix-run/node';
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
+import { LoaderFunction, ActionFunction, LinksFunction, redirect, json } from '@remix-run/node';
+import leafletStylesHref from 'leaflet/dist/leaflet.css?url';
 import {
   useLoaderData,
   useRevalidator,
@@ -61,6 +62,14 @@ import {
   setRestaurantStatus,
 } from '~/services/restaurants.client';
 import { createList } from '~/services/lists.client';
+import { geocodeAddress } from '~/services/geocode.client';
+
+// Leaflet touches `window` at import time, so only load the map on the client.
+const RestaurantMap = lazy(() => import('~/components/RestaurantMap'));
+
+export const links: LinksFunction = () => [
+  { rel: 'stylesheet', href: leafletStylesHref },
+];
 import { sendRestaurantListViaMailto } from '~/services/email.client';
 import { listTokens, makeListTheme, getStoredMode, storeMode, type ListMode } from '~/listTheme';
 
@@ -220,6 +229,9 @@ export default function Dashboard() {
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>(initialRestaurants);
   const [mode, setMode] = useState<ListMode>('light');
+  // The Leaflet map is client-only; render it after mount.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   // Load the saved theme after mount (avoids SSR/client hydration mismatch).
   useEffect(() => setMode(getStoredMode()), []);
   const changeMode = (m: ListMode) => {
@@ -280,6 +292,10 @@ export default function Dashboard() {
   const total = decorated.length;
   const beenCount = decorated.filter((r) => r.isBeen).length;
   const wantCount = decorated.filter((r) => r.isWant).length;
+  // How many of the currently-shown places can't be plotted (no coordinates).
+  const mapMissingCount = filtered.filter(
+    (r) => typeof r.lat !== 'number' || typeof r.lng !== 'number'
+  ).length;
 
   const shownMembers = members.slice(0, 3);
   const extraMembers = members.length - shownMembers.length;
@@ -307,7 +323,24 @@ export default function Dashboard() {
       if (imageFile) {
         imageUrl = await uploadRestaurantImage(imageFile, userId);
       }
-      const dataToSave = { ...restaurantData, image: imageUrl };
+      const dataToSave: Partial<Restaurant> = { ...restaurantData, image: imageUrl };
+
+      // Geocode the address for the map, but only when it actually changed
+      // (keeps us within Nominatim's rate limits and avoids needless lookups).
+      const newAddress = (restaurantData.address ?? '').trim();
+      const addressChanged = newAddress !== (selectedRestaurant?.address ?? '').trim();
+      if (newAddress && addressChanged) {
+        const point = await geocodeAddress(newAddress);
+        dataToSave.lat = point?.lat;
+        dataToSave.lng = point?.lng;
+      } else if (!newAddress) {
+        dataToSave.lat = undefined;
+        dataToSave.lng = undefined;
+      } else {
+        // Address unchanged — preserve the previously geocoded coordinates.
+        dataToSave.lat = selectedRestaurant?.lat;
+        dataToSave.lng = selectedRestaurant?.lng;
+      }
 
       if (selectedRestaurant?.id) {
         await updateRestaurant(selectedRestaurant.id, dataToSave, activeList.id, userId);
@@ -918,31 +951,40 @@ export default function Dashboard() {
               {/* MAP */}
               {view === 'map' && (
                 <Box sx={{ padding: '24px 0 40px', display: 'flex', gap: '18px', flexDirection: { xs: 'column', md: 'row' } }}>
-                  <Box
-                    sx={{
-                      flex: 1,
-                      position: 'relative',
-                      height: 540,
-                      borderRadius: '16px',
-                      border: `1px solid ${t.border}`,
-                      overflow: 'hidden',
-                      background: t.mapBg,
-                      backgroundImage: `linear-gradient(${t.mapGrid} 1px,transparent 1px),linear-gradient(90deg,${t.mapGrid} 1px,transparent 1px)`,
-                      backgroundSize: '48px 48px',
-                    }}
-                  >
-                    <Box sx={{ position: 'absolute', top: '38%', left: '-5%', width: '70%', height: 60, background: t.mapWater, transform: 'rotate(-8deg)' }} />
-                    <Box sx={{ position: 'absolute', top: '12%', left: '40%', width: 14, height: '90%', background: t.mapPark }} />
-                    {filtered.map((r) => (
-                      <Box
-                        key={r.id}
-                        onClick={() => handleEditRestaurant(r)}
-                        sx={{ position: 'absolute', left: `${r.px}%`, top: `${r.py}%`, transform: 'translate(-50%,-100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: canEdit ? 'pointer' : 'default' }}
-                      >
-                        <Box sx={{ background: t.pinLabelBg, border: `1px solid ${t.pinLabelBorder}`, color: t.pinLabelFg, boxShadow: '0 2px 8px rgba(0,0,0,.18)', fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: '7px', whiteSpace: 'nowrap', mb: '3px' }}>{r.name}</Box>
-                        <Box sx={{ width: 18, height: 18, background: t.accent, borderRadius: '50% 50% 50% 2px', transform: 'rotate(45deg)', border: `2px solid ${t.pinBorder}`, boxShadow: '0 2px 4px rgba(0,0,0,.25)' }} />
+                  <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <Box
+                      sx={{
+                        flex: 1,
+                        position: 'relative',
+                        height: 540,
+                        borderRadius: '16px',
+                        border: `1px solid ${t.border}`,
+                        overflow: 'hidden',
+                        background: t.mapBg,
+                      }}
+                    >
+                      {mounted ? (
+                        <Suspense
+                          fallback={
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: t.muted }}>
+                              Loading map…
+                            </Box>
+                          }
+                        >
+                          <RestaurantMap
+                            restaurants={filtered}
+                            accent={t.accent}
+                            canEdit={canEdit}
+                            onSelect={handleEditRestaurant}
+                          />
+                        </Suspense>
+                      ) : null}
+                    </Box>
+                    {mapMissingCount > 0 && (
+                      <Box sx={{ color: t.faint, fontSize: 12.5 }}>
+                        {mapMissingCount} {mapMissingCount === 1 ? 'place has' : 'places have'} no address yet — add one to show {mapMissingCount === 1 ? 'it' : 'them'} on the map.
                       </Box>
-                    ))}
+                    )}
                   </Box>
                   <Box sx={{ width: { xs: '100%', md: 330 }, flex: 'none', height: 540, overflowY: 'auto', border: `1px solid ${t.border}`, borderRadius: '16px', background: t.cardBg }}>
                     {filtered.map((r) => (

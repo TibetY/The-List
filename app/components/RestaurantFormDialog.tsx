@@ -59,6 +59,7 @@ export default function RestaurantFormDialog({
   const [formData, setFormData] = useState<Partial<Restaurant>>({
     name: '',
     url: '',
+    address: '',
     rating: 0,
     priceRange: '$$',
     comment: '',
@@ -80,6 +81,7 @@ export default function RestaurantFormDialog({
       setFormData({
         name: restaurant.name || '',
         url: restaurant.url || '',
+        address: restaurant.address || '',
         rating: restaurant.rating || 0,
         priceRange: restaurant.priceRange || '$$',
         comment: restaurant.comment || '',
@@ -97,6 +99,7 @@ export default function RestaurantFormDialog({
       setFormData({
         name: '',
         url: '',
+        address: '',
         rating: 0,
         priceRange: '$$',
         comment: '',
@@ -184,6 +187,20 @@ export default function RestaurantFormDialog({
               onChange={(e) =>
                 setFormData({ ...formData, name: e.target.value })
               }
+            />
+          </Grid>
+
+          {/* Address (geocoded to a map pin on save) */}
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              label="Address"
+              placeholder="123 Main St, Ottawa, ON"
+              value={formData.address ?? ''}
+              onChange={(e) =>
+                setFormData({ ...formData, address: e.target.value })
+              }
+              helperText="Used to place this spot on the map"
             />
           </Grid>
 

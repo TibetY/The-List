@@ -18,6 +18,9 @@ export interface RestaurantRow {
   comment: string | null;
   cuisine_type: string | null;
   status: RestaurantStatus | null;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -37,6 +40,9 @@ export function rowToRestaurant(row: RestaurantRow): Restaurant {
     comment: row.comment ?? undefined,
     cuisineType: row.cuisine_type ?? undefined,
     status: row.status ?? 'want',
+    address: row.address ?? undefined,
+    lat: row.latitude ?? undefined,
+    lng: row.longitude ?? undefined,
     createdAt: row.created_at ?? undefined,
     updatedAt: row.updated_at ?? undefined,
   };
@@ -64,5 +70,8 @@ export function restaurantToRow(
     comment: data.comment ?? null,
     cuisine_type: data.cuisineType ?? null,
     status: data.status ?? 'want',
+    address: data.address ?? null,
+    latitude: data.lat ?? null,
+    longitude: data.lng ?? null,
   };
 }

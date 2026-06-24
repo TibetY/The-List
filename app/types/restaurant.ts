@@ -19,6 +19,9 @@ export interface Restaurant {
   comment?: string;
   cuisineType?: string;
   status?: RestaurantStatus; // 'been' (visited) or 'want' (want to try)
+  address?: string; // Human-entered address, used for the map
+  lat?: number; // Geocoded latitude (set on save from the address)
+  lng?: number; // Geocoded longitude
   createdAt?: string; // ISO timestamp from the DB (serialized over the wire)
   updatedAt?: string;
   addedBy?: string; // User who added this entry
@@ -26,7 +29,7 @@ export interface Restaurant {
 
 export type RestaurantFormData = Omit<
   Restaurant,
-  'id' | 'listId' | 'createdAt' | 'updatedAt' | 'addedBy'
+  'id' | 'listId' | 'createdAt' | 'updatedAt' | 'addedBy' | 'lat' | 'lng'
 >;
 
 export type ListRole = 'owner' | 'editor' | 'viewer';
