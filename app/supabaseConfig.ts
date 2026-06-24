@@ -26,8 +26,10 @@ declare global {
 
 /** Read the public env on the server (loaders/actions). */
 export function getServerSupabaseEnv(): PublicEnv {
-  const SUPABASE_URL = process.env.SUPABASE_URL ?? '';
-  const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY ?? '';
+  // Trim to guard against trailing newlines/spaces from copy-paste into the
+  // host's env UI, which would otherwise corrupt the JWT ("Invalid API key").
+  const SUPABASE_URL = (process.env.SUPABASE_URL ?? '').trim();
+  const SUPABASE_ANON_KEY = (process.env.SUPABASE_ANON_KEY ?? '').trim();
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     throw new Error(
       'Missing SUPABASE_URL / SUPABASE_ANON_KEY environment variables.'
