@@ -3,16 +3,17 @@ import type { Restaurant } from '~/types/restaurant';
 import { rowToRestaurant, type RestaurantRow } from './restaurantMap';
 
 /**
- * Load the signed-in user's restaurants. Row-level security restricts the
- * result to rows owned by the authenticated user, so no explicit user filter
- * is required.
+ * Load restaurants for a specific list. Row-level security additionally
+ * restricts results to lists the authenticated user is a member of.
  */
 export async function getRestaurants(
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  listId: string
 ): Promise<Restaurant[]> {
   const { data, error } = await supabase
     .from('restaurants')
     .select('*')
+    .eq('list_id', listId)
     .order('created_at', { ascending: false });
 
   if (error) {

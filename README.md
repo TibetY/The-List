@@ -39,9 +39,12 @@ Make sure to deploy the output of `npm run build`
 
 The app uses [Supabase](https://supabase.com/) for auth, data, and image storage.
 
-1. Run `supabase/schema.sql` once in the Supabase **SQL Editor** to create the
-   `restaurants` table (with row-level security) and the `restaurant-images`
-   storage bucket.
+1. Run `supabase/schema.sql` once in the Supabase **SQL Editor**. It creates the
+   `profiles`, `lists`, `list_members`, `list_invites`, and `restaurants` tables
+   (with row-level security and Owner/Editor/Viewer roles), the helper
+   functions/triggers, and the `restaurant-images` + `avatars` storage buckets.
+   If you had data from an earlier version, also run `supabase/migrate_existing.sql`
+   once to backfill profiles, default lists, and list membership.
 2. Set your project's anon/public key in `app/supabaseConfig.ts` (or via the
    `SUPABASE_URL` / `SUPABASE_ANON_KEY` environment variables). The anon key is
    safe to expose — row-level security protects the data. Never put the

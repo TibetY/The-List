@@ -13,11 +13,13 @@ import {
   Box,
   CircularProgress,
   IconButton,
+  ToggleButton,
+  ToggleButtonGroup,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import { CloudUpload, Close } from '@mui/icons-material';
-import type { Restaurant } from '~/types/restaurant';
+import { CloudUpload, Close, Check, BookmarkBorder } from '@mui/icons-material';
+import type { Restaurant, RestaurantStatus } from '~/types/restaurant';
 
 interface RestaurantFormDialogProps {
   open: boolean;
@@ -61,6 +63,7 @@ export default function RestaurantFormDialog({
     priceRange: '$$',
     comment: '',
     cuisineType: '',
+    status: 'want',
     socialMedia: {
       facebook: '',
       instagram: '',
@@ -81,6 +84,7 @@ export default function RestaurantFormDialog({
         priceRange: restaurant.priceRange || '$$',
         comment: restaurant.comment || '',
         cuisineType: restaurant.cuisineType || '',
+        status: restaurant.status || 'want',
         socialMedia: {
           facebook: restaurant.socialMedia?.facebook || '',
           instagram: restaurant.socialMedia?.instagram || '',
@@ -97,6 +101,7 @@ export default function RestaurantFormDialog({
         priceRange: '$$',
         comment: '',
         cuisineType: '',
+        status: 'want',
         socialMedia: {
           facebook: '',
           instagram: '',
@@ -182,6 +187,40 @@ export default function RestaurantFormDialog({
               aria-required="true"
               autoFocus
             />
+          </Grid>
+
+          {/* Status: been / want to try */}
+          <Grid item xs={12}>
+            <Typography
+              component="label"
+              sx={{
+                display: 'block',
+                mb: 0.75,
+                fontWeight: 500,
+                color: 'text.secondary',
+                fontSize: '0.875rem',
+              }}
+            >
+              Status
+            </Typography>
+            <ToggleButtonGroup
+              exclusive
+              value={formData.status || 'want'}
+              onChange={(_, value: RestaurantStatus | null) => {
+                if (value) setFormData({ ...formData, status: value });
+              }}
+              size="small"
+              aria-label="Restaurant status"
+            >
+              <ToggleButton value="want" aria-label="Want to try">
+                <BookmarkBorder fontSize="small" sx={{ mr: 0.75 }} />
+                Want to try
+              </ToggleButton>
+              <ToggleButton value="been" aria-label="Been">
+                <Check fontSize="small" sx={{ mr: 0.75 }} />
+                Been
+              </ToggleButton>
+            </ToggleButtonGroup>
           </Grid>
 
           {/* Cuisine + Price */}

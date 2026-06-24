@@ -29,7 +29,11 @@ export default function Navbar() {
   if (location.pathname === "/dashboard") return null;
 
   const navLinks = isLoggedIn
-    ? [{ label: "Dashboard", to: "/dashboard" }]
+    ? [
+        { label: "Dashboard", to: "/dashboard" },
+        { label: "Invitations", to: "/invites" },
+        { label: "Profile", to: "/profile" },
+      ]
     : [
         { label: "Login", to: "/login" },
         { label: "Sign Up", to: "/signup" },

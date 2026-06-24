@@ -1,4 +1,4 @@
-import type { Restaurant } from '~/types/restaurant';
+import type { Restaurant, RestaurantStatus } from '~/types/restaurant';
 import { getSupabaseBrowserClient } from '~/supabase.client';
 import {
   restaurantToRow,
@@ -6,15 +6,16 @@ import {
   type RestaurantRow,
 } from './restaurantMap';
 
-/** Create a restaurant owned by `userId`. Returns the saved record. */
+/** Create a restaurant in `listId`, added by `userId`. Returns the saved record. */
 export async function createRestaurant(
   data: Partial<Restaurant>,
+  listId: string,
   userId: string
 ): Promise<Restaurant> {
   const supabase = getSupabaseBrowserClient();
   const { data: row, error } = await supabase
     .from('restaurants')
-    .insert(restaurantToRow(data, userId))
+    .insert(restaurantToRow(data, listId, userId))
     .select()
     .single();
 
@@ -26,11 +27,14 @@ export async function createRestaurant(
 export async function updateRestaurant(
   id: string,
   data: Partial<Restaurant>,
+  listId: string,
   userId: string
 ): Promise<Restaurant> {
   const supabase = getSupabaseBrowserClient();
-  const { user_id, ...payload } = restaurantToRow(data, userId);
-  void user_id; // user_id is immutable on update; RLS already scopes the row
+  // list_id / added_by are immutable on update; RLS already scopes the row.
+  const { list_id, added_by, ...payload } = restaurantToRow(data, listId, userId);
+  void list_id;
+  void added_by;
   const { data: row, error } = await supabase
     .from('restaurants')
     .update(payload)
@@ -40,6 +44,19 @@ export async function updateRestaurant(
 
   if (error) throw error;
   return rowToRestaurant(row as RestaurantRow);
+}
+
+/** Quick status toggle (been / want) without opening the full editor. */
+export async function setRestaurantStatus(
+  id: string,
+  status: RestaurantStatus
+): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase
+    .from('restaurants')
+    .update({ status })
+    .eq('id', id);
+  if (error) throw error;
 }
 
 /** Delete a restaurant by id. */

@@ -1,6 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { LoaderFunction, ActionFunction, redirect, json } from '@remix-run/node';
-import { useLoaderData, useRevalidator } from '@remix-run/react';
+import {
+  useLoaderData,
+  useRevalidator,
+  useSearchParams,
+  useNavigate,
+} from '@remix-run/react';
 import {
   Box,
   IconButton,
@@ -12,6 +17,13 @@ import {
   Alert,
   ThemeProvider,
   Tooltip,
+  Badge,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  TextField,
 } from '@mui/material';
 import {
   Add,
@@ -19,25 +31,52 @@ import {
   Logout,
   Edit as EditIcon,
   Delete as DeleteIcon,
+  PersonAddAlt1,
+  Person,
+  MailOutline,
 } from '@mui/icons-material';
 import { createSupabaseServerClient } from '~/supabase.server';
 import { getRestaurants } from '~/services/restaurants.server';
-import type { Restaurant } from '~/types/restaurant';
+import {
+  getLists,
+  getListMembers,
+  getListInvites,
+  getPendingInvites,
+} from '~/services/lists.server';
+import { getProfile } from '~/services/profiles.server';
+import type {
+  Restaurant,
+  RestaurantList,
+  ListMember,
+  ListInvite,
+  Profile,
+} from '~/types/restaurant';
 import RestaurantFormDialog from '~/components/RestaurantFormDialog';
 import DeleteConfirmDialog from '~/components/DeleteConfirmDialog';
 import EmailDialog from '~/components/EmailDialog';
+import ListSwitcher from '~/components/ListSwitcher';
+import ShareListDialog from '~/components/ShareListDialog';
+import InvitesDialog from '~/components/InvitesDialog';
 import { uploadRestaurantImage } from '~/services/storage.client';
 import {
   createRestaurant,
   updateRestaurant,
   deleteRestaurant,
+  setRestaurantStatus,
 } from '~/services/restaurants.client';
+import { createList } from '~/services/lists.client';
 import { sendRestaurantListViaMailto } from '~/services/email.client';
 import { listTokens, makeListTheme, type ListMode } from '~/listTheme';
 
 type LoaderData = {
-  restaurants: Restaurant[];
   userId: string;
+  lists: RestaurantList[];
+  activeList: RestaurantList | null;
+  restaurants: Restaurant[];
+  members: ListMember[];
+  listInvites: ListInvite[];
+  profile: Profile | null;
+  pendingInvites: ListInvite[];
 };
 
 export const loader: LoaderFunction = async ({ request }) => {
@@ -50,25 +89,67 @@ export const loader: LoaderFunction = async ({ request }) => {
     return redirect('/login');
   }
 
+  const requestedListId = new URL(request.url).searchParams.get('list');
+
   try {
-    const restaurants = await getRestaurants(supabase);
-    return json<LoaderData>({ restaurants, userId: user.id }, { headers });
+    const lists = await getLists(supabase, user.id);
+    const activeList =
+      lists.find((l) => l.id === requestedListId) ||
+      lists.find((l) => l.isDefault) ||
+      lists[0] ||
+      null;
+
+    let restaurants: Restaurant[] = [];
+    let members: ListMember[] = [];
+    let listInvites: ListInvite[] = [];
+    if (activeList) {
+      restaurants = await getRestaurants(supabase, activeList.id);
+      members = await getListMembers(supabase, activeList.id);
+      if (activeList.role === 'owner') {
+        listInvites = await getListInvites(supabase, activeList.id);
+      }
+    }
+    const profile = await getProfile(supabase, user.id);
+    const pendingInvites = await getPendingInvites(supabase);
+
+    return json<LoaderData>(
+      {
+        userId: user.id,
+        lists,
+        activeList,
+        restaurants,
+        members,
+        listInvites,
+        profile,
+        pendingInvites,
+      },
+      { headers }
+    );
   } catch (error) {
-    console.error('Error loading restaurants:', error);
-    return json<LoaderData>({ restaurants: [], userId: user.id }, { headers });
+    console.error('Error loading dashboard:', error);
+    return json<LoaderData>(
+      {
+        userId: user.id,
+        lists: [],
+        activeList: null,
+        restaurants: [],
+        members: [],
+        listInvites: [],
+        profile: null,
+        pendingInvites: [],
+      },
+      { headers }
+    );
   }
 };
 
 export const action: ActionFunction = async ({ request }) => {
   const { supabase, headers } = createSupabaseServerClient(request);
   const formData = await request.formData();
-  const intent = formData.get('intent');
-
-  if (intent === 'logout') {
+  if (formData.get('intent') === 'logout') {
     await supabase.auth.signOut();
     return redirect('/login', { headers });
   }
-
   return json({ success: true });
 };
 
@@ -99,34 +180,45 @@ function mapPosition(seed: string): { px: number; py: number } {
     h = (h * 31 + seed.charCodeAt(i)) | 0;
   }
   const a = Math.abs(h);
-  return {
-    px: 8 + (a % 84),
-    py: 12 + ((Math.floor(a / 84)) % 72),
-  };
+  return { px: 8 + (a % 84), py: 12 + (Math.floor(a / 84) % 72) };
 }
 
 function decorate(r: Restaurant): DecoratedRestaurant {
   const rating = Math.round(r.rating ?? 0);
   const rated = rating > 0;
   const cuisine = r.cuisineType || 'Restaurant';
-  const seed = r.id || r.name;
+  const status = r.status ?? 'want';
   return {
     ...r,
     initial: (r.name.replace(/^The /i, '')[0] || '?').toUpperCase(),
     costStr: r.priceRange || '',
     rated,
-    ratingStr: rated ? STAR_FULL.slice(0, rating) + STAR_EMPTY.slice(0, 5 - rating) : '',
+    ratingStr: rated
+      ? STAR_FULL.slice(0, rating) + STAR_EMPTY.slice(0, 5 - rating)
+      : '',
     cuisine,
     meta: cuisine,
-    isBeen: rated,
-    isWant: !rated,
-    ...mapPosition(seed),
+    isBeen: status === 'been',
+    isWant: status === 'want',
+    ...mapPosition(r.id || r.name),
   };
 }
 
 export default function Dashboard() {
-  const { restaurants: initialRestaurants, userId } = useLoaderData<LoaderData>();
+  const data = useLoaderData<LoaderData>();
+  const {
+    userId,
+    lists,
+    activeList,
+    restaurants: initialRestaurants,
+    members,
+    listInvites,
+    profile,
+    pendingInvites,
+  } = data;
   const revalidator = useRevalidator();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>(initialRestaurants);
   const [mode, setMode] = useState<ListMode>('light');
@@ -137,6 +229,10 @@ export default function Dashboard() {
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [invitesOpen, setInvitesOpen] = useState(false);
+  const [newListOpen, setNewListOpen] = useState(false);
+  const [newListName, setNewListName] = useState('');
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
   const [restaurantToDelete, setRestaurantToDelete] = useState<{
     id: string;
@@ -155,6 +251,10 @@ export default function Dashboard() {
 
   const t = listTokens[mode];
   const muiTheme = useMemo(() => makeListTheme(mode), [mode]);
+
+  const role = activeList?.role ?? 'viewer';
+  const canEdit = role === 'owner' || role === 'editor';
+  const canManage = role === 'owner';
 
   const decorated = useMemo(() => restaurants.map(decorate), [restaurants]);
 
@@ -177,15 +277,19 @@ export default function Dashboard() {
   const total = decorated.length;
   const beenCount = decorated.filter((r) => r.isBeen).length;
   const wantCount = decorated.filter((r) => r.isWant).length;
-  const userInitial = (userId?.[0] || 'M').toUpperCase();
 
-  // --- handlers (data layer preserved) -------------------------------------
+  const shownMembers = members.slice(0, 3);
+  const extraMembers = members.length - shownMembers.length;
+
+  // --- handlers ------------------------------------------------------------
   const handleAddRestaurant = () => {
+    if (!canEdit) return;
     setSelectedRestaurant(null);
     setFormOpen(true);
   };
 
   const handleEditRestaurant = (restaurant: Restaurant) => {
+    if (!canEdit) return;
     setSelectedRestaurant(restaurant);
     setFormOpen(true);
   };
@@ -194,6 +298,7 @@ export default function Dashboard() {
     restaurantData: Partial<Restaurant>,
     imageFile?: File
   ) => {
+    if (!activeList) return;
     try {
       let imageUrl = restaurantData.image;
       if (imageFile) {
@@ -202,19 +307,29 @@ export default function Dashboard() {
       const dataToSave = { ...restaurantData, image: imageUrl };
 
       if (selectedRestaurant?.id) {
-        await updateRestaurant(selectedRestaurant.id, dataToSave, userId);
+        await updateRestaurant(selectedRestaurant.id, dataToSave, activeList.id, userId);
         setSnackbar({ open: true, message: 'Restaurant updated successfully!', severity: 'success' });
       } else {
-        await createRestaurant(dataToSave, userId);
+        await createRestaurant(dataToSave, activeList.id, userId);
         setSnackbar({ open: true, message: 'Restaurant added successfully!', severity: 'success' });
       }
-
       revalidator.revalidate();
       setFormOpen(false);
     } catch (error) {
       console.error('Error saving restaurant:', error);
       setSnackbar({ open: true, message: 'Failed to save restaurant. Please try again.', severity: 'error' });
       throw error;
+    }
+  };
+
+  const handleToggleStatus = async (r: DecoratedRestaurant) => {
+    if (!canEdit || !r.id) return;
+    try {
+      await setRestaurantStatus(r.id, r.isBeen ? 'want' : 'been');
+      revalidator.revalidate();
+    } catch (error) {
+      console.error('Error updating status:', error);
+      setSnackbar({ open: true, message: 'Failed to update status.', severity: 'error' });
     }
   };
 
@@ -243,6 +358,29 @@ export default function Dashboard() {
   const handleSendEmail = async (email: string) => {
     sendRestaurantListViaMailto(restaurants, email);
     setSnackbar({ open: true, message: 'Opening email client...', severity: 'success' });
+  };
+
+  const handleSelectList = (listId: string) => {
+    const params = new URLSearchParams(searchParams);
+    params.set('list', listId);
+    setSearchParams(params);
+  };
+
+  const handleCreateList = async () => {
+    const name = newListName.trim();
+    if (!name) return;
+    try {
+      const id = await createList(name, userId);
+      setNewListOpen(false);
+      setNewListName('');
+      const params = new URLSearchParams(searchParams);
+      params.set('list', id);
+      setSearchParams(params);
+      setSnackbar({ open: true, message: 'List created!', severity: 'success' });
+    } catch (error) {
+      console.error('Error creating list:', error);
+      setSnackbar({ open: true, message: 'Failed to create list.', severity: 'error' });
+    }
   };
 
   const handleLogout = () => {
@@ -301,6 +439,35 @@ export default function Dashboard() {
 
   const serif = "'Instrument Serif',serif";
 
+  const renderAvatar = (m: ListMember, idx: number) => {
+    const name = m.profile?.displayName?.trim();
+    const initial = (name?.[0] ?? '?').toUpperCase();
+    const bg = idx === 0 ? t.accent : idx === 1 ? t.avatar2 : t.avatar3;
+    const fg = idx === 0 ? t.accentText : idx === 1 ? '#fff' : t.muted;
+    return (
+      <Box
+        key={m.id}
+        title={name || 'Member'}
+        sx={{
+          width: 30,
+          height: 30,
+          borderRadius: '50%',
+          background: m.profile?.avatarUrl ? `center/cover url(${m.profile.avatarUrl})` : bg,
+          color: fg,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 12,
+          fontWeight: 600,
+          border: `2px solid ${t.panelBg}`,
+          ml: idx === 0 ? 0 : '-9px',
+        }}
+      >
+        {!m.profile?.avatarUrl && initial}
+      </Box>
+    );
+  };
+
   return (
     <ThemeProvider theme={muiTheme}>
       <Box
@@ -345,15 +512,7 @@ export default function Dashboard() {
                 flex: 'none',
               }}
             >
-              <Box
-                sx={{
-                  width: 9,
-                  height: 9,
-                  background: t.panelBg,
-                  borderRadius: '50%',
-                  transform: 'rotate(-45deg)',
-                }}
-              />
+              <Box sx={{ width: 9, height: 9, background: t.panelBg, borderRadius: '50%', transform: 'rotate(-45deg)' }} />
             </Box>
             <Box component="span" sx={{ fontFamily: serif, fontSize: 26, letterSpacing: '.01em' }}>
               The List
@@ -362,12 +521,7 @@ export default function Dashboard() {
 
           <Box
             component="nav"
-            sx={{
-              display: { xs: 'none', md: 'flex' },
-              gap: '30px',
-              fontSize: '14.5px',
-              color: t.muted,
-            }}
+            sx={{ display: { xs: 'none', md: 'flex' }, gap: '30px', fontSize: '14.5px', color: t.muted }}
           >
             <Box component="span" sx={{ color: t.ink, fontWeight: 500 }}>Restaurants</Box>
             <Box component="span">Cities</Box>
@@ -391,22 +545,11 @@ export default function Dashboard() {
                 fontSize: '13.5px',
               }}
             >
-              <Box
-                aria-hidden
-                sx={{
-                  width: 13,
-                  height: 13,
-                  border: `1.6px solid ${t.faint}`,
-                  borderRadius: '50%',
-                  flex: 'none',
-                }}
-              />
+              <Box aria-hidden sx={{ width: 13, height: 13, border: `1.6px solid ${t.faint}`, borderRadius: '50%', flex: 'none' }} />
               <Box
                 component="input"
                 value={searchQuery}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setSearchQuery(e.target.value)
-                }
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
                 placeholder="Search places…"
                 aria-label="Search places"
                 sx={{
@@ -424,69 +567,69 @@ export default function Dashboard() {
 
             {/* theme toggle */}
             <Box sx={{ display: 'flex', background: t.searchBg, border: `1px solid ${t.border}`, borderRadius: '999px', padding: '3px' }}>
-              <Box
-                component="button"
-                onClick={() => setMode('light')}
-                title="Light"
-                aria-label="Light theme"
-                sx={{ border: 'none', cursor: 'pointer', width: 30, height: 26, borderRadius: '999px', fontSize: 13, ...themeBtn('light') }}
-              >
-                ☀
-              </Box>
-              <Box
-                component="button"
-                onClick={() => setMode('dark')}
-                title="Dark"
-                aria-label="Dark theme"
-                sx={{ border: 'none', cursor: 'pointer', width: 30, height: 26, borderRadius: '999px', fontSize: 13, ...themeBtn('dark') }}
-              >
-                ☾
-              </Box>
+              <Box component="button" onClick={() => setMode('light')} title="Light" aria-label="Light theme"
+                sx={{ border: 'none', cursor: 'pointer', width: 30, height: 26, borderRadius: '999px', fontSize: 13, ...themeBtn('light') }}>☀</Box>
+              <Box component="button" onClick={() => setMode('dark')} title="Dark" aria-label="Dark theme"
+                sx={{ border: 'none', cursor: 'pointer', width: 30, height: 26, borderRadius: '999px', fontSize: 13, ...themeBtn('dark') }}>☾</Box>
             </Box>
 
             {/* add */}
-            <Tooltip title="Add a place">
-              <Box
-                component="button"
-                onClick={handleAddRestaurant}
-                aria-label="Add restaurant"
-                sx={{
-                  display: { xs: 'none', sm: 'inline-flex' },
-                  alignItems: 'center',
-                  gap: '6px',
-                  border: 'none',
-                  cursor: 'pointer',
-                  background: t.accent,
-                  color: t.accentText,
-                  fontFamily: "'DM Sans',sans-serif",
-                  fontWeight: 600,
-                  fontSize: '13.5px',
-                  padding: '8px 16px',
-                  borderRadius: '999px',
-                }}
-              >
-                <Add sx={{ fontSize: 17 }} /> Add
-              </Box>
+            {canEdit && (
+              <Tooltip title="Add a place">
+                <Box
+                  component="button"
+                  onClick={handleAddRestaurant}
+                  aria-label="Add restaurant"
+                  sx={{
+                    display: { xs: 'none', sm: 'inline-flex' },
+                    alignItems: 'center',
+                    gap: '6px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: t.accent,
+                    color: t.accentText,
+                    fontFamily: "'DM Sans',sans-serif",
+                    fontWeight: 600,
+                    fontSize: '13.5px',
+                    padding: '8px 16px',
+                    borderRadius: '999px',
+                  }}
+                >
+                  <Add sx={{ fontSize: 17 }} /> Add
+                </Box>
+              </Tooltip>
+            )}
+
+            {/* share */}
+            <Tooltip title="Share & members">
+              <IconButton onClick={() => setShareOpen(true)} aria-label="Share and members" sx={{ color: t.muted }}>
+                <PersonAddAlt1 />
+              </IconButton>
             </Tooltip>
 
-            {/* avatar stack (opens account menu) */}
-            <Box
-              component="button"
-              onClick={(e: React.MouseEvent<HTMLButtonElement>) => setMenuAnchor(e.currentTarget)}
-              aria-label="Account menu"
-              aria-haspopup="true"
-              sx={{ display: 'flex', border: 'none', background: 'transparent', cursor: 'pointer', p: 0 }}
-            >
-              <Box sx={{ width: 30, height: 30, borderRadius: '50%', background: t.accent, color: t.accentText, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600, border: `2px solid ${t.panelBg}` }}>
-                {userInitial}
+            {/* avatar stack → account menu */}
+            <Badge color="error" variant="dot" invisible={pendingInvites.length === 0} overlap="circular">
+              <Box
+                component="button"
+                onClick={(e: React.MouseEvent<HTMLButtonElement>) => setMenuAnchor(e.currentTarget)}
+                aria-label="Account menu"
+                aria-haspopup="true"
+                sx={{ display: 'flex', border: 'none', background: 'transparent', cursor: 'pointer', p: 0 }}
+              >
+                {shownMembers.length > 0
+                  ? shownMembers.map((m, i) => renderAvatar(m, i))
+                  : (
+                    <Box sx={{ width: 30, height: 30, borderRadius: '50%', background: t.accent, color: t.accentText, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600 }}>
+                      {(profile?.displayName?.[0] ?? 'M').toUpperCase()}
+                    </Box>
+                  )}
+                {extraMembers > 0 && (
+                  <Box sx={{ width: 30, height: 30, borderRadius: '50%', background: t.avatar3, color: t.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, border: `2px solid ${t.panelBg}`, ml: '-9px' }}>
+                    +{extraMembers}
+                  </Box>
+                )}
               </Box>
-              <Box sx={{ width: 30, height: 30, borderRadius: '50%', background: t.avatar2, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600, border: `2px solid ${t.panelBg}`, ml: '-9px' }}>
-                J
-              </Box>
-              <Box sx={{ width: 30, height: 30, borderRadius: '50%', background: t.avatar3, color: t.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, border: `2px solid ${t.panelBg}`, ml: '-9px' }}>
-                +2
-              </Box>
-            </Box>
+            </Badge>
             <Menu
               anchorEl={menuAnchor}
               open={Boolean(menuAnchor)}
@@ -494,22 +637,23 @@ export default function Dashboard() {
               anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
               transformOrigin={{ vertical: 'top', horizontal: 'right' }}
             >
-              <MenuItem
-                onClick={() => {
-                  setMenuAnchor(null);
-                  setEmailOpen(true);
-                }}
-                disabled={restaurants.length === 0}
-              >
+              <MenuItem onClick={() => { setMenuAnchor(null); navigate('/profile'); }}>
+                <ListItemIcon><Person fontSize="small" sx={{ color: t.muted }} /></ListItemIcon>
+                <ListItemText>Profile</ListItemText>
+              </MenuItem>
+              <MenuItem onClick={() => { setMenuAnchor(null); setInvitesOpen(true); }}>
+                <ListItemIcon>
+                  <Badge color="error" badgeContent={pendingInvites.length} invisible={pendingInvites.length === 0}>
+                    <MailOutline fontSize="small" sx={{ color: t.muted }} />
+                  </Badge>
+                </ListItemIcon>
+                <ListItemText>Invitations</ListItemText>
+              </MenuItem>
+              <MenuItem onClick={() => { setMenuAnchor(null); setEmailOpen(true); }} disabled={restaurants.length === 0}>
                 <ListItemIcon><Email fontSize="small" sx={{ color: t.muted }} /></ListItemIcon>
                 <ListItemText>Email list</ListItemText>
               </MenuItem>
-              <MenuItem
-                onClick={() => {
-                  setMenuAnchor(null);
-                  handleLogout();
-                }}
-              >
+              <MenuItem onClick={() => { setMenuAnchor(null); handleLogout(); }}>
                 <ListItemIcon><Logout fontSize="small" sx={{ color: t.muted }} /></ListItemIcon>
                 <ListItemText>Sign out</ListItemText>
               </MenuItem>
@@ -522,11 +666,16 @@ export default function Dashboard() {
           {/* title + view toggle */}
           <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
             <Box>
-              <Box component="h1" sx={{ fontFamily: serif, fontSize: { xs: 34, md: 44 }, fontWeight: 400, lineHeight: 1.05, m: 0 }}>
-                Restaurants &amp; Bars
-              </Box>
+              <ListSwitcher
+                lists={lists}
+                activeList={activeList}
+                serifFont={serif}
+                onSelect={handleSelectList}
+                onCreate={() => setNewListOpen(true)}
+              />
               <Box component="p" sx={{ color: t.muted, fontSize: 15, mt: '8px', mb: 0 }}>
                 {total} places · {beenCount} been · {wantCount} want to try
+                {activeList && role !== 'owner' && ` · ${role}`}
               </Box>
             </Box>
             <Box sx={{ display: 'flex', background: t.searchBg, border: `1px solid ${t.border}`, borderRadius: '999px', padding: '4px' }}>
@@ -563,14 +712,16 @@ export default function Dashboard() {
               }}
             >
               <Box sx={{ fontFamily: serif, fontSize: 30, mb: 1 }}>
-                {searchQuery || filter !== 'all' ? 'No matches' : 'Your list is empty'}
+                {searchQuery || filter !== 'all' ? 'No matches' : 'This list is empty'}
               </Box>
               <Box sx={{ color: t.muted, fontSize: 15, mb: 3, maxWidth: 420, mx: 'auto' }}>
                 {searchQuery || filter !== 'all'
                   ? 'Try a different search or filter.'
-                  : 'Add your first restaurant to start building the list.'}
+                  : canEdit
+                  ? 'Add your first restaurant to start building the list.'
+                  : 'Nothing here yet.'}
               </Box>
-              {!searchQuery && filter === 'all' && (
+              {!searchQuery && filter === 'all' && canEdit && (
                 <Box
                   component="button"
                   onClick={handleAddRestaurant}
@@ -598,13 +749,7 @@ export default function Dashboard() {
               {/* TILE */}
               {view === 'tile' && (
                 <Box sx={{ padding: '24px 0 40px' }}>
-                  <Box
-                    sx={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-                      gap: '20px',
-                    }}
-                  >
+                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '20px' }}>
                     {filtered.map((r) => (
                       <Box
                         key={r.id}
@@ -614,12 +759,11 @@ export default function Dashboard() {
                           borderRadius: '16px',
                           overflow: 'hidden',
                           background: t.cardBg,
-                          cursor: 'pointer',
+                          cursor: canEdit ? 'pointer' : 'default',
                           transition: 'transform .15s, box-shadow .15s',
-                          '&:hover': {
-                            transform: 'translateY(-3px)',
-                            boxShadow: '0 12px 28px rgba(0,0,0,.12)',
-                          },
+                          '&:hover': canEdit
+                            ? { transform: 'translateY(-3px)', boxShadow: '0 12px 28px rgba(0,0,0,.12)' }
+                            : {},
                           '&:hover .card-actions': { opacity: 1 },
                         }}
                       >
@@ -627,36 +771,37 @@ export default function Dashboard() {
                           {r.image ? (
                             <Box component="img" src={r.image} alt={r.name} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                           ) : (
-                            <Box component="span" sx={{ fontFamily: serif, fontSize: 68, color: t.monoInitial, lineHeight: 1 }}>
-                              {r.initial}
-                            </Box>
+                            <Box component="span" sx={{ fontFamily: serif, fontSize: 68, color: t.monoInitial, lineHeight: 1 }}>{r.initial}</Box>
                           )}
-                          {r.isBeen ? (
-                            <Box component="span" sx={{ position: 'absolute', top: 12, right: 12, background: t.beenBg, color: t.beenFg, fontSize: '11.5px', fontWeight: 600, padding: '5px 11px', borderRadius: '999px' }}>
-                              ✓ Been
-                            </Box>
-                          ) : (
-                            <Box component="span" sx={{ position: 'absolute', top: 12, right: 12, background: t.wantBg, color: t.wantFg, fontSize: '11.5px', fontWeight: 600, padding: '5px 11px', borderRadius: '999px' }}>
-                              Want to try
-                            </Box>
-                          )}
-                          {/* hover actions */}
                           <Box
-                            className="card-actions"
-                            sx={{ position: 'absolute', top: 10, left: 10, display: 'flex', gap: '6px', opacity: 0, transition: 'opacity .15s' }}
+                            component="span"
+                            onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleToggleStatus(r); }}
+                            title={canEdit ? 'Toggle been / want' : undefined}
+                            sx={{
+                              position: 'absolute',
+                              top: 12,
+                              right: 12,
+                              background: r.isBeen ? t.beenBg : t.wantBg,
+                              color: r.isBeen ? t.beenFg : t.wantFg,
+                              fontSize: '11.5px',
+                              fontWeight: 600,
+                              padding: '5px 11px',
+                              borderRadius: '999px',
+                              cursor: canEdit ? 'pointer' : 'default',
+                            }}
                           >
-                            <CardAction label={`Edit ${r.name}`} onClick={() => handleEditRestaurant(r)} tokens={t}>
-                              <EditIcon sx={{ fontSize: 15 }} />
-                            </CardAction>
-                            <CardAction
-                              label={`Delete ${r.name}`}
-                              onClick={() => r.id && handleDeleteClick(r.id)}
-                              tokens={t}
-                              danger
-                            >
-                              <DeleteIcon sx={{ fontSize: 15 }} />
-                            </CardAction>
+                            {r.isBeen ? '✓ Been' : 'Want to try'}
                           </Box>
+                          {canEdit && (
+                            <Box className="card-actions" sx={{ position: 'absolute', top: 10, left: 10, display: 'flex', gap: '6px', opacity: 0, transition: 'opacity .15s' }}>
+                              <CardAction label={`Edit ${r.name}`} onClick={() => handleEditRestaurant(r)} tokens={t}>
+                                <EditIcon sx={{ fontSize: 15 }} />
+                              </CardAction>
+                              <CardAction label={`Delete ${r.name}`} onClick={() => r.id && handleDeleteClick(r.id)} tokens={t} danger>
+                                <DeleteIcon sx={{ fontSize: 15 }} />
+                              </CardAction>
+                            </Box>
+                          )}
                         </Box>
                         <Box sx={{ padding: '14px 16px 16px' }}>
                           <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px' }}>
@@ -693,8 +838,8 @@ export default function Dashboard() {
                           padding: '13px 18px',
                           borderBottom: `1px solid ${t.borderSoft}`,
                           background: t.cardBg,
-                          cursor: 'pointer',
-                          '&:hover': { filter: 'brightness(0.98)' },
+                          cursor: canEdit ? 'pointer' : 'default',
+                          '&:hover': canEdit ? { filter: 'brightness(0.98)' } : {},
                           '&:hover .row-actions': { opacity: 1 },
                           '&:last-of-type': { borderBottom: 'none' },
                         }}
@@ -712,19 +857,34 @@ export default function Dashboard() {
                         </Box>
                         <Box sx={{ width: 90, color: t.cost, fontSize: 14, fontWeight: 600, display: { xs: 'none', sm: 'block' } }}>{r.costStr}</Box>
                         <Box sx={{ width: 110, color: t.rating, fontSize: 14, letterSpacing: '1px', display: { xs: 'none', sm: 'block' } }}>{r.ratingStr}</Box>
-                        {r.isBeen ? (
-                          <Box component="span" sx={{ width: 96, textAlign: 'center', background: t.beenBg, color: t.beenFg, fontSize: '11.5px', fontWeight: 600, padding: '5px 0', borderRadius: '999px', flex: 'none' }}>✓ Been</Box>
-                        ) : (
-                          <Box component="span" sx={{ width: 96, textAlign: 'center', background: t.wantBg, color: t.wantFg, fontSize: '11.5px', fontWeight: 600, padding: '5px 0', borderRadius: '999px', flex: 'none' }}>Want to try</Box>
-                        )}
-                        <Box className="row-actions" sx={{ display: 'flex', gap: '4px', opacity: 0, transition: 'opacity .15s' }}>
-                          <CardAction label={`Edit ${r.name}`} onClick={() => handleEditRestaurant(r)} tokens={t} solid>
-                            <EditIcon sx={{ fontSize: 15 }} />
-                          </CardAction>
-                          <CardAction label={`Delete ${r.name}`} onClick={() => r.id && handleDeleteClick(r.id)} tokens={t} solid danger>
-                            <DeleteIcon sx={{ fontSize: 15 }} />
-                          </CardAction>
+                        <Box
+                          component="span"
+                          onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleToggleStatus(r); }}
+                          sx={{
+                            width: 96,
+                            textAlign: 'center',
+                            background: r.isBeen ? t.beenBg : t.wantBg,
+                            color: r.isBeen ? t.beenFg : t.wantFg,
+                            fontSize: '11.5px',
+                            fontWeight: 600,
+                            padding: '5px 0',
+                            borderRadius: '999px',
+                            flex: 'none',
+                            cursor: canEdit ? 'pointer' : 'default',
+                          }}
+                        >
+                          {r.isBeen ? '✓ Been' : 'Want to try'}
                         </Box>
+                        {canEdit && (
+                          <Box className="row-actions" sx={{ display: 'flex', gap: '4px', opacity: 0, transition: 'opacity .15s' }}>
+                            <CardAction label={`Edit ${r.name}`} onClick={() => handleEditRestaurant(r)} tokens={t} solid>
+                              <EditIcon sx={{ fontSize: 15 }} />
+                            </CardAction>
+                            <CardAction label={`Delete ${r.name}`} onClick={() => r.id && handleDeleteClick(r.id)} tokens={t} solid danger>
+                              <DeleteIcon sx={{ fontSize: 15 }} />
+                            </CardAction>
+                          </Box>
+                        )}
                       </Box>
                     ))}
                   </Box>
@@ -753,11 +913,9 @@ export default function Dashboard() {
                       <Box
                         key={r.id}
                         onClick={() => handleEditRestaurant(r)}
-                        sx={{ position: 'absolute', left: `${r.px}%`, top: `${r.py}%`, transform: 'translate(-50%,-100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }}
+                        sx={{ position: 'absolute', left: `${r.px}%`, top: `${r.py}%`, transform: 'translate(-50%,-100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: canEdit ? 'pointer' : 'default' }}
                       >
-                        <Box sx={{ background: t.pinLabelBg, border: `1px solid ${t.pinLabelBorder}`, color: t.pinLabelFg, boxShadow: '0 2px 8px rgba(0,0,0,.18)', fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: '7px', whiteSpace: 'nowrap', mb: '3px' }}>
-                          {r.name}
-                        </Box>
+                        <Box sx={{ background: t.pinLabelBg, border: `1px solid ${t.pinLabelBorder}`, color: t.pinLabelFg, boxShadow: '0 2px 8px rgba(0,0,0,.18)', fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: '7px', whiteSpace: 'nowrap', mb: '3px' }}>{r.name}</Box>
                         <Box sx={{ width: 18, height: 18, background: t.accent, borderRadius: '50% 50% 50% 2px', transform: 'rotate(45deg)', border: `2px solid ${t.pinBorder}`, boxShadow: '0 2px 4px rgba(0,0,0,.25)' }} />
                       </Box>
                     ))}
@@ -767,7 +925,7 @@ export default function Dashboard() {
                       <Box
                         key={r.id}
                         onClick={() => handleEditRestaurant(r)}
-                        sx={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderBottom: `1px solid ${t.borderSoft}`, cursor: 'pointer', '&:hover': { filter: 'brightness(0.98)' } }}
+                        sx={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderBottom: `1px solid ${t.borderSoft}`, cursor: canEdit ? 'pointer' : 'default', '&:hover': canEdit ? { filter: 'brightness(0.98)' } : {} }}
                       >
                         <Box sx={{ width: 34, height: 34, borderRadius: '9px', background: t.monoGrad, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', overflow: 'hidden' }}>
                           {r.image ? (
@@ -813,30 +971,32 @@ export default function Dashboard() {
         </Box>
 
         {/* mobile FAB */}
-        <Box
-          component="button"
-          onClick={handleAddRestaurant}
-          aria-label="Add restaurant"
-          sx={{
-            display: { xs: 'flex', sm: 'none' },
-            alignItems: 'center',
-            justifyContent: 'center',
-            position: 'fixed',
-            bottom: 24,
-            right: 24,
-            width: 56,
-            height: 56,
-            border: 'none',
-            cursor: 'pointer',
-            borderRadius: '50%',
-            background: t.accent,
-            color: t.accentText,
-            boxShadow: '0 8px 24px rgba(0,0,0,.3)',
-            zIndex: 1000,
-          }}
-        >
-          <Add sx={{ fontSize: 26 }} />
-        </Box>
+        {canEdit && (
+          <Box
+            component="button"
+            onClick={handleAddRestaurant}
+            aria-label="Add restaurant"
+            sx={{
+              display: { xs: 'flex', sm: 'none' },
+              alignItems: 'center',
+              justifyContent: 'center',
+              position: 'fixed',
+              bottom: 24,
+              right: 24,
+              width: 56,
+              height: 56,
+              border: 'none',
+              cursor: 'pointer',
+              borderRadius: '50%',
+              background: t.accent,
+              color: t.accentText,
+              boxShadow: '0 8px 24px rgba(0,0,0,.3)',
+              zIndex: 1000,
+            }}
+          >
+            <Add sx={{ fontSize: 26 }} />
+          </Box>
+        )}
 
         {/* dialogs */}
         <RestaurantFormDialog
@@ -851,11 +1011,42 @@ export default function Dashboard() {
           onClose={() => setDeleteOpen(false)}
           onConfirm={handleConfirmDelete}
         />
-        <EmailDialog
-          open={emailOpen}
-          onClose={() => setEmailOpen(false)}
-          onSend={handleSendEmail}
+        <EmailDialog open={emailOpen} onClose={() => setEmailOpen(false)} onSend={handleSendEmail} />
+        <ShareListDialog
+          open={shareOpen}
+          list={activeList}
+          members={members}
+          invites={listInvites}
+          currentUserId={userId}
+          canManage={canManage}
+          onClose={() => setShareOpen(false)}
+          onChanged={() => revalidator.revalidate()}
         />
+        <InvitesDialog
+          open={invitesOpen}
+          invites={pendingInvites}
+          onClose={() => setInvitesOpen(false)}
+          onChanged={() => revalidator.revalidate()}
+        />
+
+        {/* new list dialog */}
+        <Dialog open={newListOpen} onClose={() => setNewListOpen(false)} maxWidth="xs" fullWidth>
+          <DialogTitle sx={{ fontWeight: 700 }}>New list</DialogTitle>
+          <DialogContent>
+            <TextField
+              fullWidth
+              label="List name"
+              value={newListName}
+              onChange={(e) => setNewListName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleCreateList(); }}
+              sx={{ mt: 1 }}
+            />
+          </DialogContent>
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button onClick={() => setNewListOpen(false)} sx={{ color: 'text.secondary' }}>Cancel</Button>
+            <Button onClick={handleCreateList} variant="contained" disabled={!newListName.trim()}>Create</Button>
+          </DialogActions>
+        </Dialog>
 
         {/* snackbar */}
         <Snackbar
@@ -890,7 +1081,7 @@ function CardAction({
   children: React.ReactNode;
   label: string;
   onClick: () => void;
-  tokens: typeof listTokens['light'];
+  tokens: (typeof listTokens)['light'];
   danger?: boolean;
   solid?: boolean;
 }) {
