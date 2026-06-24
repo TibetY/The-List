@@ -33,7 +33,7 @@ function FitBounds({ points }: { points: Located[] }) {
   return null;
 }
 
-interface RestaurantMapProps {
+export interface RestaurantMapProps {
   restaurants: Restaurant[];
   accent: string;
   canEdit: boolean;
