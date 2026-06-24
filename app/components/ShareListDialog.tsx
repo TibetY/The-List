@@ -205,7 +205,11 @@ export default function ShareListDialog({
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           {members.map((m) => (
             <Box key={m.id} sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-              <Avatar src={m.profile?.avatarUrl} sx={{ width: 34, height: 34, fontSize: 14 }}>
+              <Avatar
+                src={m.profile?.avatarUrl}
+                alt={m.profile?.displayName || 'Member'}
+                sx={{ width: 34, height: 34, fontSize: 14 }}
+              >
                 {initials(m)}
               </Avatar>
               <Box sx={{ flex: 1, minWidth: 0 }}>

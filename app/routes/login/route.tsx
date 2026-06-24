@@ -121,7 +121,6 @@ export default function LoginPage() {
             name="email"
             label="Email Address"
             autoComplete="email"
-            aria-required="true"
             sx={{ mb: 2 }}
           />
           <TextField
@@ -134,7 +133,6 @@ export default function LoginPage() {
             label="Password"
             type="password"
             autoComplete="current-password"
-            aria-required="true"
             sx={{ mb: 3 }}
           />
           <Button

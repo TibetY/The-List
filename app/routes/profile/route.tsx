@@ -98,7 +98,7 @@ export default function ProfilePage() {
           </Typography>
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, mb: 4 }}>
-            <Avatar src={preview} sx={{ width: 88, height: 88, fontSize: 32 }}>
+            <Avatar src={preview} alt="Your profile photo" sx={{ width: 88, height: 88, fontSize: 32 }}>
               {(displayName?.[0] ?? '?').toUpperCase()}
             </Avatar>
             <Button variant="outlined" component="label" startIcon={<PhotoCamera />}>
