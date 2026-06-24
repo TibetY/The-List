@@ -56,13 +56,10 @@ export interface ListMember {
   profile?: Profile;
 }
 
-export interface ListInvite {
+export interface InviteLink {
   id: string;
+  token: string;
   listId: string;
-  listName?: string;
-  email: string;
   role: Exclude<ListRole, 'owner'>;
-  invitedByName?: string;
-  status?: 'pending' | 'accepted' | 'revoked';
-  createdAt?: Date;
+  active: boolean;
 }

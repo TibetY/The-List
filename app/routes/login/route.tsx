@@ -8,29 +8,36 @@ import {
 } from "@mui/material";
 import type { LoaderFunction, ActionFunction } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
-import { Form, useActionData, Link } from "@remix-run/react";
+import { Form, useActionData, useLoaderData, Link } from "@remix-run/react";
 import { createSupabaseServerClient } from "~/supabase.server";
+import { safeRedirect } from "~/utils/safeRedirect";
 import GoogleIcon from "@mui/icons-material/Google";
 
 type ActionData = {
   error?: string;
 };
 
+type LoaderData = {
+  next: string;
+};
+
 export const loader: LoaderFunction = async ({ request }) => {
+  const next = safeRedirect(new URL(request.url).searchParams.get("next"));
   const { supabase } = createSupabaseServerClient(request);
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (user) {
-    return redirect("/dashboard");
+    return redirect(next);
   }
-  return {};
+  return json<LoaderData>({ next });
 };
 
 export const action: ActionFunction = async ({ request }) => {
   const formData = await request.formData();
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
+  const next = safeRedirect(formData.get("next"));
 
   const { supabase, headers } = createSupabaseServerClient(request);
   const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -40,11 +47,12 @@ export const action: ActionFunction = async ({ request }) => {
     return json<ActionData>({ error: error.message });
   }
 
-  return redirect("/dashboard", { headers });
+  return redirect(next, { headers });
 };
 
 export default function LoginPage() {
   const actionData = useActionData<ActionData>();
+  const { next } = useLoaderData<LoaderData>();
 
   return (
     <Container
@@ -81,7 +89,7 @@ export default function LoginPage() {
           Don&apos;t have an account?{" "}
           <Box
             component={Link}
-            to="/signup"
+            to={`/signup?next=${encodeURIComponent(next)}`}
             sx={{
               color: "primary.main",
               textDecoration: "none",
@@ -100,6 +108,7 @@ export default function LoginPage() {
         )}
 
         <Form method="post" noValidate>
+          <input type="hidden" name="next" value={next} />
           <TextField
             variant="outlined"
             margin="normal"

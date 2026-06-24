@@ -5,7 +5,6 @@ import {
   DialogContent,
   DialogActions,
   Button,
-  TextField,
   MenuItem,
   Typography,
   Box,
@@ -15,17 +14,19 @@ import {
   Chip,
   Alert,
   CircularProgress,
+  TextField,
+  InputAdornment,
 } from '@mui/material';
-import { Close, PersonAdd, Delete, Mail } from '@mui/icons-material';
+import { Close, Delete, ContentCopy, Link as LinkIcon } from '@mui/icons-material';
 import type {
-  ListInvite,
+  InviteLink,
   ListMember,
   ListRole,
   RestaurantList,
 } from '~/types/restaurant';
 import {
-  inviteMember,
-  revokeInvite,
+  createInviteLink,
+  revokeInviteLink,
   updateMemberRole,
   removeMember,
 } from '~/services/lists.client';
@@ -34,7 +35,7 @@ interface ShareListDialogProps {
   open: boolean;
   list: RestaurantList | null;
   members: ListMember[];
-  invites: ListInvite[];
+  inviteLink: InviteLink | null;
   currentUserId: string;
   canManage: boolean;
   onClose: () => void;
@@ -50,18 +51,23 @@ export default function ShareListDialog({
   open,
   list,
   members,
-  invites,
+  inviteLink,
   currentUserId,
   canManage,
   onClose,
   onChanged,
 }: ShareListDialogProps) {
-  const [email, setEmail] = useState('');
   const [role, setRole] = useState<Exclude<ListRole, 'owner'>>('editor');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   if (!list) return null;
+
+  const linkUrl =
+    inviteLink && typeof window !== 'undefined'
+      ? `${window.location.origin}/join/${inviteLink.token}`
+      : '';
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -76,16 +82,15 @@ export default function ShareListDialog({
     }
   };
 
-  const handleInvite = async () => {
-    const value = email.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-      setError('Please enter a valid email address');
-      return;
+  const handleCopy = async () => {
+    if (!linkUrl) return;
+    try {
+      await navigator.clipboard.writeText(linkUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setError('Could not copy link');
     }
-    await run(async () => {
-      await inviteMember(list.id, value, role, currentUserId);
-      setEmail('');
-    });
   };
 
   return (
@@ -120,42 +125,77 @@ export default function ShareListDialog({
         {canManage && (
           <Box sx={{ mb: 3 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-              Invite by email
+              Invite link
             </Typography>
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              <TextField
-                size="small"
-                placeholder="friend@example.com"
-                type="email"
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  setError('');
-                }}
-                sx={{ flex: 1, minWidth: 200 }}
-                aria-label="Invite email"
-              />
-              <Select
-                size="small"
-                value={role}
-                onChange={(e) => setRole(e.target.value as Exclude<ListRole, 'owner'>)}
-                aria-label="Invite role"
-              >
-                <MenuItem value="editor">Editor</MenuItem>
-                <MenuItem value="viewer">Viewer</MenuItem>
-              </Select>
-              <Button
-                variant="contained"
-                startIcon={<PersonAdd />}
-                onClick={handleInvite}
-                disabled={busy}
-              >
-                Invite
-              </Button>
-            </Box>
-            <Typography variant="caption" sx={{ color: 'text.secondary', mt: 1, display: 'block' }}>
-              They’ll see the invite when they sign in with that email.
-            </Typography>
+
+            {inviteLink ? (
+              <>
+                <TextField
+                  fullWidth
+                  size="small"
+                  value={linkUrl}
+                  InputProps={{
+                    readOnly: true,
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <LinkIcon fontSize="small" />
+                      </InputAdornment>
+                    ),
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <Button
+                          size="small"
+                          startIcon={<ContentCopy fontSize="small" />}
+                          onClick={handleCopy}
+                        >
+                          {copied ? 'Copied' : 'Copy'}
+                        </Button>
+                      </InputAdornment>
+                    ),
+                  }}
+                  aria-label="Invite link"
+                />
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                    Anyone who opens this link joins as
+                  </Typography>
+                  <Chip size="small" label={inviteLink.role} />
+                  <Button
+                    size="small"
+                    disabled={busy}
+                    onClick={() => run(() => revokeInviteLink(inviteLink.id))}
+                    sx={{ color: 'text.secondary' }}
+                  >
+                    Revoke
+                  </Button>
+                </Box>
+              </>
+            ) : (
+              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                  Joins as
+                </Typography>
+                <Select
+                  size="small"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value as Exclude<ListRole, 'owner'>)}
+                  aria-label="Invite role"
+                >
+                  <MenuItem value="editor">Editor</MenuItem>
+                  <MenuItem value="viewer">Viewer</MenuItem>
+                </Select>
+                <Button
+                  variant="contained"
+                  startIcon={<LinkIcon />}
+                  disabled={busy}
+                  onClick={() =>
+                    run(() => createInviteLink(list.id, role, currentUserId).then(() => undefined))
+                  }
+                >
+                  Create link
+                </Button>
+              </Box>
+            )}
           </Box>
         )}
 
@@ -164,14 +204,8 @@ export default function ShareListDialog({
         </Typography>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           {members.map((m) => (
-            <Box
-              key={m.id}
-              sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}
-            >
-              <Avatar
-                src={m.profile?.avatarUrl}
-                sx={{ width: 34, height: 34, fontSize: 14 }}
-              >
+            <Box key={m.id} sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <Avatar src={m.profile?.avatarUrl} sx={{ width: 34, height: 34, fontSize: 14 }}>
                 {initials(m)}
               </Avatar>
               <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -214,37 +248,6 @@ export default function ShareListDialog({
             </Box>
           ))}
         </Box>
-
-        {canManage && invites.length > 0 && (
-          <>
-            <Typography variant="subtitle2" sx={{ fontWeight: 600, mt: 3, mb: 1 }}>
-              Pending invites
-            </Typography>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              {invites.map((inv) => (
-                <Box key={inv.id} sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                  <Avatar sx={{ width: 34, height: 34, bgcolor: 'transparent', color: 'text.secondary' }}>
-                    <Mail fontSize="small" />
-                  </Avatar>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="body2" noWrap>
-                      {inv.email}
-                    </Typography>
-                  </Box>
-                  <Chip size="small" label={inv.role} />
-                  <IconButton
-                    size="small"
-                    aria-label="Revoke invite"
-                    onClick={() => run(() => revokeInvite(inv.id))}
-                    sx={{ color: 'text.secondary', '&:hover': { color: 'error.main' } }}
-                  >
-                    <Delete fontSize="small" />
-                  </IconButton>
-                </Box>
-              ))}
-            </Box>
-          </>
-        )}
       </DialogContent>
       <DialogActions sx={{ px: 3, py: 2 }}>
         {busy && <CircularProgress size={20} sx={{ mr: 1 }} />}

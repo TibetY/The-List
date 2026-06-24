@@ -17,7 +17,6 @@ import {
   Alert,
   ThemeProvider,
   Tooltip,
-  Badge,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -33,22 +32,20 @@ import {
   Delete as DeleteIcon,
   PersonAddAlt1,
   Person,
-  MailOutline,
 } from '@mui/icons-material';
 import { createSupabaseServerClient } from '~/supabase.server';
 import { getRestaurants } from '~/services/restaurants.server';
 import {
   getLists,
   getListMembers,
-  getListInvites,
-  getPendingInvites,
+  getInviteLink,
 } from '~/services/lists.server';
 import { getProfile } from '~/services/profiles.server';
 import type {
   Restaurant,
   RestaurantList,
   ListMember,
-  ListInvite,
+  InviteLink,
   Profile,
 } from '~/types/restaurant';
 import RestaurantFormDialog from '~/components/RestaurantFormDialog';
@@ -56,7 +53,6 @@ import DeleteConfirmDialog from '~/components/DeleteConfirmDialog';
 import EmailDialog from '~/components/EmailDialog';
 import ListSwitcher from '~/components/ListSwitcher';
 import ShareListDialog from '~/components/ShareListDialog';
-import InvitesDialog from '~/components/InvitesDialog';
 import { uploadRestaurantImage } from '~/services/storage.client';
 import {
   createRestaurant,
@@ -74,9 +70,8 @@ type LoaderData = {
   activeList: RestaurantList | null;
   restaurants: Restaurant[];
   members: ListMember[];
-  listInvites: ListInvite[];
+  inviteLink: InviteLink | null;
   profile: Profile | null;
-  pendingInvites: ListInvite[];
 };
 
 export const loader: LoaderFunction = async ({ request }) => {
@@ -101,16 +96,15 @@ export const loader: LoaderFunction = async ({ request }) => {
 
     let restaurants: Restaurant[] = [];
     let members: ListMember[] = [];
-    let listInvites: ListInvite[] = [];
+    let inviteLink: InviteLink | null = null;
     if (activeList) {
       restaurants = await getRestaurants(supabase, activeList.id);
       members = await getListMembers(supabase, activeList.id);
       if (activeList.role === 'owner') {
-        listInvites = await getListInvites(supabase, activeList.id);
+        inviteLink = await getInviteLink(supabase, activeList.id);
       }
     }
     const profile = await getProfile(supabase, user.id);
-    const pendingInvites = await getPendingInvites(supabase);
 
     return json<LoaderData>(
       {
@@ -119,9 +113,8 @@ export const loader: LoaderFunction = async ({ request }) => {
         activeList,
         restaurants,
         members,
-        listInvites,
+        inviteLink,
         profile,
-        pendingInvites,
       },
       { headers }
     );
@@ -134,9 +127,8 @@ export const loader: LoaderFunction = async ({ request }) => {
         activeList: null,
         restaurants: [],
         members: [],
-        listInvites: [],
+        inviteLink: null,
         profile: null,
-        pendingInvites: [],
       },
       { headers }
     );
@@ -212,9 +204,8 @@ export default function Dashboard() {
     activeList,
     restaurants: initialRestaurants,
     members,
-    listInvites,
+    inviteLink,
     profile,
-    pendingInvites,
   } = data;
   const revalidator = useRevalidator();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -230,7 +221,6 @@ export default function Dashboard() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
-  const [invitesOpen, setInvitesOpen] = useState(false);
   const [newListOpen, setNewListOpen] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
@@ -608,28 +598,26 @@ export default function Dashboard() {
             </Tooltip>
 
             {/* avatar stack → account menu */}
-            <Badge color="error" variant="dot" invisible={pendingInvites.length === 0} overlap="circular">
-              <Box
-                component="button"
-                onClick={(e: React.MouseEvent<HTMLButtonElement>) => setMenuAnchor(e.currentTarget)}
-                aria-label="Account menu"
-                aria-haspopup="true"
-                sx={{ display: 'flex', border: 'none', background: 'transparent', cursor: 'pointer', p: 0 }}
-              >
-                {shownMembers.length > 0
-                  ? shownMembers.map((m, i) => renderAvatar(m, i))
-                  : (
-                    <Box sx={{ width: 30, height: 30, borderRadius: '50%', background: t.accent, color: t.accentText, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600 }}>
-                      {(profile?.displayName?.[0] ?? 'M').toUpperCase()}
-                    </Box>
-                  )}
-                {extraMembers > 0 && (
-                  <Box sx={{ width: 30, height: 30, borderRadius: '50%', background: t.avatar3, color: t.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, border: `2px solid ${t.panelBg}`, ml: '-9px' }}>
-                    +{extraMembers}
+            <Box
+              component="button"
+              onClick={(e: React.MouseEvent<HTMLButtonElement>) => setMenuAnchor(e.currentTarget)}
+              aria-label="Account menu"
+              aria-haspopup="true"
+              sx={{ display: 'flex', border: 'none', background: 'transparent', cursor: 'pointer', p: 0 }}
+            >
+              {shownMembers.length > 0
+                ? shownMembers.map((m, i) => renderAvatar(m, i))
+                : (
+                  <Box sx={{ width: 30, height: 30, borderRadius: '50%', background: t.accent, color: t.accentText, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600 }}>
+                    {(profile?.displayName?.[0] ?? 'M').toUpperCase()}
                   </Box>
                 )}
-              </Box>
-            </Badge>
+              {extraMembers > 0 && (
+                <Box sx={{ width: 30, height: 30, borderRadius: '50%', background: t.avatar3, color: t.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, border: `2px solid ${t.panelBg}`, ml: '-9px' }}>
+                  +{extraMembers}
+                </Box>
+              )}
+            </Box>
             <Menu
               anchorEl={menuAnchor}
               open={Boolean(menuAnchor)}
@@ -641,13 +629,9 @@ export default function Dashboard() {
                 <ListItemIcon><Person fontSize="small" sx={{ color: t.muted }} /></ListItemIcon>
                 <ListItemText>Profile</ListItemText>
               </MenuItem>
-              <MenuItem onClick={() => { setMenuAnchor(null); setInvitesOpen(true); }}>
-                <ListItemIcon>
-                  <Badge color="error" badgeContent={pendingInvites.length} invisible={pendingInvites.length === 0}>
-                    <MailOutline fontSize="small" sx={{ color: t.muted }} />
-                  </Badge>
-                </ListItemIcon>
-                <ListItemText>Invitations</ListItemText>
+              <MenuItem onClick={() => { setMenuAnchor(null); setShareOpen(true); }}>
+                <ListItemIcon><PersonAddAlt1 fontSize="small" sx={{ color: t.muted }} /></ListItemIcon>
+                <ListItemText>Share &amp; members</ListItemText>
               </MenuItem>
               <MenuItem onClick={() => { setMenuAnchor(null); setEmailOpen(true); }} disabled={restaurants.length === 0}>
                 <ListItemIcon><Email fontSize="small" sx={{ color: t.muted }} /></ListItemIcon>
@@ -1016,16 +1000,10 @@ export default function Dashboard() {
           open={shareOpen}
           list={activeList}
           members={members}
-          invites={listInvites}
+          inviteLink={inviteLink}
           currentUserId={userId}
           canManage={canManage}
           onClose={() => setShareOpen(false)}
-          onChanged={() => revalidator.revalidate()}
-        />
-        <InvitesDialog
-          open={invitesOpen}
-          invites={pendingInvites}
-          onClose={() => setInvitesOpen(false)}
           onChanged={() => revalidator.revalidate()}
         />
 

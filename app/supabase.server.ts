@@ -3,7 +3,7 @@ import {
   parseCookieHeader,
   serializeCookieHeader,
 } from '@supabase/ssr';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from '~/supabaseConfig';
+import { getServerSupabaseEnv } from '~/supabaseConfig';
 
 /**
  * Create a request-scoped Supabase client for use inside Remix loaders and
@@ -17,6 +17,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from '~/supabaseConfig';
  */
 export function createSupabaseServerClient(request: Request) {
   const headers = new Headers();
+  const { SUPABASE_URL, SUPABASE_ANON_KEY } = getServerSupabaseEnv();
 
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     cookies: {

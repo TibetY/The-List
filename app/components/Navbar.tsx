@@ -31,7 +31,6 @@ export default function Navbar() {
   const navLinks = isLoggedIn
     ? [
         { label: "Dashboard", to: "/dashboard" },
-        { label: "Invitations", to: "/invites" },
         { label: "Profile", to: "/profile" },
       ]
     : [

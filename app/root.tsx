@@ -10,6 +10,7 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  useLoaderData,
 } from "@remix-run/react";
 
 import { CacheProvider } from "@emotion/react";
@@ -20,6 +21,7 @@ import theme from "./theme";
 
 import { json } from "@remix-run/node";
 import { createSupabaseServerClient } from "~/supabase.server";
+import { getServerSupabaseEnv, type PublicEnv } from "~/supabaseConfig";
 import Navbar from "./components/Navbar";
 
 export const links: LinksFunction = () => [
@@ -54,11 +56,13 @@ export const loader: LoaderFunction = async ({ request }) => {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  return json({ isLoggedIn: !!user });
+  const ENV = getServerSupabaseEnv();
+  return json({ isLoggedIn: !!user, ENV });
 };
 
 export default function App() {
   const clientSideEmotionCache = createEmotionCache();
+  const { ENV } = useLoaderData<{ ENV: PublicEnv }>();
 
   return (
     <html lang="en">
@@ -80,6 +84,11 @@ export default function App() {
           </ThemeProvider>
         </CacheProvider>
         <ScrollRestoration />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.ENV = ${JSON.stringify(ENV)};`,
+          }}
+        />
         <Scripts />
         <LiveReload />
       </body>
