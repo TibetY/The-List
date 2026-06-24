@@ -20,25 +20,20 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
 } from '@mui/icons-material';
-import { getSession, destroySession } from '~/session.server';
-import { getRestaurantsByUser } from '~/services/restaurants.server';
+import { createSupabaseServerClient } from '~/supabase.server';
+import { getRestaurants } from '~/services/restaurants.server';
 import type { Restaurant } from '~/types/restaurant';
 import RestaurantFormDialog from '~/components/RestaurantFormDialog';
 import DeleteConfirmDialog from '~/components/DeleteConfirmDialog';
 import EmailDialog from '~/components/EmailDialog';
 import { uploadRestaurantImage } from '~/services/storage.client';
+import {
+  createRestaurant,
+  updateRestaurant,
+  deleteRestaurant,
+} from '~/services/restaurants.client';
 import { sendRestaurantListViaMailto } from '~/services/email.client';
 import { listTokens, makeListTheme, type ListMode } from '~/listTheme';
-
-import {
-  collection,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  Timestamp,
-} from 'firebase/firestore';
-import { db } from '~/firebase';
 
 type LoaderData = {
   restaurants: Restaurant[];
@@ -46,34 +41,32 @@ type LoaderData = {
 };
 
 export const loader: LoaderFunction = async ({ request }) => {
-  const session = await getSession(request.headers.get('Cookie'));
-  const token = session.get('token');
-  const userId = session.get('userId');
+  const { supabase, headers } = createSupabaseServerClient(request);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!token || !userId) {
+  if (!user) {
     return redirect('/login');
   }
 
   try {
-    const restaurants = await getRestaurantsByUser(userId);
-    return json<LoaderData>({ restaurants, userId });
+    const restaurants = await getRestaurants(supabase);
+    return json<LoaderData>({ restaurants, userId: user.id }, { headers });
   } catch (error) {
     console.error('Error loading restaurants:', error);
-    return json<LoaderData>({ restaurants: [], userId });
+    return json<LoaderData>({ restaurants: [], userId: user.id }, { headers });
   }
 };
 
 export const action: ActionFunction = async ({ request }) => {
-  const session = await getSession(request.headers.get('Cookie'));
+  const { supabase, headers } = createSupabaseServerClient(request);
   const formData = await request.formData();
   const intent = formData.get('intent');
 
   if (intent === 'logout') {
-    return redirect('/login', {
-      headers: {
-        'Set-Cookie': await destroySession(session),
-      },
-    });
+    await supabase.auth.signOut();
+    return redirect('/login', { headers });
   }
 
   return json({ success: true });
@@ -206,20 +199,13 @@ export default function Dashboard() {
       if (imageFile) {
         imageUrl = await uploadRestaurantImage(imageFile, userId);
       }
-      const dataToSave = { ...restaurantData, image: imageUrl, userId };
+      const dataToSave = { ...restaurantData, image: imageUrl };
 
       if (selectedRestaurant?.id) {
-        await updateDoc(doc(db, 'restaurants', selectedRestaurant.id), {
-          ...dataToSave,
-          updatedAt: Timestamp.now(),
-        });
+        await updateRestaurant(selectedRestaurant.id, dataToSave, userId);
         setSnackbar({ open: true, message: 'Restaurant updated successfully!', severity: 'success' });
       } else {
-        await addDoc(collection(db, 'restaurants'), {
-          ...dataToSave,
-          createdAt: Timestamp.now(),
-          updatedAt: Timestamp.now(),
-        });
+        await createRestaurant(dataToSave, userId);
         setSnackbar({ open: true, message: 'Restaurant added successfully!', severity: 'success' });
       }
 
@@ -243,7 +229,7 @@ export default function Dashboard() {
   const handleConfirmDelete = async () => {
     if (!restaurantToDelete) return;
     try {
-      await deleteDoc(doc(db, 'restaurants', restaurantToDelete.id));
+      await deleteRestaurant(restaurantToDelete.id);
       setSnackbar({ open: true, message: 'Restaurant deleted successfully!', severity: 'success' });
       revalidator.revalidate();
       setDeleteOpen(false);

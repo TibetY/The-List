@@ -19,8 +19,8 @@ import Logo from "./Logo";
 
 export default function Navbar() {
   const location = useLocation();
-  const rootData = useRouteLoaderData("root") as { token: string | null } | undefined;
-  const isLoggedIn = !!rootData?.token;
+  const rootData = useRouteLoaderData("root") as { isLoggedIn: boolean } | undefined;
+  const isLoggedIn = !!rootData?.isLoggedIn;
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [drawerOpen, setDrawerOpen] = useState(false);

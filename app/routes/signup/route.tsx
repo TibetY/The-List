@@ -1,9 +1,7 @@
 import type { ActionFunction, LoaderFunction } from "@remix-run/node";
-import { redirect } from "@remix-run/node";
+import { json, redirect } from "@remix-run/node";
 import { Form, useActionData, Link } from "@remix-run/react";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { auth } from "~/firebase";
-import { getSession, commitSession } from "~/session.server";
+import { createSupabaseServerClient } from "~/supabase.server";
 import {
   Box,
   Container,
@@ -14,9 +12,11 @@ import {
 } from "@mui/material";
 
 export const loader: LoaderFunction = async ({ request }) => {
-  const session = await getSession(request.headers.get("Cookie"));
-  const token = session.get("token");
-  if (token) {
+  const { supabase } = createSupabaseServerClient(request);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user) {
     return redirect("/dashboard");
   }
   return {};
@@ -24,6 +24,7 @@ export const loader: LoaderFunction = async ({ request }) => {
 
 type ActionData = {
   error?: string;
+  message?: string;
 };
 
 export const action: ActionFunction = async ({ request }) => {
@@ -33,33 +34,26 @@ export const action: ActionFunction = async ({ request }) => {
   const confirmPassword = formData.get("confirmPassword") as string;
 
   if (password !== confirmPassword) {
-    return { error: "Passwords do not match" } as ActionData;
+    return json<ActionData>({ error: "Passwords do not match" });
   }
 
-  try {
-    const userCredential = await createUserWithEmailAndPassword(
-      auth,
-      email,
-      password
-    );
-    const token = await userCredential.user.getIdToken();
+  const { supabase, headers } = createSupabaseServerClient(request);
+  const { data, error } = await supabase.auth.signUp({ email, password });
 
-    const session = await getSession(request.headers.get("Cookie"));
-    session.set("token", token);
-    session.set("userId", userCredential.user.uid);
+  if (error) {
+    console.error("Signup error:", error.message);
+    return json<ActionData>({ error: error.message });
+  }
 
-    return redirect("/dashboard", {
-      headers: { "Set-Cookie": await commitSession(session) },
+  // When email confirmation is enabled, no session is returned yet.
+  if (!data.session) {
+    return json<ActionData>({
+      message:
+        "Account created! Check your email to confirm your address, then sign in.",
     });
-  } catch (err: unknown) {
-    if (err instanceof Error) {
-      console.error("Signup error:", err.message);
-      return { error: err.message } as ActionData;
-    } else {
-      console.error("Signup error:", err);
-      return { error: "An unknown error occurred" } as ActionData;
-    }
   }
+
+  return redirect("/dashboard", { headers });
 };
 
 export default function SignUpPage() {
@@ -115,6 +109,12 @@ export default function SignUpPage() {
         {actionData?.error && (
           <Alert severity="error" sx={{ mb: 3 }} role="alert">
             {actionData.error}
+          </Alert>
+        )}
+
+        {actionData?.message && (
+          <Alert severity="success" sx={{ mb: 3 }} role="status">
+            {actionData.message}
           </Alert>
         )}
 
