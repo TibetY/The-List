@@ -386,16 +386,23 @@ create policy "delete own avatar" on storage.objects
 -- HARDENING (security linter)
 -- ============================================================
 
+-- Remove the obsolete email-invite table (replaced by list_invite_links).
+-- CASCADE also drops its leftover RLS policies, which still reference the old
+-- public.list_role(uuid) helper and would otherwise block dropping it below.
+drop table if exists public.list_invites cascade;
+
 -- Remove obsolete email-invite RPCs (replaced by invite links).
 drop function if exists public.accept_invite(uuid);
 drop function if exists public.decline_invite(uuid);
 drop function if exists public.my_pending_invites();
 
 -- Remove the old public copies of the RLS helpers now that policies reference
--- the private schema. (Safe: nothing depends on them anymore.)
-drop function if exists public.is_list_member(uuid);
-drop function if exists public.can_edit_list(uuid);
-drop function if exists public.list_role(uuid);
+-- the private schema. (CASCADE clears any remaining legacy policies that still
+-- depend on these public versions; the live policies were already recreated
+-- above to use the private.* helpers, so this is safe.)
+drop function if exists public.is_list_member(uuid) cascade;
+drop function if exists public.can_edit_list(uuid) cascade;
+drop function if exists public.list_role(uuid) cascade;
 
 -- Trigger functions must never be callable as RPCs. Revoking EXECUTE does not
 -- affect triggers (the trigger system runs them regardless of grants).
