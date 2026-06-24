@@ -24,23 +24,26 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Skip to main content link (WCAG) */
+/* Skip to main content link (WCAG): hidden off-screen until keyboard-focused.
+   Uses transform (reliable) rather than a percentage `top`, which resolves
+   against the containing block height and can leave the link visible. */
 .skip-to-main {
-  position: absolute;
-  top: -100%;
+  position: fixed;
+  top: 0;
   left: 16px;
   z-index: 9999;
   padding: 12px 24px;
-  background: var(--color-accent);
+  background: var(--color-accent, #E8734A);
   color: white;
   border-radius: 0 0 12px 12px;
   font-weight: 600;
   text-decoration: none;
-  transition: top 0.2s ease;
+  transform: translateY(-150%);
+  transition: transform 0.2s ease;
 }
 
 .skip-to-main:focus {
-  top: 0;
+  transform: translateY(0);
 }
 
 /* Glassmorphism utility */

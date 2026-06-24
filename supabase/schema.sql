@@ -78,6 +78,13 @@ alter table public.restaurants
     check (status in ('been','want'));
 alter table public.restaurants
   add column if not exists added_by uuid references auth.users(id) on delete set null;
+-- Location for the map view: a human-entered address, geocoded to coordinates.
+alter table public.restaurants
+  add column if not exists address text;
+alter table public.restaurants
+  add column if not exists latitude double precision;
+alter table public.restaurants
+  add column if not exists longitude double precision;
 -- Carry any legacy owner value into added_by, then retire user_id usage.
 update public.restaurants set added_by = user_id where added_by is null;
 

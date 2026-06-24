@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
-import { LoaderFunction, ActionFunction, redirect, json } from '@remix-run/node';
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
+import { LoaderFunction, ActionFunction, LinksFunction, redirect, json } from '@remix-run/node';
+import leafletStylesHref from 'leaflet/dist/leaflet.css?url';
 import {
   useLoaderData,
   useRevalidator,
@@ -61,8 +62,16 @@ import {
   setRestaurantStatus,
 } from '~/services/restaurants.client';
 import { createList } from '~/services/lists.client';
+import { geocodeAddress } from '~/services/geocode.client';
+
+// Leaflet touches `window` at import time, so only load the map on the client.
+const RestaurantMap = lazy(() => import('~/components/RestaurantMap'));
+
+export const links: LinksFunction = () => [
+  { rel: 'stylesheet', href: leafletStylesHref },
+];
 import { sendRestaurantListViaMailto } from '~/services/email.client';
-import { listTokens, makeListTheme, type ListMode } from '~/listTheme';
+import { listTokens, makeListTheme, getStoredMode, storeMode, type ListMode } from '~/listTheme';
 
 type LoaderData = {
   userId: string;
@@ -72,6 +81,7 @@ type LoaderData = {
   members: ListMember[];
   inviteLink: InviteLink | null;
   profile: Profile | null;
+  error: string | null;
 };
 
 export const loader: LoaderFunction = async ({ request }) => {
@@ -115,6 +125,7 @@ export const loader: LoaderFunction = async ({ request }) => {
         members,
         inviteLink,
         profile,
+        error: null,
       },
       { headers }
     );
@@ -129,6 +140,10 @@ export const loader: LoaderFunction = async ({ request }) => {
         members: [],
         inviteLink: null,
         profile: null,
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Could not load your lists. Please try again.',
       },
       { headers }
     );
@@ -206,6 +221,7 @@ export default function Dashboard() {
     members,
     inviteLink,
     profile,
+    error,
   } = data;
   const revalidator = useRevalidator();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -213,6 +229,15 @@ export default function Dashboard() {
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>(initialRestaurants);
   const [mode, setMode] = useState<ListMode>('light');
+  // The Leaflet map is client-only; render it after mount.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  // Load the saved theme after mount (avoids SSR/client hydration mismatch).
+  useEffect(() => setMode(getStoredMode()), []);
+  const changeMode = (m: ListMode) => {
+    setMode(m);
+    storeMode(m);
+  };
   const [view, setView] = useState<ViewMode>('tile');
   const [filter, setFilter] = useState<FilterMode>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -267,6 +292,10 @@ export default function Dashboard() {
   const total = decorated.length;
   const beenCount = decorated.filter((r) => r.isBeen).length;
   const wantCount = decorated.filter((r) => r.isWant).length;
+  // How many of the currently-shown places can't be plotted (no coordinates).
+  const mapMissingCount = filtered.filter(
+    (r) => typeof r.lat !== 'number' || typeof r.lng !== 'number'
+  ).length;
 
   const shownMembers = members.slice(0, 3);
   const extraMembers = members.length - shownMembers.length;
@@ -294,7 +323,24 @@ export default function Dashboard() {
       if (imageFile) {
         imageUrl = await uploadRestaurantImage(imageFile, userId);
       }
-      const dataToSave = { ...restaurantData, image: imageUrl };
+      const dataToSave: Partial<Restaurant> = { ...restaurantData, image: imageUrl };
+
+      // Geocode the address for the map, but only when it actually changed
+      // (keeps us within Nominatim's rate limits and avoids needless lookups).
+      const newAddress = (restaurantData.address ?? '').trim();
+      const addressChanged = newAddress !== (selectedRestaurant?.address ?? '').trim();
+      if (newAddress && addressChanged) {
+        const point = await geocodeAddress(newAddress);
+        dataToSave.lat = point?.lat;
+        dataToSave.lng = point?.lng;
+      } else if (!newAddress) {
+        dataToSave.lat = undefined;
+        dataToSave.lng = undefined;
+      } else {
+        // Address unchanged — preserve the previously geocoded coordinates.
+        dataToSave.lat = selectedRestaurant?.lat;
+        dataToSave.lng = selectedRestaurant?.lng;
+      }
 
       if (selectedRestaurant?.id) {
         await updateRestaurant(selectedRestaurant.id, dataToSave, activeList.id, userId);
@@ -532,16 +578,6 @@ export default function Dashboard() {
             </Box>
           </Box>
 
-          <Box
-            component="nav"
-            sx={{ display: { xs: 'none', md: 'flex' }, gap: '30px', fontSize: '14.5px', color: t.muted }}
-          >
-            <Box component="span" sx={{ color: t.ink, fontWeight: 500 }}>Restaurants</Box>
-            <Box component="span">Cities</Box>
-            <Box component="span">Map</Box>
-            <Box component="span">Wishlist</Box>
-          </Box>
-
           <Box sx={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             {/* search */}
             <Box
@@ -580,9 +616,9 @@ export default function Dashboard() {
 
             {/* theme toggle */}
             <Box sx={{ display: 'flex', background: t.searchBg, border: `1px solid ${t.border}`, borderRadius: '999px', padding: '3px' }}>
-              <Box component="button" onClick={() => setMode('light')} title="Light" aria-label="Light theme"
+              <Box component="button" onClick={() => changeMode('light')} title="Light" aria-label="Light theme"
                 sx={{ border: 'none', cursor: 'pointer', width: 30, height: 26, borderRadius: '999px', fontSize: 13, ...themeBtn('light') }}>☀</Box>
-              <Box component="button" onClick={() => setMode('dark')} title="Dark" aria-label="Dark theme"
+              <Box component="button" onClick={() => changeMode('dark')} title="Dark" aria-label="Dark theme"
                 sx={{ border: 'none', cursor: 'pointer', width: 30, height: 26, borderRadius: '999px', fontSize: 13, ...themeBtn('dark') }}>☾</Box>
             </Box>
 
@@ -632,7 +668,7 @@ export default function Dashboard() {
                 ? shownMembers.map((m, i) => renderAvatar(m, i))
                 : (
                   <Box sx={{ width: 30, height: 30, borderRadius: '50%', background: t.accent, color: t.accentText, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600 }}>
-                    {(profile?.displayName?.[0] ?? 'M').toUpperCase()}
+                    {(profile?.displayName?.[0] ?? '?').toUpperCase()}
                   </Box>
                 )}
               {extraMembers > 0 && (
@@ -670,6 +706,12 @@ export default function Dashboard() {
 
         {/* body container */}
         <Box sx={{ flexGrow: 1, width: '100%', maxWidth: 1320, mx: 'auto', padding: { xs: '24px 18px 0', md: '30px 40px 0' } }}>
+          {error && (
+            <Alert severity="error" sx={{ mb: 3 }} role="alert">
+              Couldn&apos;t load your lists: {error}. If this persists, confirm the
+              database schema has been applied and the Supabase key is correct.
+            </Alert>
+          )}
           {/* title + view toggle */}
           <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
             <Box>
@@ -909,31 +951,40 @@ export default function Dashboard() {
               {/* MAP */}
               {view === 'map' && (
                 <Box sx={{ padding: '24px 0 40px', display: 'flex', gap: '18px', flexDirection: { xs: 'column', md: 'row' } }}>
-                  <Box
-                    sx={{
-                      flex: 1,
-                      position: 'relative',
-                      height: 540,
-                      borderRadius: '16px',
-                      border: `1px solid ${t.border}`,
-                      overflow: 'hidden',
-                      background: t.mapBg,
-                      backgroundImage: `linear-gradient(${t.mapGrid} 1px,transparent 1px),linear-gradient(90deg,${t.mapGrid} 1px,transparent 1px)`,
-                      backgroundSize: '48px 48px',
-                    }}
-                  >
-                    <Box sx={{ position: 'absolute', top: '38%', left: '-5%', width: '70%', height: 60, background: t.mapWater, transform: 'rotate(-8deg)' }} />
-                    <Box sx={{ position: 'absolute', top: '12%', left: '40%', width: 14, height: '90%', background: t.mapPark }} />
-                    {filtered.map((r) => (
-                      <Box
-                        key={r.id}
-                        onClick={() => handleEditRestaurant(r)}
-                        sx={{ position: 'absolute', left: `${r.px}%`, top: `${r.py}%`, transform: 'translate(-50%,-100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: canEdit ? 'pointer' : 'default' }}
-                      >
-                        <Box sx={{ background: t.pinLabelBg, border: `1px solid ${t.pinLabelBorder}`, color: t.pinLabelFg, boxShadow: '0 2px 8px rgba(0,0,0,.18)', fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: '7px', whiteSpace: 'nowrap', mb: '3px' }}>{r.name}</Box>
-                        <Box sx={{ width: 18, height: 18, background: t.accent, borderRadius: '50% 50% 50% 2px', transform: 'rotate(45deg)', border: `2px solid ${t.pinBorder}`, boxShadow: '0 2px 4px rgba(0,0,0,.25)' }} />
+                  <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <Box
+                      sx={{
+                        flex: 1,
+                        position: 'relative',
+                        height: 540,
+                        borderRadius: '16px',
+                        border: `1px solid ${t.border}`,
+                        overflow: 'hidden',
+                        background: t.mapBg,
+                      }}
+                    >
+                      {mounted ? (
+                        <Suspense
+                          fallback={
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: t.muted }}>
+                              Loading map…
+                            </Box>
+                          }
+                        >
+                          <RestaurantMap
+                            restaurants={filtered}
+                            accent={t.accent}
+                            canEdit={canEdit}
+                            onSelect={handleEditRestaurant}
+                          />
+                        </Suspense>
+                      ) : null}
+                    </Box>
+                    {mapMissingCount > 0 && (
+                      <Box sx={{ color: t.faint, fontSize: 12.5 }}>
+                        {mapMissingCount} {mapMissingCount === 1 ? 'place has' : 'places have'} no address yet — add one to show {mapMissingCount === 1 ? 'it' : 'them'} on the map.
                       </Box>
-                    ))}
+                    )}
                   </Box>
                   <Box sx={{ width: { xs: '100%', md: 330 }, flex: 'none', height: 540, overflowY: 'auto', border: `1px solid ${t.border}`, borderRadius: '16px', background: t.cardBg }}>
                     {filtered.map((r) => (

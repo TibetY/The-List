@@ -9,6 +9,22 @@ import { createTheme, type Theme } from '@mui/material/styles';
  */
 export type ListMode = 'light' | 'dark';
 
+const THEME_STORAGE_KEY = 'thelist.theme';
+
+/** Read the user's saved theme preference (client only; defaults to light). */
+export function getStoredMode(): ListMode {
+  if (typeof window === 'undefined') return 'light';
+  const v = window.localStorage.getItem(THEME_STORAGE_KEY);
+  return v === 'dark' || v === 'light' ? v : 'light';
+}
+
+/** Persist the user's theme preference so it survives navigation/reloads. */
+export function storeMode(mode: ListMode): void {
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(THEME_STORAGE_KEY, mode);
+  }
+}
+
 export interface ListTokens {
   pageBg: string;
   panelBg: string;
