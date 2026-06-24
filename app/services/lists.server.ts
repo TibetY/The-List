@@ -1,13 +1,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
-  ListInvite,
+  InviteLink,
   ListMember,
   RestaurantList,
 } from '~/types/restaurant';
 import {
-  rowToInvite,
+  rowToInviteLink,
   rowToProfile,
-  type PendingInviteRow,
+  type InviteLinkRow,
   type ProfileRow,
 } from './listMap';
 
@@ -118,42 +118,20 @@ export async function getListMembers(
     .sort((a, b) => rolePriority[a.role] - rolePriority[b.role]);
 }
 
-/** Pending invites for a list (owner-only by RLS). */
-export async function getListInvites(
+/** The active shareable invite link for a list, if any (owner-only by RLS). */
+export async function getInviteLink(
   supabase: SupabaseClient,
   listId: string
-): Promise<ListInvite[]> {
+): Promise<InviteLink | null> {
   const { data, error } = await supabase
-    .from('list_invites')
-    .select('*')
+    .from('list_invite_links')
+    .select('id, token, list_id, role, active')
     .eq('list_id', listId)
-    .eq('status', 'pending');
+    .eq('active', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
   if (error) throw error;
-
-  return (
-    data as {
-      id: string;
-      list_id: string;
-      email: string;
-      role: ListInvite['role'];
-      created_at: string | null;
-    }[]
-  ).map((i) => ({
-    id: i.id,
-    listId: i.list_id,
-    email: i.email,
-    role: i.role,
-    status: 'pending' as const,
-    createdAt: i.created_at ? new Date(i.created_at) : undefined,
-  }));
-}
-
-/** Pending invites addressed to the current user (via RPC). */
-export async function getPendingInvites(
-  supabase: SupabaseClient
-): Promise<ListInvite[]> {
-  const { data, error } = await supabase.rpc('my_pending_invites');
-  if (error) throw error;
-  return (data as PendingInviteRow[]).map(rowToInvite);
+  return data ? rowToInviteLink(data as InviteLinkRow) : null;
 }

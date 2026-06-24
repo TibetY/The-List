@@ -1,7 +1,8 @@
 import type { ActionFunction, LoaderFunction } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
-import { Form, useActionData, Link } from "@remix-run/react";
+import { Form, useActionData, useLoaderData, Link } from "@remix-run/react";
 import { createSupabaseServerClient } from "~/supabase.server";
+import { safeRedirect } from "~/utils/safeRedirect";
 import {
   Box,
   Container,
@@ -11,15 +12,20 @@ import {
   Alert,
 } from "@mui/material";
 
+type LoaderData = {
+  next: string;
+};
+
 export const loader: LoaderFunction = async ({ request }) => {
+  const next = safeRedirect(new URL(request.url).searchParams.get("next"));
   const { supabase } = createSupabaseServerClient(request);
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (user) {
-    return redirect("/dashboard");
+    return redirect(next);
   }
-  return {};
+  return json<LoaderData>({ next });
 };
 
 type ActionData = {
@@ -32,6 +38,7 @@ export const action: ActionFunction = async ({ request }) => {
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
   const confirmPassword = formData.get("confirmPassword") as string;
+  const next = safeRedirect(formData.get("next"));
 
   if (password !== confirmPassword) {
     return json<ActionData>({ error: "Passwords do not match" });
@@ -53,11 +60,12 @@ export const action: ActionFunction = async ({ request }) => {
     });
   }
 
-  return redirect("/dashboard", { headers });
+  return redirect(next, { headers });
 };
 
 export default function SignUpPage() {
   const actionData = useActionData<ActionData>();
+  const { next } = useLoaderData<LoaderData>();
 
   return (
     <Container
@@ -94,7 +102,7 @@ export default function SignUpPage() {
           Already have an account?{" "}
           <Box
             component={Link}
-            to="/login"
+            to={`/login?next=${encodeURIComponent(next)}`}
             sx={{
               color: "primary.main",
               textDecoration: "none",
@@ -119,6 +127,7 @@ export default function SignUpPage() {
         )}
 
         <Form method="post" noValidate>
+          <input type="hidden" name="next" value={next} />
           <TextField
             variant="outlined"
             margin="normal"

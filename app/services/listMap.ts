@@ -1,5 +1,5 @@
 import type {
-  ListInvite,
+  InviteLink,
   ListMember,
   Profile,
   RestaurantList,
@@ -37,25 +37,20 @@ export function rowToListMember(row: ListMemberRow): ListMember {
   };
 }
 
-/** Row returned by the my_pending_invites() RPC. */
-export interface PendingInviteRow {
+export interface InviteLinkRow {
   id: string;
+  token: string;
   list_id: string;
-  list_name: string;
-  role: ListInvite['role'];
-  invited_by_name: string | null;
-  created_at: string | null;
+  role: InviteLink['role'];
+  active: boolean;
 }
 
-export function rowToInvite(row: PendingInviteRow): ListInvite {
+export function rowToInviteLink(row: InviteLinkRow): InviteLink {
   return {
     id: row.id,
+    token: row.token,
     listId: row.list_id,
-    listName: row.list_name,
     role: row.role,
-    email: '',
-    invitedByName: row.invited_by_name ?? undefined,
-    status: 'pending',
-    createdAt: row.created_at ? new Date(row.created_at) : undefined,
+    active: row.active,
   };
 }

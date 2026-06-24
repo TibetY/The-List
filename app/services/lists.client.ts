@@ -1,5 +1,6 @@
-import type { ListRole, RestaurantList } from '~/types/restaurant';
+import type { InviteLink, ListRole, RestaurantList } from '~/types/restaurant';
 import { getSupabaseBrowserClient } from '~/supabase.client';
+import { rowToInviteLink, type InviteLinkRow } from './listMap';
 
 /** Create a new list owned by the current user. Returns its id. */
 export async function createList(
@@ -37,31 +38,40 @@ export async function deleteList(id: string): Promise<void> {
   if (error) throw error;
 }
 
-/** Invite someone to a list by email (owner only). */
-export async function inviteMember(
+/**
+ * Create a fresh shareable invite link for a list (owner only). Any previous
+ * links are deactivated so only the newest link works.
+ */
+export async function createInviteLink(
   listId: string,
-  email: string,
   role: Exclude<ListRole, 'owner'>,
-  invitedBy: string
-): Promise<void> {
+  createdBy: string
+): Promise<InviteLink> {
   const supabase = getSupabaseBrowserClient();
-  const { error } = await supabase.from('list_invites').insert({
-    list_id: listId,
-    email: email.trim().toLowerCase(),
-    role,
-    invited_by: invitedBy,
-    status: 'pending',
-  });
+
+  await supabase
+    .from('list_invite_links')
+    .update({ active: false })
+    .eq('list_id', listId)
+    .eq('active', true);
+
+  const { data, error } = await supabase
+    .from('list_invite_links')
+    .insert({ list_id: listId, role, created_by: createdBy })
+    .select('id, token, list_id, role, active')
+    .single();
+
   if (error) throw error;
+  return rowToInviteLink(data as InviteLinkRow);
 }
 
-/** Revoke a pending invite (owner only). */
-export async function revokeInvite(inviteId: string): Promise<void> {
+/** Deactivate a list's invite link (owner only). */
+export async function revokeInviteLink(linkId: string): Promise<void> {
   const supabase = getSupabaseBrowserClient();
   const { error } = await supabase
-    .from('list_invites')
-    .update({ status: 'revoked' })
-    .eq('id', inviteId);
+    .from('list_invite_links')
+    .update({ active: false })
+    .eq('id', linkId);
   if (error) throw error;
 }
 
@@ -85,21 +95,5 @@ export async function removeMember(memberId: string): Promise<void> {
     .from('list_members')
     .delete()
     .eq('id', memberId);
-  if (error) throw error;
-}
-
-/** Accept an invite addressed to the current user (via RPC). */
-export async function acceptInvite(inviteId: string): Promise<void> {
-  const supabase = getSupabaseBrowserClient();
-  const { error } = await supabase.rpc('accept_invite', { _invite_id: inviteId });
-  if (error) throw error;
-}
-
-/** Decline an invite addressed to the current user (via RPC). */
-export async function declineInvite(inviteId: string): Promise<void> {
-  const supabase = getSupabaseBrowserClient();
-  const { error } = await supabase.rpc('decline_invite', {
-    _invite_id: inviteId,
-  });
   if (error) throw error;
 }

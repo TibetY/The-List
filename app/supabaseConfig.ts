@@ -1,23 +1,48 @@
 /**
- * Supabase project configuration.
+ * Supabase configuration is read from environment variables (set these in
+ * Netlify → Site settings → Environment variables, and in a local `.env` for
+ * development):
  *
- * Both of these values are *public* (the anon key is safe to ship to the
- * browser — row-level security in the database is what protects your data),
- * so hardcoding them here mirrors how the old Firebase config worked.
+ *   SUPABASE_URL        e.g. https://xxxx.supabase.co
+ *   SUPABASE_ANON_KEY   the project's anon / public key
  *
- * 👉 Paste your anon/public key below. Find it in the Supabase dashboard under
- *    Project Settings → API → "Project API keys" → `anon` `public`.
- *    (Do NOT use the `service_role` key here — that one is secret.)
- *
- * You can also override either value with the SUPABASE_URL / SUPABASE_ANON_KEY
- * environment variables.
+ * The anon key is public (row-level security protects the data), so it is safe
+ * to ship to the browser. The server reads `process.env` directly; the browser
+ * reads the values from `window.ENV`, which the root route injects from the
+ * server-side env (see app/root.tsx).
  */
-export const SUPABASE_URL =
-  (typeof process !== 'undefined' && process.env.SUPABASE_URL) ||
-  'https://lgldchystppntwuqkdnv.supabase.co';
-
-export const SUPABASE_ANON_KEY =
-  (typeof process !== 'undefined' && process.env.SUPABASE_ANON_KEY) ||
-  'PASTE_YOUR_SUPABASE_ANON_KEY_HERE';
-
 export const RESTAURANT_IMAGE_BUCKET = 'restaurant-images';
+
+export interface PublicEnv {
+  SUPABASE_URL: string;
+  SUPABASE_ANON_KEY: string;
+}
+
+declare global {
+  interface Window {
+    ENV?: PublicEnv;
+  }
+}
+
+/** Read the public env on the server (loaders/actions). */
+export function getServerSupabaseEnv(): PublicEnv {
+  const SUPABASE_URL = process.env.SUPABASE_URL ?? '';
+  const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY ?? '';
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new Error(
+      'Missing SUPABASE_URL / SUPABASE_ANON_KEY environment variables.'
+    );
+  }
+  return { SUPABASE_URL, SUPABASE_ANON_KEY };
+}
+
+/** Read the public env in the browser (injected via window.ENV). */
+export function getBrowserSupabaseEnv(): PublicEnv {
+  const env = typeof window !== 'undefined' ? window.ENV : undefined;
+  if (!env?.SUPABASE_URL || !env?.SUPABASE_ANON_KEY) {
+    throw new Error(
+      'Supabase env not available on window.ENV. Is root.tsx injecting it?'
+    );
+  }
+  return env;
+}

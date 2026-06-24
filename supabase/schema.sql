@@ -42,20 +42,17 @@ create table if not exists public.list_members (
 create index if not exists list_members_list_id_idx on public.list_members (list_id);
 create index if not exists list_members_user_id_idx on public.list_members (user_id);
 
--- list_invites: pending email invitations to join a list
-create table if not exists public.list_invites (
+-- list_invite_links: shareable join links for a list (token-based)
+create table if not exists public.list_invite_links (
   id         uuid primary key default gen_random_uuid(),
+  token      text unique not null default replace(gen_random_uuid()::text, '-', ''),
   list_id    uuid not null references public.lists(id) on delete cascade,
-  email      text not null,
-  role       text not null default 'viewer' check (role in ('editor','viewer')),
-  invited_by uuid references auth.users(id) on delete set null,
-  status     text not null default 'pending' check (status in ('pending','accepted','revoked')),
+  role       text not null default 'editor' check (role in ('editor','viewer')),
+  created_by uuid references auth.users(id) on delete set null,
+  active     boolean not null default true,
   created_at timestamptz not null default now()
 );
-create unique index if not exists list_invites_unique_pending
-  on public.list_invites (list_id, lower(email))
-  where status = 'pending';
-create index if not exists list_invites_email_idx on public.list_invites (lower(email));
+create index if not exists list_invite_links_list_id_idx on public.list_invite_links (list_id);
 
 -- restaurants: the actual entries (now belong to a list)
 create table if not exists public.restaurants (
@@ -179,72 +176,37 @@ create trigger on_list_created
   for each row execute function public.handle_new_list();
 
 -- ============================================================
--- Invite RPCs
+-- Invite link RPC
 -- ============================================================
 
--- Accept a pending invite addressed to the caller's email.
-create or replace function public.accept_invite(_invite_id uuid)
-returns void language plpgsql security definer set search_path = public as $$
-declare inv public.list_invites;
-declare my_email text;
+-- Redeem a shareable invite link: add the caller to the list with the link's
+-- role. Existing members keep their current role. Returns the list id.
+create or replace function public.redeem_invite_link(_token text)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare lnk public.list_invite_links;
 begin
-  select email into my_email from auth.users where id = auth.uid();
-  select * into inv from public.list_invites
-    where id = _invite_id and status = 'pending';
-  if inv.id is null then
-    raise exception 'Invite not found or already handled';
-  end if;
-  if lower(inv.email) <> lower(my_email) then
-    raise exception 'This invite is for a different email';
+  select * into lnk from public.list_invite_links
+    where token = _token and active;
+  if lnk.id is null then
+    raise exception 'Invalid or inactive invite link';
   end if;
 
   insert into public.list_members (list_id, user_id, role)
-  values (inv.list_id, auth.uid(), inv.role)
-  on conflict (list_id, user_id) do update set role = excluded.role;
+  values (lnk.list_id, auth.uid(), lnk.role)
+  on conflict (list_id, user_id) do nothing;
 
-  update public.list_invites set status = 'accepted' where id = inv.id;
+  return lnk.list_id;
 end; $$;
-
--- Decline a pending invite addressed to the caller's email.
-create or replace function public.decline_invite(_invite_id uuid)
-returns void language plpgsql security definer set search_path = public as $$
-declare my_email text;
-begin
-  select email into my_email from auth.users where id = auth.uid();
-  update public.list_invites
-    set status = 'revoked'
-    where id = _invite_id and status = 'pending'
-      and lower(email) = lower(my_email);
-end; $$;
-
--- Pending invites addressed to the caller, with list + inviter names.
-create or replace function public.my_pending_invites()
-returns table (
-  id uuid,
-  list_id uuid,
-  list_name text,
-  role text,
-  invited_by_name text,
-  created_at timestamptz
-) language sql security definer stable set search_path = public as $$
-  select i.id, i.list_id, l.name, i.role,
-         coalesce(p.display_name, 'Someone'), i.created_at
-  from public.list_invites i
-  join public.lists l on l.id = i.list_id
-  left join public.profiles p on p.id = i.invited_by
-  where i.status = 'pending'
-    and lower(i.email) = lower((select email from auth.users where id = auth.uid()));
-$$;
 
 -- ============================================================
 -- ROW LEVEL SECURITY
 -- ============================================================
 
-alter table public.profiles      enable row level security;
-alter table public.lists         enable row level security;
-alter table public.list_members  enable row level security;
-alter table public.list_invites  enable row level security;
-alter table public.restaurants   enable row level security;
+alter table public.profiles           enable row level security;
+alter table public.lists              enable row level security;
+alter table public.list_members       enable row level security;
+alter table public.list_invite_links  enable row level security;
+alter table public.restaurants        enable row level security;
 
 -- profiles: any authenticated user can read display info; you edit only your own
 drop policy if exists "read profiles" on public.profiles;
@@ -285,21 +247,20 @@ create policy "owner updates members" on public.list_members
 create policy "owner removes or self leaves" on public.list_members
   for delete using (public.list_role(list_id) = 'owner' or user_id = auth.uid());
 
--- list_invites: list owner manages; invitee can see invites for their email
-drop policy if exists "read invites" on public.list_invites;
-drop policy if exists "owner creates invites" on public.list_invites;
-drop policy if exists "owner updates invites" on public.list_invites;
-drop policy if exists "owner deletes invites" on public.list_invites;
-create policy "read invites" on public.list_invites
-  for select using (
-    public.list_role(list_id) = 'owner'
-    or lower(email) = lower(coalesce(auth.jwt() ->> 'email', ''))
-  );
-create policy "owner creates invites" on public.list_invites
+-- list_invite_links: only the list owner can see / manage join links.
+-- (Redemption happens via the redeem_invite_link RPC, which is SECURITY DEFINER
+--  and therefore does not require a SELECT policy for the joining user.)
+drop policy if exists "owner reads links" on public.list_invite_links;
+drop policy if exists "owner creates links" on public.list_invite_links;
+drop policy if exists "owner updates links" on public.list_invite_links;
+drop policy if exists "owner deletes links" on public.list_invite_links;
+create policy "owner reads links" on public.list_invite_links
+  for select using (public.list_role(list_id) = 'owner');
+create policy "owner creates links" on public.list_invite_links
   for insert with check (public.list_role(list_id) = 'owner');
-create policy "owner updates invites" on public.list_invites
+create policy "owner updates links" on public.list_invite_links
   for update using (public.list_role(list_id) = 'owner');
-create policy "owner deletes invites" on public.list_invites
+create policy "owner deletes links" on public.list_invite_links
   for delete using (public.list_role(list_id) = 'owner');
 
 -- restaurants: members read; editors/owners write; rows are scoped to a list
