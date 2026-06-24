@@ -218,6 +218,36 @@ begin
 end; $$;
 
 -- ============================================================
+-- Self-heal: ensure the caller has a default list
+-- ============================================================
+
+-- Accounts created before on_auth_user_created existed have no profile / list /
+-- membership. This idempotent RPC bootstraps them on demand (called from the
+-- dashboard loader when the user has no lists), so existing accounts recover
+-- without re-signing-up. Returns the caller's (existing or new) default list id.
+create or replace function public.ensure_default_list()
+returns uuid language plpgsql security definer set search_path = public as $$
+declare existing uuid; new_list_id uuid;
+begin
+  insert into public.profiles (id, display_name)
+  values (auth.uid(), split_part(coalesce(auth.jwt()->>'email', ''), '@', 1))
+  on conflict (id) do nothing;
+
+  select list_id into existing from public.list_members
+    where user_id = auth.uid() limit 1;
+  if existing is not null then return existing; end if;
+
+  insert into public.lists (owner_id, name, is_default)
+  values (auth.uid(), 'My List', true)
+  returning id into new_list_id;   -- on_list_created adds the owner membership
+  return new_list_id;
+end; $$;
+
+-- Only signed-in users can self-heal (anon has no auth.uid()).
+revoke execute on function public.ensure_default_list() from anon;
+grant  execute on function public.ensure_default_list() to authenticated;
+
+-- ============================================================
 -- ROW LEVEL SECURITY
 -- ============================================================
 
@@ -356,16 +386,23 @@ create policy "delete own avatar" on storage.objects
 -- HARDENING (security linter)
 -- ============================================================
 
+-- Remove the obsolete email-invite table (replaced by list_invite_links).
+-- CASCADE also drops its leftover RLS policies, which still reference the old
+-- public.list_role(uuid) helper and would otherwise block dropping it below.
+drop table if exists public.list_invites cascade;
+
 -- Remove obsolete email-invite RPCs (replaced by invite links).
 drop function if exists public.accept_invite(uuid);
 drop function if exists public.decline_invite(uuid);
 drop function if exists public.my_pending_invites();
 
 -- Remove the old public copies of the RLS helpers now that policies reference
--- the private schema. (Safe: nothing depends on them anymore.)
-drop function if exists public.is_list_member(uuid);
-drop function if exists public.can_edit_list(uuid);
-drop function if exists public.list_role(uuid);
+-- the private schema. (CASCADE clears any remaining legacy policies that still
+-- depend on these public versions; the live policies were already recreated
+-- above to use the private.* helpers, so this is safe.)
+drop function if exists public.is_list_member(uuid) cascade;
+drop function if exists public.can_edit_list(uuid) cascade;
+drop function if exists public.list_role(uuid) cascade;
 
 -- Trigger functions must never be callable as RPCs. Revoking EXECUTE does not
 -- affect triggers (the trigger system runs them regardless of grants).
