@@ -58,7 +58,7 @@ export default function Navbar() {
           px: { xs: 2, sm: 3 },
         }}
       >
-        <Link to="/" style={{ textDecoration: "none" }} aria-label="The List - Home">
+        <Link to="/" style={{ textDecoration: "none" }} aria-label="The Foodiedex - Home">
           <Logo />
         </Link>
 

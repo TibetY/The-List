@@ -44,7 +44,7 @@ export const links: LinksFunction = () => [
 export const meta: MetaFunction = () => {
   return [
     { charset: "utf-8" },
-    { title: "The List — Your Personal Restaurant Guide" },
+    { title: "The Foodiedex — Your Personal Restaurant Guide" },
     { name: "description", content: "Discover, rate, and remember your favorite restaurants. Your personal dining companion." },
     { name: "viewport", content: "width=device-width,initial-scale=1" },
     { name: "theme-color", content: "#0a0a0f" },

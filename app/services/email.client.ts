@@ -49,7 +49,7 @@ export function formatRestaurantsForEmail(restaurants: Restaurant[]): string {
 
   emailBody += '\n---\n';
   emailBody += `Total Restaurants: ${restaurants.length}\n`;
-  emailBody += `Generated from The List on ${new Date().toLocaleDateString()}\n`;
+  emailBody += `Generated from The Foodiedex on ${new Date().toLocaleDateString()}\n`;
 
   return emailBody;
 }

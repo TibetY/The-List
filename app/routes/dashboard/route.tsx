@@ -505,7 +505,7 @@ export default function Dashboard() {
               <Box sx={{ width: 9, height: 9, background: t.panelBg, borderRadius: '50%', transform: 'rotate(-45deg)' }} />
             </Box>
             <Box component="span" sx={{ fontFamily: serif, fontSize: 26, letterSpacing: '.01em' }}>
-              The List
+              The Foodiedex
             </Box>
           </Box>
 
@@ -948,7 +948,7 @@ export default function Dashboard() {
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: '9px', color: t.muted, fontSize: 13 }}>
             <Box aria-hidden sx={{ width: 16, height: 16, background: t.accent, borderRadius: '50% 50% 50% 2px', transform: 'rotate(45deg)' }} />
-            <Box component="span" sx={{ fontFamily: serif, fontSize: 16, color: t.ink }}>The List</Box>
+            <Box component="span" sx={{ fontFamily: serif, fontSize: 16, color: t.ink }}>The Foodiedex</Box>
             <Box component="span" sx={{ ml: '6px' }}>a shared table for a few good friends</Box>
           </Box>
           <Box sx={{ color: t.faint, fontSize: '12.5px' }}>Ottawa &amp; beyond · {total} spots and counting</Box>
