@@ -60,7 +60,7 @@ export async function getLists(
       isDefault: r.lists!.is_default,
       role: r.role,
       memberCount: counts.get(r.list_id) ?? 1,
-      createdAt: r.lists!.created_at ? new Date(r.lists!.created_at) : undefined,
+      createdAt: r.lists!.created_at ?? undefined,
     }))
     .sort((a, b) => {
       if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;

@@ -45,19 +45,32 @@ export const action: ActionFunction = async ({ request }) => {
   }
 
   const { supabase, headers } = createSupabaseServerClient(request);
-  const { data, error } = await supabase.auth.signUp({ email, password });
+  const origin = new URL(request.url).origin;
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      // Where the confirmation email link returns to. Our /auth/confirm route
+      // verifies the token and signs the user in, then forwards to `next`.
+      emailRedirectTo: `${origin}/auth/confirm?next=${encodeURIComponent(next)}`,
+    },
+  });
 
   if (error) {
     console.error("Signup error:", error.message);
     return json<ActionData>({ error: error.message });
   }
 
-  // When email confirmation is enabled, no session is returned yet.
+  // When email confirmation is enabled, no session is returned yet. Return the
+  // headers so any auth cookies set during sign-up are persisted.
   if (!data.session) {
-    return json<ActionData>({
-      message:
-        "Account created! Check your email to confirm your address, then sign in.",
-    });
+    return json<ActionData>(
+      {
+        message:
+          "Account created! Check your email to confirm your address.",
+      },
+      { headers }
+    );
   }
 
   return redirect(next, { headers });
