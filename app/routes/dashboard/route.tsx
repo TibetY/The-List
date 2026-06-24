@@ -63,9 +63,17 @@ import {
 } from '~/services/restaurants.client';
 import { createList } from '~/services/lists.client';
 import { geocodeAddress } from '~/services/geocode.client';
+import type { RestaurantMapProps } from '~/components/RestaurantMap';
 
-// Leaflet touches `window` at import time, so only load the map on the client.
-const RestaurantMap = lazy(() => import('~/components/RestaurantMap'));
+// Leaflet touches `window` at import time, so it must never load on the server.
+// `import.meta.env.SSR` is inlined as a constant per build, so the real import
+// is dead code in the SSR bundle (Rollup tree-shakes it out entirely) and only
+// the browser bundle ever pulls in Leaflet.
+const RestaurantMap = lazy<React.ComponentType<RestaurantMapProps>>(() =>
+  import.meta.env.SSR
+    ? Promise.resolve({ default: () => null })
+    : import('~/components/RestaurantMap')
+);
 
 export const links: LinksFunction = () => [
   { rel: 'stylesheet', href: leafletStylesHref },
