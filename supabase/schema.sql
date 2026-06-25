@@ -90,6 +90,13 @@ alter table public.restaurants
   add column if not exists latitude double precision;
 alter table public.restaurants
   add column if not exists longitude double precision;
+-- Reservation link, auto-detected from the restaurant's website (Resy/OpenTable)
+-- or set manually; platform is a free-form label, not constrained, since users
+-- can type any platform name when overriding.
+alter table public.restaurants
+  add column if not exists reservation_platform text;
+alter table public.restaurants
+  add column if not exists reservation_url text;
 -- Carry any legacy owner value into added_by, then retire user_id usage.
 update public.restaurants set added_by = user_id where added_by is null;
 

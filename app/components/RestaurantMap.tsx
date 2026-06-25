@@ -83,6 +83,14 @@ export default function RestaurantMap({
                 {r.cuisineType}
               </>
             ) : null}
+            {r.reservationUrl ? (
+              <>
+                <br />
+                <a href={r.reservationUrl} target="_blank" rel="noopener noreferrer">
+                  Reserve on {r.reservationPlatform === 'resy' ? 'Resy' : r.reservationPlatform === 'opentable' ? 'OpenTable' : r.reservationPlatform}
+                </a>
+              </>
+            ) : null}
           </Popup>
         </Marker>
       ))}

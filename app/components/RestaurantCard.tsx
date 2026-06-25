@@ -8,6 +8,7 @@ import {
   Chip,
   Rating,
   Tooltip,
+  Button,
 } from '@mui/material';
 import {
   Edit,
@@ -16,8 +17,16 @@ import {
   Facebook,
   Instagram,
   Twitter,
+  EventSeat,
 } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 import type { Restaurant } from '~/types/restaurant';
+
+function reservationLabel(platform: string): string {
+  if (platform === 'resy') return 'Resy';
+  if (platform === 'opentable') return 'OpenTable';
+  return platform;
+}
 
 interface RestaurantCardProps {
   restaurant: Restaurant;
@@ -30,6 +39,7 @@ export default function RestaurantCard({
   onEdit,
   onDelete,
 }: RestaurantCardProps) {
+  const { t } = useTranslation();
   const defaultImage =
     'data:image/svg+xml;base64,' +
     btoa(
@@ -216,6 +226,24 @@ export default function RestaurantCard({
           >
             {restaurant.comment}
           </Typography>
+        )}
+
+        {/* Reservation link */}
+        {restaurant.reservationUrl && (
+          <Button
+            size="small"
+            variant="outlined"
+            component="a"
+            href={restaurant.reservationUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            startIcon={<EventSeat fontSize="small" />}
+            sx={{ alignSelf: 'flex-start', mb: 1.5 }}
+          >
+            {t('dashboard.reserveOn', {
+              platform: reservationLabel(restaurant.reservationPlatform || ''),
+            })}
+          </Button>
         )}
 
         {/* Social links */}

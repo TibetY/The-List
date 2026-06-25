@@ -1,5 +1,6 @@
 import { Form, useLocation } from '@remix-run/react';
-import { Box } from '@mui/material';
+import { Box, useTheme } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { supportedLngs } from '~/i18n';
 
@@ -12,8 +13,13 @@ import { supportedLngs } from '~/i18n';
 export default function LanguageSwitcher() {
   const { t, i18n } = useTranslation();
   const location = useLocation();
+  const theme = useTheme();
   const current = i18n.resolvedLanguage ?? i18n.language;
   const redirectTo = location.pathname + location.search;
+  // Use a high-contrast border/text derived from text.primary instead of the
+  // (intentionally subtle) divider/text.secondary tokens, which are too close
+  // to the background in some palettes (e.g. the dashboard's light theme).
+  const borderColor = alpha(theme.palette.text.primary, 0.35);
 
   return (
     <Form method="post" action="/api/locale" style={{ display: 'inline-flex' }}>
@@ -23,8 +29,8 @@ export default function LanguageSwitcher() {
         aria-label={t('language.label')}
         sx={{
           display: 'inline-flex',
-          border: '1px solid',
-          borderColor: 'divider',
+          border: '1.5px solid',
+          borderColor,
           borderRadius: '999px',
           overflow: 'hidden',
         }}
@@ -50,8 +56,11 @@ export default function LanguageSwitcher() {
                 fontFamily: 'inherit',
                 lineHeight: 1.4,
                 background: active ? 'primary.main' : 'transparent',
-                color: active ? 'primary.contrastText' : 'text.secondary',
-                '&:hover': { color: active ? 'primary.contrastText' : 'text.primary' },
+                color: active ? 'primary.contrastText' : 'text.primary',
+                '&:hover': {
+                  color: active ? 'primary.contrastText' : 'text.primary',
+                  background: active ? 'primary.main' : alpha(theme.palette.text.primary, 0.08),
+                },
               }}
             >
               {lng.toUpperCase()}
