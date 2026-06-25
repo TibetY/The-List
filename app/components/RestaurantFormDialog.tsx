@@ -11,6 +11,9 @@ import {
   Rating,
   Typography,
   Box,
+  Checkbox,
+  FormControlLabel,
+  FormGroup,
   CircularProgress,
   IconButton,
   ToggleButton,
@@ -21,7 +24,7 @@ import {
 import { CloudUpload, Close, Check, BookmarkBorder } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import type { Restaurant, RestaurantStatus } from '~/types/restaurant';
-import { cuisineTypes } from '~/types/restaurant';
+import { cuisineTypes, dietaryTags, placeTypes } from '~/types/restaurant';
 
 interface RestaurantFormDialogProps {
   open: boolean;
@@ -30,8 +33,14 @@ interface RestaurantFormDialogProps {
   onSave: (restaurant: Partial<Restaurant>, imageFile?: File) => Promise<void>;
 }
 
-const priceRanges = ['$', '$$', '$$$', '$$$$'];
+const priceRanges = ['$', '$$', '$$$', '$$$$', '$$$$$'];
 const reservationPlatforms = ['resy', 'opentable'] as const;
+const michelinStarOptions = [0, 1, 2, 3];
+
+/** Cuisine value isn't in the predefined list, so it's a custom "Other" entry. */
+function isCustomCuisine(cuisine: string | undefined): boolean {
+  return !!cuisine && cuisine !== '' && !cuisineTypes.includes(cuisine);
+}
 
 export default function RestaurantFormDialog({
   open,
@@ -51,6 +60,10 @@ export default function RestaurantFormDialog({
     priceRange: '$$',
     comment: '',
     cuisineType: '',
+    dietaryTags: [],
+    placeTypes: [],
+    michelinStars: 0,
+    bibGourmand: false,
     reservationPlatform: '',
     reservationUrl: '',
     status: 'want',
@@ -61,6 +74,9 @@ export default function RestaurantFormDialog({
       tiktok: '',
     },
   });
+  // Dropdown selection for cuisine; 'Other' reveals a free-text field whose value
+  // is what actually gets stored in formData.cuisineType.
+  const [cuisineChoice, setCuisineChoice] = useState<string>('');
   const [imageFile, setImageFile] = useState<File | undefined>();
   const [imagePreview, setImagePreview] = useState<string>('');
   const [loading, setLoading] = useState(false);
@@ -76,6 +92,10 @@ export default function RestaurantFormDialog({
         priceRange: restaurant.priceRange || '$$',
         comment: restaurant.comment || '',
         cuisineType: restaurant.cuisineType || '',
+        dietaryTags: restaurant.dietaryTags || [],
+        placeTypes: restaurant.placeTypes || [],
+        michelinStars: restaurant.michelinStars || 0,
+        bibGourmand: restaurant.bibGourmand || false,
         reservationPlatform: restaurant.reservationPlatform || '',
         reservationUrl: restaurant.reservationUrl || '',
         status: restaurant.status || 'want',
@@ -86,6 +106,11 @@ export default function RestaurantFormDialog({
           tiktok: restaurant.socialMedia?.tiktok || '',
         },
       });
+      setCuisineChoice(
+        isCustomCuisine(restaurant.cuisineType)
+          ? 'Other'
+          : restaurant.cuisineType || ''
+      );
       setImagePreview(restaurant.image || '');
     } else {
       setFormData({
@@ -96,6 +121,10 @@ export default function RestaurantFormDialog({
         priceRange: '$$',
         comment: '',
         cuisineType: '',
+        dietaryTags: [],
+        placeTypes: [],
+        michelinStars: 0,
+        bibGourmand: false,
         reservationPlatform: '',
         reservationUrl: '',
         status: 'want',
@@ -106,6 +135,7 @@ export default function RestaurantFormDialog({
           tiktok: '',
         },
       });
+      setCuisineChoice('');
       setImagePreview('');
     }
     setImageFile(undefined);
@@ -131,6 +161,10 @@ export default function RestaurantFormDialog({
           prev.reservationPlatform || data.reservationPlatform || prev.reservationPlatform,
         reservationUrl: prev.reservationUrl || data.reservationUrl || prev.reservationUrl,
       }));
+      // Keep the cuisine dropdown in sync if the scraper supplied a known cuisine.
+      if (data.cuisineType && !formData.cuisineType && cuisineTypes.includes(data.cuisineType)) {
+        setCuisineChoice(data.cuisineType);
+      }
       if (data.image && !imagePreview && !imageFile) {
         setImagePreview(data.image);
         setFormData((prev) => ({ ...prev, image: data.image ?? undefined }));
@@ -152,6 +186,33 @@ export default function RestaurantFormDialog({
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleCuisineChange = (value: string) => {
+    setCuisineChoice(value);
+    // 'Other' keeps whatever custom text is already typed; anything else stores
+    // the chosen cuisine directly.
+    if (value === 'Other') {
+      setFormData((prev) => ({
+        ...prev,
+        cuisineType: isCustomCuisine(prev.cuisineType) ? prev.cuisineType : '',
+      }));
+    } else {
+      setFormData((prev) => ({ ...prev, cuisineType: value }));
+    }
+  };
+
+  const toggleArrayValue = (
+    field: 'dietaryTags' | 'placeTypes',
+    value: string
+  ) => {
+    setFormData((prev) => {
+      const current = prev[field] ?? [];
+      const next = current.includes(value)
+        ? current.filter((v) => v !== value)
+        : [...current, value];
+      return { ...prev, [field]: next };
+    });
   };
 
   const handleSubmit = async () => {
@@ -269,10 +330,8 @@ export default function RestaurantFormDialog({
               fullWidth
               select
               label={t('form.cuisineType')}
-              value={formData.cuisineType}
-              onChange={(e) =>
-                setFormData({ ...formData, cuisineType: e.target.value })
-              }
+              value={cuisineChoice}
+              onChange={(e) => handleCuisineChange(e.target.value)}
             >
               <MenuItem value="">{t('form.none')}</MenuItem>
               {cuisineTypes.map((type) => (
@@ -298,6 +357,113 @@ export default function RestaurantFormDialog({
                 </MenuItem>
               ))}
             </TextField>
+          </Grid>
+
+          {/* Custom cuisine — shown only when "Other" is selected */}
+          {cuisineChoice === 'Other' && (
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label={t('form.customCuisine')}
+                placeholder={t('form.customCuisinePlaceholder')}
+                value={isCustomCuisine(formData.cuisineType) ? formData.cuisineType : ''}
+                onChange={(e) =>
+                  setFormData({ ...formData, cuisineType: e.target.value })
+                }
+              />
+            </Grid>
+          )}
+
+          {/* Place types — multi-select (a venue can be more than one) */}
+          <Grid item xs={12}>
+            <Typography
+              component="label"
+              sx={{
+                display: 'block',
+                mb: 0.5,
+                fontWeight: 500,
+                color: 'text.secondary',
+                fontSize: '0.875rem',
+              }}
+            >
+              {t('form.placeTypes')}
+            </Typography>
+            <FormGroup row>
+              {placeTypes.map((type) => (
+                <FormControlLabel
+                  key={type}
+                  control={
+                    <Checkbox
+                      checked={formData.placeTypes?.includes(type) ?? false}
+                      onChange={() => toggleArrayValue('placeTypes', type)}
+                    />
+                  }
+                  label={t(`placeTypes.${type}`, type)}
+                />
+              ))}
+            </FormGroup>
+          </Grid>
+
+          {/* Dietary options — multi-select */}
+          <Grid item xs={12}>
+            <Typography
+              component="label"
+              sx={{
+                display: 'block',
+                mb: 0.5,
+                fontWeight: 500,
+                color: 'text.secondary',
+                fontSize: '0.875rem',
+              }}
+            >
+              {t('form.dietaryTags')}
+            </Typography>
+            <FormGroup row>
+              {dietaryTags.map((tag) => (
+                <FormControlLabel
+                  key={tag}
+                  control={
+                    <Checkbox
+                      checked={formData.dietaryTags?.includes(tag) ?? false}
+                      onChange={() => toggleArrayValue('dietaryTags', tag)}
+                    />
+                  }
+                  label={t(`dietary.${tag}`, tag)}
+                />
+              ))}
+            </FormGroup>
+          </Grid>
+
+          {/* Recognition — Michelin stars + Bib Gourmand */}
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              select
+              label={t('form.michelinStars')}
+              value={formData.michelinStars ?? 0}
+              onChange={(e) =>
+                setFormData({ ...formData, michelinStars: Number(e.target.value) })
+              }
+            >
+              {michelinStarOptions.map((n) => (
+                <MenuItem key={n} value={n}>
+                  {n === 0 ? t('form.none') : '★'.repeat(n)}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid item xs={12} sm={6} sx={{ display: 'flex', alignItems: 'center' }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={formData.bibGourmand ?? false}
+                  onChange={(e) =>
+                    setFormData({ ...formData, bibGourmand: e.target.checked })
+                  }
+                />
+              }
+              label={t('form.bibGourmand')}
+            />
           </Grid>
 
           {/* Rating */}

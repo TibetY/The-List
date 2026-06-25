@@ -52,6 +52,7 @@ import type {
   Profile,
 } from '~/types/restaurant';
 import RestaurantFormDialog from '~/components/RestaurantFormDialog';
+import RestaurantDetailDialog from '~/components/RestaurantDetailDialog';
 import DeleteConfirmDialog from '~/components/DeleteConfirmDialog';
 import EmailDialog from '~/components/EmailDialog';
 import ListSwitcher from '~/components/ListSwitcher';
@@ -296,6 +297,7 @@ export default function Dashboard() {
   } | null>(null);
 
   const [formOpen, setFormOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -313,7 +315,7 @@ export default function Dashboard() {
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
-    severity: 'success' | 'error';
+    severity: 'success' | 'error' | 'warning';
   }>({ open: false, message: '', severity: 'success' });
 
   useEffect(() => {
@@ -403,8 +405,15 @@ export default function Dashboard() {
     setFormOpen(true);
   };
 
+  // Clicking a card/row opens the read-only detail view first (everyone can view).
+  const handleViewRestaurant = (restaurant: Restaurant) => {
+    setSelectedRestaurant(restaurant);
+    setDetailOpen(true);
+  };
+
   const handleEditRestaurant = (restaurant: Restaurant) => {
     if (!canEdit) return;
+    setDetailOpen(false);
     setSelectedRestaurant(restaurant);
     setFormOpen(true);
   };
@@ -425,10 +434,12 @@ export default function Dashboard() {
       // (keeps us within Nominatim's rate limits and avoids needless lookups).
       const newAddress = (restaurantData.address ?? '').trim();
       const addressChanged = newAddress !== (selectedRestaurant?.address ?? '').trim();
+      let geocodeFailed = false;
       if (newAddress && addressChanged) {
         const point = await geocodeAddress(newAddress);
         dataToSave.lat = point?.lat;
         dataToSave.lng = point?.lng;
+        geocodeFailed = !point;
       } else if (!newAddress) {
         dataToSave.lat = undefined;
         dataToSave.lng = undefined;
@@ -440,10 +451,19 @@ export default function Dashboard() {
 
       if (selectedRestaurant?.id) {
         await updateRestaurant(selectedRestaurant.id, dataToSave, activeList.id, userId);
-        setSnackbar({ open: true, message: tr('dashboard.snackUpdated'), severity: 'success' });
       } else {
         await createRestaurant(dataToSave, activeList.id, userId);
-        setSnackbar({ open: true, message: tr('dashboard.snackAdded'), severity: 'success' });
+      }
+      // Saved fine — but if the address couldn't be located, tell the user the
+      // map pin won't appear (rather than failing silently and looking buggy).
+      if (geocodeFailed) {
+        setSnackbar({ open: true, message: tr('dashboard.snackGeocodeFailed'), severity: 'warning' });
+      } else {
+        setSnackbar({
+          open: true,
+          message: selectedRestaurant?.id ? tr('dashboard.snackUpdated') : tr('dashboard.snackAdded'),
+          severity: 'success',
+        });
       }
       revalidator.revalidate();
       setFormOpen(false);
@@ -722,8 +742,10 @@ export default function Dashboard() {
           </Box>
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            {/* search */}
+            {/* search — a single <label> so clicking anywhere in the pill
+                (icon included) focuses the input, not two separate hit areas. */}
             <Box
+              component="label"
               sx={{
                 display: { xs: 'none', sm: 'flex' },
                 alignItems: 'center',
@@ -735,6 +757,7 @@ export default function Dashboard() {
                 width: 180,
                 color: t.faint,
                 fontSize: '13.5px',
+                cursor: 'text',
               }}
             >
               <Box aria-hidden sx={{ width: 13, height: 13, border: `1.6px solid ${t.faint}`, borderRadius: '50%', flex: 'none' }} />
@@ -1022,17 +1045,15 @@ export default function Dashboard() {
                     {filtered.map((r) => (
                       <Box
                         key={r.id}
-                        onClick={() => handleEditRestaurant(r)}
+                        onClick={() => handleViewRestaurant(r)}
                         sx={{
                           border: `1px solid ${t.border}`,
                           borderRadius: '16px',
                           overflow: 'hidden',
                           background: t.cardBg,
-                          cursor: canEdit ? 'pointer' : 'default',
+                          cursor: 'pointer',
                           transition: 'transform .15s, box-shadow .15s',
-                          '&:hover': canEdit
-                            ? { transform: 'translateY(-3px)', boxShadow: '0 12px 28px rgba(0,0,0,.12)' }
-                            : {},
+                          '&:hover': { transform: 'translateY(-3px)', boxShadow: '0 12px 28px rgba(0,0,0,.12)' },
                           '&:hover .card-actions, &:focus-within .card-actions': { opacity: 1 },
                         }}
                       >
@@ -1118,7 +1139,7 @@ export default function Dashboard() {
                     {filtered.map((r) => (
                       <Box
                         key={r.id}
-                        onClick={() => handleEditRestaurant(r)}
+                        onClick={() => handleViewRestaurant(r)}
                         sx={{
                           display: 'flex',
                           alignItems: 'center',
@@ -1126,8 +1147,8 @@ export default function Dashboard() {
                           padding: '13px 18px',
                           borderBottom: `1px solid ${t.borderSoft}`,
                           background: t.cardBg,
-                          cursor: canEdit ? 'pointer' : 'default',
-                          '&:hover': canEdit ? { filter: 'brightness(0.98)' } : {},
+                          cursor: 'pointer',
+                          '&:hover': { filter: 'brightness(0.98)' },
                           '&:hover .row-actions, &:focus-within .row-actions': { opacity: 1 },
                           '&:last-of-type': { borderBottom: 'none' },
                         }}
@@ -1224,8 +1245,7 @@ export default function Dashboard() {
                           <RestaurantMap
                             restaurants={filtered}
                             accent={t.accent}
-                            canEdit={canEdit}
-                            onSelect={handleEditRestaurant}
+                            onSelect={handleViewRestaurant}
                           />
                         </Suspense>
                       ) : null}
@@ -1240,8 +1260,8 @@ export default function Dashboard() {
                     {filtered.map((r) => (
                       <Box
                         key={r.id}
-                        onClick={() => handleEditRestaurant(r)}
-                        sx={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderBottom: `1px solid ${t.borderSoft}`, cursor: canEdit ? 'pointer' : 'default', '&:hover': canEdit ? { filter: 'brightness(0.98)' } : {} }}
+                        onClick={() => handleViewRestaurant(r)}
+                        sx={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderBottom: `1px solid ${t.borderSoft}`, cursor: 'pointer', '&:hover': { filter: 'brightness(0.98)' } }}
                       >
                         <Box sx={{ width: 34, height: 34, borderRadius: '9px', background: t.monoGrad, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', overflow: 'hidden' }}>
                           {r.image ? (
@@ -1315,6 +1335,16 @@ export default function Dashboard() {
         )}
 
         {/* dialogs */}
+        <RestaurantDetailDialog
+          open={detailOpen}
+          restaurant={selectedRestaurant}
+          canEdit={canEdit}
+          tokens={t}
+          serifFont={serif}
+          onClose={() => setDetailOpen(false)}
+          onEdit={handleEditRestaurant}
+          onDelete={(id) => { setDetailOpen(false); handleDeleteClick(id); }}
+        />
         <RestaurantFormDialog
           open={formOpen}
           restaurant={selectedRestaurant}

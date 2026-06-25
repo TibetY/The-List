@@ -36,14 +36,12 @@ function FitBounds({ points }: { points: Located[] }) {
 export interface RestaurantMapProps {
   restaurants: Restaurant[];
   accent: string;
-  canEdit: boolean;
   onSelect: (r: Restaurant) => void;
 }
 
 export default function RestaurantMap({
   restaurants,
   accent,
-  canEdit,
   onSelect,
 }: RestaurantMapProps) {
   const points = useMemo(
@@ -73,7 +71,7 @@ export default function RestaurantMap({
           key={r.id}
           position={[r.lat, r.lng]}
           icon={icon}
-          eventHandlers={{ click: () => canEdit && onSelect(r) }}
+          eventHandlers={{ click: () => onSelect(r) }}
         >
           <Popup>
             <strong>{r.name}</strong>

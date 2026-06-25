@@ -97,6 +97,20 @@ alter table public.restaurants
   add column if not exists reservation_platform text;
 alter table public.restaurants
   add column if not exists reservation_url text;
+-- Dietary tags and place types are open-ended multi-select facets; stored as
+-- text[] rather than an enum/junction table since the set is small and only
+-- ever read/written whole, never queried column-by-column.
+alter table public.restaurants
+  add column if not exists dietary_tags text[] not null default '{}'::text[];
+alter table public.restaurants
+  add column if not exists place_types text[] not null default '{}'::text[];
+-- Recognition badges: Michelin stars are a 0-3 tier, Bib Gourmand is separate
+-- (a restaurant can hold one without the other).
+alter table public.restaurants
+  add column if not exists michelin_stars smallint not null default 0
+    check (michelin_stars between 0 and 3);
+alter table public.restaurants
+  add column if not exists bib_gourmand boolean not null default false;
 -- Carry any legacy owner value into added_by, then retire user_id usage.
 update public.restaurants set added_by = user_id where added_by is null;
 

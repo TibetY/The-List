@@ -17,6 +17,10 @@ export interface RestaurantRow {
   price_range: string | null;
   comment: string | null;
   cuisine_type: string | null;
+  dietary_tags: string[] | null;
+  place_types: string[] | null;
+  michelin_stars: number | null;
+  bib_gourmand: boolean | null;
   reservation_platform: string | null;
   reservation_url: string | null;
   status: RestaurantStatus | null;
@@ -41,6 +45,10 @@ export function rowToRestaurant(row: RestaurantRow): Restaurant {
     priceRange: row.price_range ?? undefined,
     comment: row.comment ?? undefined,
     cuisineType: row.cuisine_type ?? undefined,
+    dietaryTags: row.dietary_tags ?? undefined,
+    placeTypes: row.place_types ?? undefined,
+    michelinStars: row.michelin_stars ?? undefined,
+    bibGourmand: row.bib_gourmand ?? undefined,
     reservationPlatform: row.reservation_platform ?? undefined,
     reservationUrl: row.reservation_url ?? undefined,
     status: row.status ?? 'want',
@@ -73,6 +81,10 @@ export function restaurantToRow(
     price_range: data.priceRange ?? null,
     comment: data.comment ?? null,
     cuisine_type: data.cuisineType ?? null,
+    dietary_tags: data.dietaryTags ?? [],
+    place_types: data.placeTypes ?? [],
+    michelin_stars: data.michelinStars ?? 0,
+    bib_gourmand: data.bibGourmand ?? false,
     reservation_platform: data.reservationPlatform ?? null,
     reservation_url: data.reservationUrl ?? null,
     status: data.status ?? 'want',
