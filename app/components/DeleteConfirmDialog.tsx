@@ -8,6 +8,7 @@ import {
   Box,
 } from '@mui/material';
 import { WarningAmber } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 
 interface DeleteConfirmDialogProps {
   open: boolean;
@@ -22,6 +23,7 @@ export default function DeleteConfirmDialog({
   onClose,
   onConfirm,
 }: DeleteConfirmDialogProps) {
+  const { t } = useTranslation();
   return (
     <Dialog
       open={open}
@@ -35,7 +37,7 @@ export default function DeleteConfirmDialog({
         id="delete-dialog-title"
         sx={{ fontWeight: 700, pb: 1 }}
       >
-        Delete Restaurant
+        {t('delete.title')}
       </DialogTitle>
       <DialogContent>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
@@ -56,15 +58,13 @@ export default function DeleteConfirmDialog({
             variant="body1"
             sx={{ color: 'text.secondary', lineHeight: 1.6 }}
           >
-            Are you sure you want to delete{' '}
-            <strong style={{ color: '#F5F5F7' }}>{restaurantName}</strong>?
-            This action cannot be undone.
+            {t('delete.body', { name: restaurantName })}
           </Typography>
         </Box>
       </DialogContent>
       <DialogActions sx={{ px: 3, py: 2 }}>
         <Button onClick={onClose} sx={{ color: 'text.secondary' }}>
-          Cancel
+          {t('delete.cancel')}
         </Button>
         <Button
           onClick={onConfirm}
@@ -78,7 +78,7 @@ export default function DeleteConfirmDialog({
             },
           }}
         >
-          Delete
+          {t('delete.confirm')}
         </Button>
       </DialogActions>
     </Dialog>

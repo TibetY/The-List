@@ -1,8 +1,10 @@
 import type { ActionFunction, LoaderFunction } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
 import { Form, useActionData, useLoaderData, Link } from "@remix-run/react";
+import { useTranslation } from "react-i18next";
 import { createSupabaseServerClient } from "~/supabase.server";
 import { safeRedirect } from "~/utils/safeRedirect";
+import i18nextServer from "~/i18next.server";
 import {
   Box,
   Container,
@@ -39,9 +41,10 @@ export const action: ActionFunction = async ({ request }) => {
   const password = formData.get("password") as string;
   const confirmPassword = formData.get("confirmPassword") as string;
   const next = safeRedirect(formData.get("next"));
+  const t = await i18nextServer.getFixedT(request);
 
   if (password !== confirmPassword) {
-    return json<ActionData>({ error: "Passwords do not match" });
+    return json<ActionData>({ error: t("signup.passwordsNoMatch") });
   }
 
   const { supabase, headers } = createSupabaseServerClient(request);
@@ -66,8 +69,7 @@ export const action: ActionFunction = async ({ request }) => {
   if (!data.session) {
     return json<ActionData>(
       {
-        message:
-          "Account created! Check your email to confirm your address.",
+        message: t("signup.checkEmail"),
       },
       { headers }
     );
@@ -79,6 +81,7 @@ export const action: ActionFunction = async ({ request }) => {
 export default function SignUpPage() {
   const actionData = useActionData<ActionData>();
   const { next } = useLoaderData<LoaderData>();
+  const { t } = useTranslation();
 
   return (
     <Container
@@ -109,10 +112,10 @@ export default function SignUpPage() {
           component="h1"
           sx={{ fontWeight: 800, mb: 1, letterSpacing: "-0.02em" }}
         >
-          Create account
+          {t("signup.title")}
         </Typography>
         <Typography variant="body1" sx={{ color: "text.secondary", mb: 4 }}>
-          Already have an account?{" "}
+          {t("signup.haveAccount")}{" "}
           <Box
             component={Link}
             to={`/login?next=${encodeURIComponent(next)}`}
@@ -123,7 +126,7 @@ export default function SignUpPage() {
               "&:hover": { textDecoration: "underline" },
             }}
           >
-            Sign in
+            {t("signup.signin")}
           </Box>
         </Typography>
 
@@ -148,7 +151,7 @@ export default function SignUpPage() {
             fullWidth
             id="email"
             name="email"
-            label="Email Address"
+            label={t("signup.email")}
             type="email"
             autoComplete="email"
             sx={{ mb: 2 }}
@@ -160,7 +163,7 @@ export default function SignUpPage() {
             fullWidth
             name="password"
             id="password"
-            label="Password"
+            label={t("signup.password")}
             type="password"
             autoComplete="new-password"
             sx={{ mb: 2 }}
@@ -172,7 +175,7 @@ export default function SignUpPage() {
             fullWidth
             name="confirmPassword"
             id="confirmPassword"
-            label="Confirm Password"
+            label={t("signup.confirmPassword")}
             type="password"
             autoComplete="new-password"
             sx={{ mb: 3 }}
@@ -184,7 +187,7 @@ export default function SignUpPage() {
             size="large"
             sx={{ py: 1.5 }}
           >
-            Create Account
+            {t("signup.submit")}
           </Button>
         </Form>
 
@@ -198,8 +201,7 @@ export default function SignUpPage() {
             lineHeight: 1.6,
           }}
         >
-          By creating an account, you agree to keep your restaurant opinions
-          honest and your taste buds adventurous.
+          {t("signup.disclaimer")}
         </Typography>
       </Box>
     </Container>

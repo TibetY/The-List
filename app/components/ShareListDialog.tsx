@@ -18,6 +18,7 @@ import {
   InputAdornment,
 } from '@mui/material';
 import { Close, Delete, ContentCopy, Link as LinkIcon } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 import type {
   InviteLink,
   ListMember,
@@ -57,6 +58,7 @@ export default function ShareListDialog({
   onClose,
   onChanged,
 }: ShareListDialogProps) {
+  const { t } = useTranslation();
   const [role, setRole] = useState<Exclude<ListRole, 'owner'>>('editor');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -76,7 +78,7 @@ export default function ShareListDialog({
       await fn();
       onChanged();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong');
+      setError(e instanceof Error ? e.message : t('share.somethingWrong'));
     } finally {
       setBusy(false);
     }
@@ -89,7 +91,7 @@ export default function ShareListDialog({
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      setError('Could not copy link');
+      setError(t('share.couldNotCopy'));
     }
   };
 
@@ -110,8 +112,8 @@ export default function ShareListDialog({
           fontWeight: 700,
         }}
       >
-        Share “{list.name}”
-        <IconButton onClick={onClose} aria-label="Close" sx={{ color: 'text.secondary' }}>
+        {t('share.title', { name: list.name })}
+        <IconButton onClick={onClose} aria-label={t('share.close')} sx={{ color: 'text.secondary' }}>
           <Close />
         </IconButton>
       </DialogTitle>
@@ -125,7 +127,7 @@ export default function ShareListDialog({
         {canManage && (
           <Box sx={{ mb: 3 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-              Invite link
+              {t('share.inviteLink')}
             </Typography>
 
             {inviteLink ? (
@@ -148,41 +150,41 @@ export default function ShareListDialog({
                           startIcon={<ContentCopy fontSize="small" />}
                           onClick={handleCopy}
                         >
-                          {copied ? 'Copied' : 'Copy'}
+                          {copied ? t('share.copied') : t('share.copy')}
                         </Button>
                       </InputAdornment>
                     ),
                   }}
-                  aria-label="Invite link"
+                  aria-label={t('share.inviteLink')}
                 />
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
                   <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                    Anyone who opens this link joins as
+                    {t('share.joinsAsLong')}
                   </Typography>
-                  <Chip size="small" label={inviteLink.role} />
+                  <Chip size="small" label={t(`roles.${inviteLink.role}`)} />
                   <Button
                     size="small"
                     disabled={busy}
                     onClick={() => run(() => revokeInviteLink(inviteLink.id))}
                     sx={{ color: 'text.secondary' }}
                   >
-                    Revoke
+                    {t('share.revoke')}
                   </Button>
                 </Box>
               </>
             ) : (
               <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                  Joins as
+                  {t('share.joinsAs')}
                 </Typography>
                 <Select
                   size="small"
                   value={role}
                   onChange={(e) => setRole(e.target.value as Exclude<ListRole, 'owner'>)}
-                  aria-label="Invite role"
+                  aria-label={t('share.inviteRole')}
                 >
-                  <MenuItem value="editor">Editor</MenuItem>
-                  <MenuItem value="viewer">Viewer</MenuItem>
+                  <MenuItem value="editor">{t('roles.editor')}</MenuItem>
+                  <MenuItem value="viewer">{t('roles.viewer')}</MenuItem>
                 </Select>
                 <Button
                   variant="contained"
@@ -192,7 +194,7 @@ export default function ShareListDialog({
                     run(() => createInviteLink(list.id, role, currentUserId).then(() => undefined))
                   }
                 >
-                  Create link
+                  {t('share.createLink')}
                 </Button>
               </Box>
             )}
@@ -200,26 +202,26 @@ export default function ShareListDialog({
         )}
 
         <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-          Members
+          {t('share.members')}
         </Typography>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           {members.map((m) => (
             <Box key={m.id} sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
               <Avatar
                 src={m.profile?.avatarUrl}
-                alt={m.profile?.displayName || 'Member'}
+                alt={m.profile?.displayName || t('share.member')}
                 sx={{ width: 34, height: 34, fontSize: 14 }}
               >
                 {initials(m)}
               </Avatar>
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                  {m.profile?.displayName || 'Member'}
-                  {m.userId === currentUserId && ' (you)'}
+                  {m.profile?.displayName || t('share.member')}
+                  {m.userId === currentUserId && t('share.you')}
                 </Typography>
               </Box>
               {m.role === 'owner' || !canManage || m.userId === currentUserId ? (
-                <Chip size="small" label={m.role} />
+                <Chip size="small" label={t(`roles.${m.role}`)} />
               ) : (
                 <>
                   <Select
@@ -234,14 +236,14 @@ export default function ShareListDialog({
                       )
                     }
                     sx={{ minWidth: 110 }}
-                    aria-label={`Role for ${m.profile?.displayName || 'member'}`}
+                    aria-label={t('share.roleFor', { name: m.profile?.displayName || t('share.member') })}
                   >
-                    <MenuItem value="editor">Editor</MenuItem>
-                    <MenuItem value="viewer">Viewer</MenuItem>
+                    <MenuItem value="editor">{t('roles.editor')}</MenuItem>
+                    <MenuItem value="viewer">{t('roles.viewer')}</MenuItem>
                   </Select>
                   <IconButton
                     size="small"
-                    aria-label="Remove member"
+                    aria-label={t('share.removeMember')}
                     onClick={() => run(() => removeMember(m.id))}
                     sx={{ color: 'text.secondary', '&:hover': { color: 'error.main' } }}
                   >
@@ -255,7 +257,7 @@ export default function ShareListDialog({
       </DialogContent>
       <DialogActions sx={{ px: 3, py: 2 }}>
         {busy && <CircularProgress size={20} sx={{ mr: 1 }} />}
-        <Button onClick={onClose}>Done</Button>
+        <Button onClick={onClose}>{t('share.done')}</Button>
       </DialogActions>
     </Dialog>
   );

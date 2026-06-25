@@ -19,6 +19,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { CloudUpload, Close, Check, BookmarkBorder } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 import type { Restaurant, RestaurantStatus } from '~/types/restaurant';
 
 interface RestaurantFormDialogProps {
@@ -53,6 +54,7 @@ export default function RestaurantFormDialog({
   onClose,
   onSave,
 }: RestaurantFormDialogProps) {
+  const { t } = useTranslation();
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -145,7 +147,7 @@ export default function RestaurantFormDialog({
     }
   };
 
-  const dialogTitle = restaurant ? 'Edit Restaurant' : 'Add New Restaurant';
+  const dialogTitle = restaurant ? t('form.editTitle') : t('form.addTitle');
 
   return (
     <Dialog
@@ -169,7 +171,7 @@ export default function RestaurantFormDialog({
         {dialogTitle}
         <IconButton
           onClick={onClose}
-          aria-label="Close dialog"
+          aria-label={t('form.close')}
           sx={{ color: 'text.secondary' }}
         >
           <Close />
@@ -182,7 +184,7 @@ export default function RestaurantFormDialog({
             <TextField
               fullWidth
               required
-              label="Restaurant Name"
+              label={t('form.name')}
               value={formData.name}
               onChange={(e) =>
                 setFormData({ ...formData, name: e.target.value })
@@ -194,13 +196,13 @@ export default function RestaurantFormDialog({
           <Grid item xs={12}>
             <TextField
               fullWidth
-              label="Address"
-              placeholder="123 Main St, Ottawa, ON"
+              label={t('form.address')}
+              placeholder={t('form.addressPlaceholder')}
               value={formData.address ?? ''}
               onChange={(e) =>
                 setFormData({ ...formData, address: e.target.value })
               }
-              helperText="Used to place this spot on the map"
+              helperText={t('form.addressHelp')}
             />
           </Grid>
 
@@ -216,7 +218,7 @@ export default function RestaurantFormDialog({
                 fontSize: '0.875rem',
               }}
             >
-              Status
+              {t('form.status')}
             </Typography>
             <ToggleButtonGroup
               exclusive
@@ -225,15 +227,15 @@ export default function RestaurantFormDialog({
                 if (value) setFormData({ ...formData, status: value });
               }}
               size="small"
-              aria-label="Restaurant status"
+              aria-label={t('form.statusLabel')}
             >
-              <ToggleButton value="want" aria-label="Want to try">
+              <ToggleButton value="want" aria-label={t('form.wantToTry')}>
                 <BookmarkBorder fontSize="small" sx={{ mr: 0.75 }} />
-                Want to try
+                {t('form.wantToTry')}
               </ToggleButton>
-              <ToggleButton value="been" aria-label="Been">
+              <ToggleButton value="been" aria-label={t('form.been')}>
                 <Check fontSize="small" sx={{ mr: 0.75 }} />
-                Been
+                {t('form.been')}
               </ToggleButton>
             </ToggleButtonGroup>
           </Grid>
@@ -243,16 +245,16 @@ export default function RestaurantFormDialog({
             <TextField
               fullWidth
               select
-              label="Cuisine Type"
+              label={t('form.cuisineType')}
               value={formData.cuisineType}
               onChange={(e) =>
                 setFormData({ ...formData, cuisineType: e.target.value })
               }
             >
-              <MenuItem value="">None</MenuItem>
+              <MenuItem value="">{t('form.none')}</MenuItem>
               {cuisineTypes.map((type) => (
                 <MenuItem key={type} value={type}>
-                  {type}
+                  {t(`cuisines.${type}`, type)}
                 </MenuItem>
               ))}
             </TextField>
@@ -261,7 +263,7 @@ export default function RestaurantFormDialog({
             <TextField
               fullWidth
               select
-              label="Price Range"
+              label={t('form.priceRange')}
               value={formData.priceRange}
               onChange={(e) =>
                 setFormData({ ...formData, priceRange: e.target.value })
@@ -288,7 +290,7 @@ export default function RestaurantFormDialog({
                 fontSize: '0.875rem',
               }}
             >
-              Rating
+              {t('form.rating')}
             </Typography>
             <Rating
               value={formData.rating || 0}
@@ -305,7 +307,7 @@ export default function RestaurantFormDialog({
           <Grid item xs={12}>
             <TextField
               fullWidth
-              label="Website URL"
+              label={t('form.websiteUrl')}
               value={formData.url}
               onChange={(e) =>
                 setFormData({ ...formData, url: e.target.value })
@@ -321,12 +323,12 @@ export default function RestaurantFormDialog({
               fullWidth
               multiline
               rows={3}
-              label="Notes"
+              label={t('form.notes')}
               value={formData.comment}
               onChange={(e) =>
                 setFormData({ ...formData, comment: e.target.value })
               }
-              placeholder="What did you think? Any must-try dishes?"
+              placeholder={t('form.notesPlaceholder')}
             />
           </Grid>
 
@@ -343,13 +345,13 @@ export default function RestaurantFormDialog({
                 letterSpacing: '0.05em',
               }}
             >
-              Social Media
+              {t('form.socialMedia')}
             </Typography>
           </Grid>
           <Grid item xs={12} sm={6}>
             <TextField
               fullWidth
-              label="Facebook"
+              label={t('form.facebook')}
               value={formData.socialMedia?.facebook}
               onChange={(e) =>
                 setFormData({
@@ -366,7 +368,7 @@ export default function RestaurantFormDialog({
           <Grid item xs={12} sm={6}>
             <TextField
               fullWidth
-              label="Instagram"
+              label={t('form.instagram')}
               value={formData.socialMedia?.instagram}
               onChange={(e) =>
                 setFormData({
@@ -383,7 +385,7 @@ export default function RestaurantFormDialog({
           <Grid item xs={12} sm={6}>
             <TextField
               fullWidth
-              label="Twitter / X"
+              label={t('form.twitter')}
               value={formData.socialMedia?.twitter}
               onChange={(e) =>
                 setFormData({
@@ -400,7 +402,7 @@ export default function RestaurantFormDialog({
           <Grid item xs={12} sm={6}>
             <TextField
               fullWidth
-              label="TikTok"
+              label={t('form.tiktok')}
               value={formData.socialMedia?.tiktok}
               onChange={(e) =>
                 setFormData({
@@ -433,13 +435,13 @@ export default function RestaurantFormDialog({
                 },
               }}
             >
-              {imagePreview ? 'Change Image' : 'Upload Image'}
+              {imagePreview ? t('form.changeImage') : t('form.uploadImage')}
               <input
                 type="file"
                 hidden
                 accept="image/*"
                 onChange={handleImageChange}
-                aria-label="Upload restaurant image"
+                aria-label={t('form.uploadImageLabel')}
               />
             </Button>
           </Grid>
@@ -456,7 +458,7 @@ export default function RestaurantFormDialog({
               >
                 <img
                   src={imagePreview}
-                  alt="Restaurant preview"
+                  alt={t('form.previewAlt')}
                   style={{
                     maxWidth: '100%',
                     maxHeight: '250px',
@@ -476,7 +478,7 @@ export default function RestaurantFormDialog({
           disabled={loading}
           sx={{ color: 'text.secondary' }}
         >
-          Cancel
+          {t('form.cancel')}
         </Button>
         <Button
           onClick={handleSubmit}
@@ -487,9 +489,9 @@ export default function RestaurantFormDialog({
           {loading ? (
             <CircularProgress size={24} color="inherit" />
           ) : restaurant ? (
-            'Save Changes'
+            t('form.saveChanges')
           ) : (
-            'Add Restaurant'
+            t('form.addRestaurant')
           )}
         </Button>
       </DialogActions>
