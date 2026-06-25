@@ -60,6 +60,33 @@ export const dietaryTags = [
 /** Place types, multi-select (a venue can be e.g. both a Bar and a Cafe). */
 export const placeTypes = ['Restaurant', 'Bar', 'Cafe', 'Bakery'] as const;
 
+/** Menu / service styles, multi-select (e.g. Fine Dining + Tasting Menu). */
+export const menuTypes = [
+  'Fine Dining',
+  'Tasting Menu',
+  'À la carte',
+  'Buffet',
+  'Prix Fixe',
+  'Casual',
+] as const;
+
+/**
+ * A single physical location for a restaurant. A restaurant has one or more of
+ * these (e.g. a chain with several branches); each carries its own address (and
+ * map pin), contact info, and reservation link. Brand-level attributes (cuisine,
+ * price, rating, status, etc.) live on the Restaurant, not here.
+ */
+export interface RestaurantLocation {
+  label?: string; // e.g. "Carling", "Downtown"; optional branch name
+  address?: string;
+  lat?: number; // Geocoded latitude (set on save from the address)
+  lng?: number; // Geocoded longitude
+  phone?: string;
+  email?: string;
+  reservationPlatform?: ReservationPlatform;
+  reservationUrl?: string;
+}
+
 export interface Restaurant {
   id?: string;
   listId?: string; // The list this entry belongs to
@@ -73,16 +100,22 @@ export interface Restaurant {
   cuisineType?: string;
   dietaryTags?: string[]; // e.g. Vegan, Halal — multi-select
   placeTypes?: string[]; // e.g. Restaurant, Bar, Cafe — multi-select
+  menuTypes?: string[]; // e.g. Fine Dining, Tasting Menu — multi-select
   michelinStars?: number; // 0-3 Michelin stars
   bibGourmand?: boolean; // Michelin Bib Gourmand recognition
+  status?: RestaurantStatus; // 'been' (visited) or 'want' (want to try)
+  // Canonical per-location data (address/pin/contact/booking). A restaurant
+  // always has at least one location.
+  locations?: RestaurantLocation[];
+  // Deprecated convenience mirrors of locations[0], populated by the mapper so
+  // any older read path still works. Prefer `locations`.
   reservationPlatform?: ReservationPlatform;
   reservationUrl?: string;
-  email?: string; // Best-effort scraped from the restaurant's website
+  email?: string;
   phone?: string;
-  status?: RestaurantStatus; // 'been' (visited) or 'want' (want to try)
-  address?: string; // Human-entered address, used for the map
-  lat?: number; // Geocoded latitude (set on save from the address)
-  lng?: number; // Geocoded longitude
+  address?: string;
+  lat?: number;
+  lng?: number;
   createdAt?: string; // ISO timestamp from the DB (serialized over the wire)
   updatedAt?: string;
   addedBy?: string; // User who added this entry

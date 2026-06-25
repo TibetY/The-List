@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -5,6 +6,8 @@ import {
   Button,
   IconButton,
   Chip,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import {
   Close,
@@ -54,9 +57,17 @@ export default function RestaurantDetailDialog({
   onDelete,
 }: RestaurantDetailDialogProps) {
   const { t: tr } = useTranslation();
+  const [activeLoc, setActiveLoc] = useState(0);
+  // Reset to the first location tab whenever a different restaurant is opened.
+  useEffect(() => {
+    setActiveLoc(0);
+  }, [restaurant?.id]);
   if (!restaurant) return null;
 
   const r = restaurant;
+  const locations = r.locations ?? [];
+  const safeIdx = locations.length ? Math.min(activeLoc, locations.length - 1) : 0;
+  const loc = locations[safeIdx] ?? {};
   const rating = Math.round(r.rating ?? 0);
   const initial = (r.name.replace(/^The /i, '')[0] || '?').toUpperCase();
   const isBeen = (r.status ?? 'want') === 'been';
@@ -202,26 +213,84 @@ export default function RestaurantDetailDialog({
           </Box>
         )}
 
-        {/* Address */}
-        {r.address && (
+        {/* Menu types */}
+        {r.menuTypes && r.menuTypes.length > 0 && (
           <Box sx={{ mt: '16px' }}>
-            <Box component="span" sx={sectionLabel}>{tr('form.address')}</Box>
-            <Box sx={{ color: t.ink, fontSize: 14 }}>{r.address}</Box>
+            <Box component="span" sx={sectionLabel}>{tr('form.menuTypes')}</Box>
+            <Box sx={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {r.menuTypes.map((m) => (
+                <Chip key={m} size="small" label={tr(`menuTypes.${m}`, m)} sx={chipSx} />
+              ))}
+            </Box>
           </Box>
         )}
 
-        {/* Contact: phone + email */}
-        {(r.phone || r.email) && (
-          <Box sx={{ display: 'flex', gap: '4px', mt: '14px' }}>
-            {r.phone && (
-              <IconButton component="a" href={`tel:${r.phone}`} aria-label={tr('detail.phone')} sx={{ color: t.muted }}>
-                <PhoneIcon fontSize="small" />
-              </IconButton>
+        {/* Locations — address/contact/booking, tabbed when there's more than one */}
+        {locations.length > 0 && (
+          <Box sx={{ mt: '16px' }}>
+            {locations.length > 1 && (
+              <Tabs
+                value={safeIdx}
+                onChange={(_, v: number) => setActiveLoc(v)}
+                variant="scrollable"
+                scrollButtons="auto"
+                sx={{ mb: '10px', minHeight: 36 }}
+              >
+                {locations.map((l, i) => (
+                  <Tab
+                    key={i}
+                    label={l.label?.trim() || tr('form.locationN', { n: i + 1 })}
+                    sx={{
+                      minHeight: 36,
+                      textTransform: 'none',
+                      color: t.muted,
+                      '&.Mui-selected': { color: t.ink },
+                    }}
+                  />
+                ))}
+              </Tabs>
             )}
-            {r.email && (
-              <IconButton component="a" href={`mailto:${r.email}`} aria-label={tr('detail.email')} sx={{ color: t.muted }}>
-                <EmailIcon fontSize="small" />
-              </IconButton>
+
+            {loc.address && (
+              <Box sx={{ mb: '10px' }}>
+                <Box component="span" sx={sectionLabel}>{tr('form.address')}</Box>
+                <Box sx={{ color: t.ink, fontSize: 14 }}>{loc.address}</Box>
+              </Box>
+            )}
+
+            {(loc.phone || loc.email) && (
+              <Box sx={{ display: 'flex', gap: '4px' }}>
+                {loc.phone && (
+                  <IconButton component="a" href={`tel:${loc.phone}`} aria-label={tr('detail.phone')} sx={{ color: t.muted }}>
+                    <PhoneIcon fontSize="small" />
+                  </IconButton>
+                )}
+                {loc.email && (
+                  <IconButton component="a" href={`mailto:${loc.email}`} aria-label={tr('detail.email')} sx={{ color: t.muted }}>
+                    <EmailIcon fontSize="small" />
+                  </IconButton>
+                )}
+              </Box>
+            )}
+
+            {loc.reservationUrl && (
+              <Box sx={{ mt: '12px' }}>
+                <Button
+                  variant="outlined"
+                  component="a"
+                  href={loc.reservationUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  startIcon={<EventSeat fontSize="small" />}
+                >
+                  {tr('dashboard.reserveOn', { platform: reservationLabel(loc.reservationPlatform || '') })}
+                </Button>
+              </Box>
+            )}
+            {!loc.reservationUrl && loc.reservationPlatform === 'walkin' && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: '6px', mt: '12px', color: t.muted, fontSize: 14 }}>
+                <EventSeat fontSize="small" /> {tr('detail.walkinBadge')}
+              </Box>
             )}
           </Box>
         )}
@@ -231,27 +300,6 @@ export default function RestaurantDetailDialog({
           <Box sx={{ mt: '16px' }}>
             <Box component="span" sx={sectionLabel}>{tr('form.notes')}</Box>
             <Box sx={{ color: t.ink, fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{r.comment}</Box>
-          </Box>
-        )}
-
-        {/* Reservation */}
-        {r.reservationUrl && (
-          <Box sx={{ mt: '18px' }}>
-            <Button
-              variant="outlined"
-              component="a"
-              href={r.reservationUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              startIcon={<EventSeat fontSize="small" />}
-            >
-              {tr('dashboard.reserveOn', { platform: reservationLabel(r.reservationPlatform || '') })}
-            </Button>
-          </Box>
-        )}
-        {!r.reservationUrl && r.reservationPlatform === 'walkin' && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: '6px', mt: '18px', color: t.muted, fontSize: 14 }}>
-            <EventSeat fontSize="small" /> {tr('detail.walkinBadge')}
           </Box>
         )}
 
