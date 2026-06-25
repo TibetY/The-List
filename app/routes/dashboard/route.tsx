@@ -34,6 +34,8 @@ import {
   PersonAddAlt1,
   Person,
   EventSeat,
+  Favorite,
+  FavoriteBorder,
 } from '@mui/icons-material';
 import { createSupabaseServerClient } from '~/supabase.server';
 import { getRestaurants } from '~/services/restaurants.server';
@@ -65,6 +67,8 @@ import {
   updateRestaurant,
   deleteRestaurant,
   setRestaurantStatus,
+  setRestaurantFavorite,
+  setRestaurantVisitCount,
 } from '~/services/restaurants.client';
 import { createList, updateList, deleteList } from '~/services/lists.client';
 import { geocodeAddress } from '~/services/geocode.client';
@@ -210,31 +214,31 @@ type DecoratedRestaurant = Restaurant & {
   cuisine: string;
   isBeen: boolean;
   isWant: boolean;
-  px: number;
-  py: number;
 };
 
 type ViewMode = 'tile' | 'list' | 'map';
 type FilterMode = 'all' | 'been' | 'want';
+type SortMode = 'recent' | 'rating' | 'name' | 'price' | 'visits' | 'favorite';
+const SORT_MODES: SortMode[] = ['recent', 'rating', 'name', 'price', 'visits', 'favorite'];
 
 const STAR_FULL = '★★★★★';
 const STAR_EMPTY = '☆☆☆☆☆';
+
+/** Make a non-button clickable element keyboard-operable (Enter/Space). */
+function activateOnKey(fn: () => void) {
+  return (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      fn();
+    }
+  };
+}
 
 function reservationLabel(platform: string): string {
   if (platform === 'resy') return 'Resy';
   if (platform === 'opentable') return 'OpenTable';
   if (platform === 'walkin') return '';
   return platform;
-}
-
-/** Stable pseudo-random map coordinates derived from the restaurant id/name. */
-function mapPosition(seed: string): { px: number; py: number } {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) {
-    h = (h * 31 + seed.charCodeAt(i)) | 0;
-  }
-  const a = Math.abs(h);
-  return { px: 8 + (a % 84), py: 12 + (Math.floor(a / 84) % 72) };
 }
 
 function decorate(r: Restaurant): DecoratedRestaurant {
@@ -254,7 +258,6 @@ function decorate(r: Restaurant): DecoratedRestaurant {
     meta: cuisine,
     isBeen: status === 'been',
     isWant: status === 'want',
-    ...mapPosition(r.id || r.name),
   };
 }
 
@@ -293,8 +296,9 @@ export default function Dashboard() {
   const [cuisineFilter, setCuisineFilter] = useState('');
   const [costFilter, setCostFilter] = useState('');
   const [ratingFilter, setRatingFilter] = useState(0);
+  const [sort, setSort] = useState<SortMode>('recent');
   const [filterMenu, setFilterMenu] = useState<{
-    kind: 'cuisine' | 'cost' | 'rating';
+    kind: 'cuisine' | 'cost' | 'rating' | 'sort';
     anchor: HTMLElement;
   } | null>(null);
 
@@ -374,12 +378,45 @@ export default function Dashboard() {
     });
   }, [decorated, filter, searchQuery, cuisineFilter, costFilter, ratingFilter]);
 
+  // Apply the chosen sort to the filtered set (order-independent metrics like
+  // counts still read from `filtered`).
+  const sorted = useMemo(() => {
+    const arr = [...filtered];
+    switch (sort) {
+      case 'rating':
+        arr.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+        break;
+      case 'name':
+        arr.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+      case 'price':
+        arr.sort((a, b) => (a.priceRange?.length ?? 0) - (b.priceRange?.length ?? 0));
+        break;
+      case 'visits':
+        arr.sort((a, b) => (b.visitCount ?? 0) - (a.visitCount ?? 0));
+        break;
+      case 'favorite':
+        arr.sort(
+          (a, b) =>
+            Number(b.favorite ?? false) - Number(a.favorite ?? false) ||
+            a.name.localeCompare(b.name)
+        );
+        break;
+      case 'recent':
+      default:
+        arr.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
+        break;
+    }
+    return arr;
+  }, [filtered, sort]);
+
   const hasActiveFilters =
     filter !== 'all' ||
     !!searchQuery ||
     !!cuisineFilter ||
     !!costFilter ||
-    ratingFilter > 0;
+    ratingFilter > 0 ||
+    sort !== 'recent';
 
   const clearFilters = () => {
     setFilter('all');
@@ -387,6 +424,7 @@ export default function Dashboard() {
     setCuisineFilter('');
     setCostFilter('');
     setRatingFilter(0);
+    setSort('recent');
   };
 
   const total = decorated.length;
@@ -496,6 +534,33 @@ export default function Dashboard() {
       revalidator.revalidate();
     } catch (error) {
       console.error('Error updating status:', error);
+      setSnackbar({ open: true, message: tr('dashboard.snackStatusFailed'), severity: 'error' });
+    }
+  };
+
+  const handleToggleFavorite = async (r: Restaurant) => {
+    if (!canEdit || !r.id) return;
+    const next = !r.favorite;
+    try {
+      await setRestaurantFavorite(r.id, next);
+      // Reflect immediately in an open detail dialog (loader revalidate lags).
+      setSelectedRestaurant((cur) => (cur && cur.id === r.id ? { ...cur, favorite: next } : cur));
+      revalidator.revalidate();
+    } catch (error) {
+      console.error('Error updating favourite:', error);
+      setSnackbar({ open: true, message: tr('dashboard.snackStatusFailed'), severity: 'error' });
+    }
+  };
+
+  const handleAddVisit = async (r: Restaurant) => {
+    if (!canEdit || !r.id) return;
+    const next = (r.visitCount ?? 0) + 1;
+    try {
+      await setRestaurantVisitCount(r.id, next);
+      setSelectedRestaurant((cur) => (cur && cur.id === r.id ? { ...cur, visitCount: next } : cur));
+      revalidator.revalidate();
+    } catch (error) {
+      console.error('Error updating visit count:', error);
       setSnackbar({ open: true, message: tr('dashboard.snackStatusFailed'), severity: 'error' });
     }
   };
@@ -952,6 +1017,15 @@ export default function Dashboard() {
             >
               {ratingFilter ? tr('dashboard.ratingStars', { count: ratingFilter }) : tr('dashboard.rating')} ▾
             </Box>
+            <Box
+              component="button"
+              type="button"
+              aria-haspopup="true"
+              onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'sort', anchor: e.currentTarget })}
+              sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: sort !== 'recent' ? t.pBg : 'transparent', color: sort !== 'recent' ? t.pFg : t.chip }}
+            >
+              {tr(`dashboard.sort_${sort}`)} ▾
+            </Box>
             {hasActiveFilters && (
               <Box
                 component="button"
@@ -1002,6 +1076,12 @@ export default function Dashboard() {
                 </MenuItem>
               )),
             ]}
+            {filterMenu?.kind === 'sort' &&
+              SORT_MODES.map((m) => (
+                <MenuItem key={m} selected={sort === m} onClick={() => { setSort(m); setFilterMenu(null); }}>
+                  {tr(`dashboard.sort_${m}`)}
+                </MenuItem>
+              ))}
           </Menu>
 
           {/* empty state */}
@@ -1057,10 +1137,14 @@ export default function Dashboard() {
               {view === 'tile' && (
                 <Box sx={{ padding: '24px 0 40px' }}>
                   <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '20px' }}>
-                    {filtered.map((r) => (
+                    {sorted.map((r) => (
                       <Box
                         key={r.id}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={r.name}
                         onClick={() => handleViewRestaurant(r)}
+                        onKeyDown={activateOnKey(() => handleViewRestaurant(r))}
                         sx={{
                           border: `1px solid ${t.border}`,
                           borderRadius: '16px',
@@ -1116,15 +1200,35 @@ export default function Dashboard() {
                           )}
                         </Box>
                         <Box sx={{ padding: '14px 16px 16px' }}>
-                          <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px' }}>
-                            <Box component="span" sx={{ fontFamily: serif, fontSize: 20 }}>{r.name}</Box>
-                            <Box component="span" sx={{ color: t.cost, fontSize: 14, fontWeight: 600, letterSpacing: '.03em' }}>{r.costStr}</Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                            <Box component="span" sx={{ fontFamily: serif, fontSize: 20, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</Box>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 'none' }}>
+                              <Box component="span" sx={{ color: t.cost, fontSize: 14, fontWeight: 600, letterSpacing: '.03em' }}>{r.costStr}</Box>
+                              {canEdit ? (
+                                <IconButton
+                                  size="small"
+                                  onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleToggleFavorite(r); }}
+                                  aria-label={tr(r.favorite ? 'dashboard.unfavorite' : 'dashboard.favorite', { name: r.name })}
+                                  aria-pressed={r.favorite ?? false}
+                                  sx={{ color: r.favorite ? 'error.main' : t.faint, p: '2px' }}
+                                >
+                                  {r.favorite ? <Favorite sx={{ fontSize: 18 }} /> : <FavoriteBorder sx={{ fontSize: 18 }} />}
+                                </IconButton>
+                              ) : r.favorite ? (
+                                <Favorite role="img" aria-label={tr('dashboard.favorited')} sx={{ fontSize: 18, color: 'error.main' }} />
+                              ) : null}
+                            </Box>
                           </Box>
                           <Box sx={{ color: t.muted, fontSize: 13, mt: '4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                             <Box component="span">{r.meta}</Box>
                             {(r.locations?.length ?? 0) > 1 && (
                               <Box component="span" sx={{ fontSize: 11.5, color: t.faint }}>
                                 · {tr('dashboard.locationsCount', { count: r.locations?.length ?? 0 })}
+                              </Box>
+                            )}
+                            {(r.visitCount ?? 0) > 0 && (
+                              <Box component="span" sx={{ fontSize: 11.5, color: t.faint }}>
+                                · {tr('dashboard.visitsCount', { count: r.visitCount ?? 0 })}
                               </Box>
                             )}
                           </Box>
@@ -1149,7 +1253,7 @@ export default function Dashboard() {
                             {r.rated ? (
                               <Box component="span" sx={{ color: t.rating, fontSize: 15, letterSpacing: '2px' }}>{r.ratingStr}</Box>
                             ) : (
-                              <Box component="span" sx={{ color: t.notRated, fontSize: 13, fontStyle: 'italic' }}>Not rated yet</Box>
+                              <Box component="span" sx={{ color: t.notRated, fontSize: 13, fontStyle: 'italic' }}>{tr('dashboard.notRated')}</Box>
                             )}
                           </Box>
                           {r.reservationUrl && (
@@ -1186,10 +1290,14 @@ export default function Dashboard() {
               {view === 'list' && (
                 <Box sx={{ padding: '24px 0 40px' }}>
                   <Box sx={{ border: `1px solid ${t.border}`, borderRadius: '14px', overflow: 'hidden' }}>
-                    {filtered.map((r) => (
+                    {sorted.map((r) => (
                       <Box
                         key={r.id}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={r.name}
                         onClick={() => handleViewRestaurant(r)}
+                        onKeyDown={activateOnKey(() => handleViewRestaurant(r))}
                         sx={{
                           display: 'flex',
                           alignItems: 'center',
@@ -1222,6 +1330,12 @@ export default function Dashboard() {
                               <Box component="span" sx={{ color: t.faint }}>
                                 {' · '}
                                 {tr('dashboard.locationsCount', { count: r.locations?.length ?? 0 })}
+                              </Box>
+                            )}
+                            {(r.visitCount ?? 0) > 0 && (
+                              <Box component="span" sx={{ color: t.faint }}>
+                                {' · '}
+                                {tr('dashboard.visitsCount', { count: r.visitCount ?? 0 })}
                               </Box>
                             )}
                           </Box>
@@ -1268,6 +1382,19 @@ export default function Dashboard() {
                         )}
                         <Box sx={{ width: 90, color: t.cost, fontSize: 14, fontWeight: 600, display: { xs: 'none', sm: 'block' } }}>{r.costStr}</Box>
                         <Box sx={{ width: 110, color: t.rating, fontSize: 14, letterSpacing: '1px', display: { xs: 'none', sm: 'block' } }}>{r.ratingStr}</Box>
+                        {canEdit ? (
+                          <IconButton
+                            size="small"
+                            onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleToggleFavorite(r); }}
+                            aria-label={tr(r.favorite ? 'dashboard.unfavorite' : 'dashboard.favorite', { name: r.name })}
+                            aria-pressed={r.favorite ?? false}
+                            sx={{ flex: 'none', color: r.favorite ? 'error.main' : t.faint }}
+                          >
+                            {r.favorite ? <Favorite sx={{ fontSize: 18 }} /> : <FavoriteBorder sx={{ fontSize: 18 }} />}
+                          </IconButton>
+                        ) : r.favorite ? (
+                          <Favorite role="img" aria-label={tr('dashboard.favorited')} sx={{ flex: 'none', fontSize: 18, color: 'error.main' }} />
+                        ) : null}
                         <Box
                           component={canEdit ? 'button' : 'span'}
                           type={canEdit ? 'button' : undefined}
@@ -1330,7 +1457,7 @@ export default function Dashboard() {
                           }
                         >
                           <RestaurantMap
-                            restaurants={filtered}
+                            restaurants={sorted}
                             accent={t.accent}
                             onSelect={handleViewRestaurant}
                           />
@@ -1344,10 +1471,14 @@ export default function Dashboard() {
                     )}
                   </Box>
                   <Box sx={{ width: { xs: '100%', md: 330 }, flex: 'none', height: 540, overflowY: 'auto', border: `1px solid ${t.border}`, borderRadius: '16px', background: t.cardBg }}>
-                    {filtered.map((r) => (
+                    {sorted.map((r) => (
                       <Box
                         key={r.id}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={r.name}
                         onClick={() => handleViewRestaurant(r)}
+                        onKeyDown={activateOnKey(() => handleViewRestaurant(r))}
                         sx={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderBottom: `1px solid ${t.borderSoft}`, cursor: 'pointer', '&:hover': { filter: 'brightness(0.98)' } }}
                       >
                         <Box sx={{ width: 34, height: 34, borderRadius: '9px', flex: 'none' }}>
@@ -1435,6 +1566,8 @@ export default function Dashboard() {
           onClose={() => setDetailOpen(false)}
           onEdit={handleEditRestaurant}
           onDelete={(id) => { setDetailOpen(false); handleDeleteClick(id); }}
+          onToggleFavorite={handleToggleFavorite}
+          onAddVisit={handleAddVisit}
         />
         <RestaurantFormDialog
           open={formOpen}

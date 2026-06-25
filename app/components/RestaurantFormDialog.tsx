@@ -30,6 +30,8 @@ import {
   BookmarkBorder,
   Add,
   DeleteOutline,
+  Favorite,
+  FavoriteBorder,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import type {
@@ -85,6 +87,8 @@ const EMPTY_BRAND: Partial<Restaurant> = {
   menuTypes: [],
   michelinStars: 0,
   bibGourmand: false,
+  visitCount: 0,
+  favorite: false,
   status: 'want',
   socialMedia: { facebook: '', instagram: '', twitter: '', tiktok: '' },
 };
@@ -133,6 +137,8 @@ export default function RestaurantFormDialog({
         menuTypes: restaurant.menuTypes || [],
         michelinStars: restaurant.michelinStars || 0,
         bibGourmand: restaurant.bibGourmand || false,
+        visitCount: restaurant.visitCount || 0,
+        favorite: restaurant.favorite || false,
         status: restaurant.status || 'want',
         socialMedia: {
           facebook: restaurant.socialMedia?.facebook || '',
@@ -428,6 +434,39 @@ export default function RestaurantFormDialog({
                 {t('form.been')}
               </ToggleButton>
             </ToggleButtonGroup>
+          </Grid>
+
+          {/* Favourite + times visited */}
+          <Grid item xs={12} sm={6} sx={{ display: 'flex', alignItems: 'center' }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  icon={<FavoriteBorder />}
+                  checkedIcon={<Favorite />}
+                  checked={formData.favorite ?? false}
+                  onChange={(e) =>
+                    setFormData({ ...formData, favorite: e.target.checked })
+                  }
+                  sx={{ color: 'text.secondary', '&.Mui-checked': { color: 'error.main' } }}
+                />
+              }
+              label={t('form.favorite')}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              type="number"
+              label={t('form.visitCount')}
+              value={formData.visitCount ?? 0}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  visitCount: Math.max(0, Math.floor(Number(e.target.value) || 0)),
+                })
+              }
+              inputProps={{ min: 0, 'aria-label': t('form.visitCount') }}
+            />
           </Grid>
 
           {/* Cuisine + Price */}
