@@ -18,13 +18,31 @@ import {
   IconButton,
   ToggleButton,
   ToggleButtonGroup,
+  Tabs,
+  Tab,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import { CloudUpload, Close, Check, BookmarkBorder } from '@mui/icons-material';
+import {
+  CloudUpload,
+  Close,
+  Check,
+  BookmarkBorder,
+  Add,
+  DeleteOutline,
+} from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import type { Restaurant, RestaurantStatus } from '~/types/restaurant';
-import { cuisineTypes, dietaryTags, placeTypes } from '~/types/restaurant';
+import type {
+  Restaurant,
+  RestaurantLocation,
+  RestaurantStatus,
+} from '~/types/restaurant';
+import {
+  cuisineTypes,
+  dietaryTags,
+  placeTypes,
+  menuTypes,
+} from '~/types/restaurant';
 
 interface RestaurantFormDialogProps {
   open: boolean;
@@ -48,6 +66,29 @@ function isCustomPlatform(platform: string | undefined): boolean {
   return !!platform && !knownReservationPlatforms.includes(platform);
 }
 
+/** Derive which reservation-select option matches a location's stored platform. */
+function platformChoiceFor(loc: RestaurantLocation | undefined): string {
+  const p = loc?.reservationPlatform;
+  return isCustomPlatform(p) ? 'custom' : p || '';
+}
+
+const EMPTY_BRAND: Partial<Restaurant> = {
+  name: '',
+  url: '',
+  image: '',
+  rating: 0,
+  priceRange: '$$',
+  comment: '',
+  cuisineType: '',
+  dietaryTags: [],
+  placeTypes: [],
+  menuTypes: [],
+  michelinStars: 0,
+  bibGourmand: false,
+  status: 'want',
+  socialMedia: { facebook: '', instagram: '', twitter: '', tiktok: '' },
+};
+
 export default function RestaurantFormDialog({
   open,
   restaurant,
@@ -58,59 +99,40 @@ export default function RestaurantFormDialog({
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
 
-  const [formData, setFormData] = useState<Partial<Restaurant>>({
-    name: '',
-    url: '',
-    address: '',
-    rating: 0,
-    priceRange: '$$',
-    comment: '',
-    cuisineType: '',
-    dietaryTags: [],
-    placeTypes: [],
-    michelinStars: 0,
-    bibGourmand: false,
-    reservationPlatform: '',
-    reservationUrl: '',
-    email: '',
-    phone: '',
-    status: 'want',
-    socialMedia: {
-      facebook: '',
-      instagram: '',
-      twitter: '',
-      tiktok: '',
-    },
-  });
+  // Brand-level fields only; per-location data lives in `locations`.
+  const [formData, setFormData] = useState<Partial<Restaurant>>({ ...EMPTY_BRAND });
+  // One or more physical locations (address/pin/contact/booking). Always ≥1.
+  const [locations, setLocations] = useState<RestaurantLocation[]>([{}]);
+  const [activeLocation, setActiveLocation] = useState(0);
   // Dropdown selection for cuisine; 'Other' reveals a free-text field whose value
   // is what actually gets stored in formData.cuisineType.
   const [cuisineChoice, setCuisineChoice] = useState<string>('');
-  // Same pattern for the reservation platform select ('custom' reveals a free-text field).
+  // Reservation-platform select for the ACTIVE location ('custom' reveals a
+  // free-text field). Recomputed when the active tab changes.
   const [platformChoice, setPlatformChoice] = useState<string>('');
   const [imageFile, setImageFile] = useState<File | undefined>();
   const [imagePreview, setImagePreview] = useState<string>('');
   const [dragActive, setDragActive] = useState(false);
   const [loading, setLoading] = useState(false);
   const [fetchingInfo, setFetchingInfo] = useState(false);
+  // Whether the last website scrape returned anything useful.
+  const [scrapeStatus, setScrapeStatus] = useState<'idle' | 'ok' | 'empty'>('idle');
 
   useEffect(() => {
     if (restaurant) {
       setFormData({
         name: restaurant.name || '',
         url: restaurant.url || '',
-        address: restaurant.address || '',
+        image: restaurant.image || '',
         rating: restaurant.rating || 0,
         priceRange: restaurant.priceRange || '$$',
         comment: restaurant.comment || '',
         cuisineType: restaurant.cuisineType || '',
         dietaryTags: restaurant.dietaryTags || [],
         placeTypes: restaurant.placeTypes || [],
+        menuTypes: restaurant.menuTypes || [],
         michelinStars: restaurant.michelinStars || 0,
         bibGourmand: restaurant.bibGourmand || false,
-        reservationPlatform: restaurant.reservationPlatform || '',
-        reservationUrl: restaurant.reservationUrl || '',
-        email: restaurant.email || '',
-        phone: restaurant.phone || '',
         status: restaurant.status || 'want',
         socialMedia: {
           facebook: restaurant.socialMedia?.facebook || '',
@@ -119,54 +141,64 @@ export default function RestaurantFormDialog({
           tiktok: restaurant.socialMedia?.tiktok || '',
         },
       });
+      const locs =
+        restaurant.locations && restaurant.locations.length > 0
+          ? restaurant.locations.map((l) => ({ ...l }))
+          : [{}];
+      setLocations(locs);
+      setActiveLocation(0);
       setCuisineChoice(
-        isCustomCuisine(restaurant.cuisineType)
-          ? 'Other'
-          : restaurant.cuisineType || ''
+        isCustomCuisine(restaurant.cuisineType) ? 'Other' : restaurant.cuisineType || ''
       );
-      setPlatformChoice(
-        isCustomPlatform(restaurant.reservationPlatform)
-          ? 'custom'
-          : restaurant.reservationPlatform || ''
-      );
+      setPlatformChoice(platformChoiceFor(locs[0]));
       setImagePreview(restaurant.image || '');
     } else {
-      setFormData({
-        name: '',
-        url: '',
-        address: '',
-        rating: 0,
-        priceRange: '$$',
-        comment: '',
-        cuisineType: '',
-        dietaryTags: [],
-        placeTypes: [],
-        michelinStars: 0,
-        bibGourmand: false,
-        reservationPlatform: '',
-        reservationUrl: '',
-        email: '',
-        phone: '',
-        status: 'want',
-        socialMedia: {
-          facebook: '',
-          instagram: '',
-          twitter: '',
-          tiktok: '',
-        },
-      });
+      setFormData({ ...EMPTY_BRAND });
+      setLocations([{}]);
+      setActiveLocation(0);
       setCuisineChoice('');
       setPlatformChoice('');
       setImagePreview('');
     }
+    setScrapeStatus('idle');
     setImageFile(undefined);
   }, [restaurant, open]);
+
+  /** Patch the currently-active location. */
+  const updateActiveLocation = (patch: Partial<RestaurantLocation>) => {
+    setLocations((prev) =>
+      prev.map((loc, i) => (i === activeLocation ? { ...loc, ...patch } : loc))
+    );
+  };
+
+  const addLocation = () => {
+    setLocations((prev) => [...prev, {}]);
+    setActiveLocation(locations.length); // the new tab's index
+    setPlatformChoice('');
+  };
+
+  const removeLocation = (index: number) => {
+    setLocations((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      const safe = next.length > 0 ? next : [{}];
+      const newActive = Math.max(0, Math.min(activeLocation, safe.length - 1));
+      setActiveLocation(newActive);
+      setPlatformChoice(platformChoiceFor(safe[newActive]));
+      return safe;
+    });
+  };
+
+  const switchLocation = (index: number) => {
+    setActiveLocation(index);
+    setPlatformChoice(platformChoiceFor(locations[index]));
+  };
 
   const handleWebsiteBlur = async () => {
     const url = formData.url?.trim();
     if (!url || !/^https?:\/\/.+/i.test(url)) return;
 
     setFetchingInfo(true);
+    setScrapeStatus('idle');
     try {
       const res = await fetch(`/api/scrape-website?url=${encodeURIComponent(url)}`);
       const data = (await res.json()) as {
@@ -178,34 +210,50 @@ export default function RestaurantFormDialog({
         email: string | null;
         phone: string | null;
       };
+      const foundAnything = Boolean(
+        data.image ||
+          data.cuisineType ||
+          data.reservationPlatform ||
+          data.reservationUrl ||
+          data.address ||
+          data.email ||
+          data.phone
+      );
+      setScrapeStatus(foundAnything ? 'ok' : 'empty');
+
+      // Brand-level enrichment.
       setFormData((prev) => ({
         ...prev,
         cuisineType: prev.cuisineType || data.cuisineType || prev.cuisineType,
-        reservationPlatform:
-          prev.reservationPlatform || data.reservationPlatform || prev.reservationPlatform,
-        reservationUrl: prev.reservationUrl || data.reservationUrl || prev.reservationUrl,
-        address: prev.address || data.address || prev.address,
-        email: prev.email || data.email || prev.email,
-        phone: prev.phone || data.phone || prev.phone,
       }));
-      // Keep the cuisine dropdown in sync if the scraper supplied a known cuisine.
       if (data.cuisineType && !formData.cuisineType && cuisineTypes.includes(data.cuisineType)) {
         setCuisineChoice(data.cuisineType);
       }
-      // Keep the reservation-platform dropdown in sync if the scraper found a link.
-      if (
-        data.reservationPlatform &&
-        !formData.reservationPlatform &&
-        knownReservationPlatforms.includes(data.reservationPlatform)
-      ) {
-        setPlatformChoice(data.reservationPlatform);
+
+      // Per-location enrichment targets the active location, filling only blanks.
+      const active = locations[activeLocation] ?? {};
+      const patch: Partial<RestaurantLocation> = {};
+      if (!active.address && data.address) patch.address = data.address;
+      if (!active.email && data.email) patch.email = data.email;
+      if (!active.phone && data.phone) patch.phone = data.phone;
+      if (!active.reservationUrl && data.reservationUrl) patch.reservationUrl = data.reservationUrl;
+      if (!active.reservationPlatform && data.reservationPlatform) {
+        patch.reservationPlatform = data.reservationPlatform;
       }
+      if (Object.keys(patch).length > 0) {
+        updateActiveLocation(patch);
+        if (patch.reservationPlatform && knownReservationPlatforms.includes(patch.reservationPlatform)) {
+          setPlatformChoice(patch.reservationPlatform);
+        }
+      }
+
       if (data.image && !imagePreview && !imageFile) {
         setImagePreview(data.image);
         setFormData((prev) => ({ ...prev, image: data.image ?? undefined }));
       }
     } catch {
-      // Best-effort enrichment; silently ignore failures.
+      // Best-effort enrichment; treat a hard failure like "nothing found".
+      setScrapeStatus('empty');
     } finally {
       setFetchingInfo(false);
     }
@@ -255,21 +303,19 @@ export default function RestaurantFormDialog({
   const handlePlatformChange = (value: string) => {
     setPlatformChoice(value);
     if (value === 'custom') {
-      setFormData((prev) => ({
-        ...prev,
-        reservationPlatform: isCustomPlatform(prev.reservationPlatform)
-          ? prev.reservationPlatform
-          : '',
-      }));
+      const current = locations[activeLocation]?.reservationPlatform;
+      updateActiveLocation({
+        reservationPlatform: isCustomPlatform(current) ? current : '',
+      });
     } else if (value === 'walkin') {
-      setFormData((prev) => ({ ...prev, reservationPlatform: 'walkin', reservationUrl: '' }));
+      updateActiveLocation({ reservationPlatform: 'walkin', reservationUrl: '' });
     } else {
-      setFormData((prev) => ({ ...prev, reservationPlatform: value }));
+      updateActiveLocation({ reservationPlatform: value });
     }
   };
 
   const toggleArrayValue = (
-    field: 'dietaryTags' | 'placeTypes',
+    field: 'dietaryTags' | 'placeTypes' | 'menuTypes',
     value: string
   ) => {
     setFormData((prev) => {
@@ -288,7 +334,7 @@ export default function RestaurantFormDialog({
 
     setLoading(true);
     try {
-      await onSave(formData, imageFile);
+      await onSave({ ...formData, locations }, imageFile);
       onClose();
     } catch (error) {
       console.error('Error saving restaurant:', error);
@@ -298,6 +344,14 @@ export default function RestaurantFormDialog({
   };
 
   const dialogTitle = restaurant ? t('form.editTitle') : t('form.addTitle');
+  const loc = locations[activeLocation] ?? {};
+  const sectionLabelSx = {
+    display: 'block',
+    mb: 0.5,
+    fontWeight: 500,
+    color: 'text.secondary',
+    fontSize: '0.875rem',
+  } as const;
 
   return (
     <Dialog
@@ -339,41 +393,6 @@ export default function RestaurantFormDialog({
               onChange={(e) =>
                 setFormData({ ...formData, name: e.target.value })
               }
-            />
-          </Grid>
-
-          {/* Address (geocoded to a map pin on save) */}
-          <Grid item xs={12}>
-            <TextField
-              fullWidth
-              label={t('form.address')}
-              placeholder={t('form.addressPlaceholder')}
-              value={formData.address ?? ''}
-              onChange={(e) =>
-                setFormData({ ...formData, address: e.target.value })
-              }
-              helperText={t('form.addressHelp')}
-            />
-          </Grid>
-
-          {/* Contact info — auto-filled from the website, manually editable */}
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label={t('form.email')}
-              value={formData.email ?? ''}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              type="email"
-              placeholder="contact@restaurant.com"
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label={t('form.phone')}
-              value={formData.phone ?? ''}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              type="tel"
             />
           </Grid>
 
@@ -463,16 +482,7 @@ export default function RestaurantFormDialog({
 
           {/* Place types — multi-select (a venue can be more than one) */}
           <Grid item xs={12}>
-            <Typography
-              component="label"
-              sx={{
-                display: 'block',
-                mb: 0.5,
-                fontWeight: 500,
-                color: 'text.secondary',
-                fontSize: '0.875rem',
-              }}
-            >
+            <Typography component="label" sx={sectionLabelSx}>
               {t('form.placeTypes')}
             </Typography>
             <FormGroup row>
@@ -491,18 +501,30 @@ export default function RestaurantFormDialog({
             </FormGroup>
           </Grid>
 
+          {/* Menu types — multi-select (Fine Dining, Tasting Menu, …) */}
+          <Grid item xs={12}>
+            <Typography component="label" sx={sectionLabelSx}>
+              {t('form.menuTypes')}
+            </Typography>
+            <FormGroup row>
+              {menuTypes.map((type) => (
+                <FormControlLabel
+                  key={type}
+                  control={
+                    <Checkbox
+                      checked={formData.menuTypes?.includes(type) ?? false}
+                      onChange={() => toggleArrayValue('menuTypes', type)}
+                    />
+                  }
+                  label={t(`menuTypes.${type}`, type)}
+                />
+              ))}
+            </FormGroup>
+          </Grid>
+
           {/* Dietary options — multi-select */}
           <Grid item xs={12}>
-            <Typography
-              component="label"
-              sx={{
-                display: 'block',
-                mb: 0.5,
-                fontWeight: 500,
-                color: 'text.secondary',
-                fontSize: '0.875rem',
-              }}
-            >
+            <Typography component="label" sx={sectionLabelSx}>
               {t('form.dietaryTags')}
             </Typography>
             <FormGroup row>
@@ -555,17 +577,7 @@ export default function RestaurantFormDialog({
 
           {/* Rating */}
           <Grid item xs={12}>
-            <Typography
-              component="label"
-              id="rating-label"
-              sx={{
-                display: 'block',
-                mb: 0.5,
-                fontWeight: 500,
-                color: 'text.secondary',
-                fontSize: '0.875rem',
-              }}
-            >
+            <Typography component="label" id="rating-label" sx={sectionLabelSx}>
               {t('form.rating')}
             </Typography>
             <Rating
@@ -585,73 +597,196 @@ export default function RestaurantFormDialog({
               fullWidth
               label={t('form.websiteUrl')}
               value={formData.url}
-              onChange={(e) =>
-                setFormData({ ...formData, url: e.target.value })
-              }
+              onChange={(e) => {
+                setFormData({ ...formData, url: e.target.value });
+                if (scrapeStatus !== 'idle') setScrapeStatus('idle');
+              }}
               onBlur={handleWebsiteBlur}
               placeholder="https://..."
               type="url"
+              error={scrapeStatus === 'empty'}
               InputProps={{
                 endAdornment: fetchingInfo ? (
                   <CircularProgress size={18} />
                 ) : undefined,
               }}
-              helperText={fetchingInfo ? t('form.fetchingInfo') : undefined}
+              helperText={
+                fetchingInfo
+                  ? t('form.fetchingInfo')
+                  : scrapeStatus === 'empty'
+                    ? t('form.scrapeNoInfo')
+                    : undefined
+              }
             />
           </Grid>
 
-          {/* Reservation link — auto-filled from the website, manually editable */}
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              select
-              label={t('form.reservationPlatform')}
-              value={platformChoice}
-              onChange={(e) => handlePlatformChange(e.target.value)}
+          {/* Locations — one or more branches, each with its own pin/contact/booking */}
+          <Grid item xs={12}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                mb: 1,
+              }}
             >
-              <MenuItem value="">{t('form.reservationNone')}</MenuItem>
-              {reservationPlatforms.map((platform) => (
-                <MenuItem key={platform} value={platform}>
-                  {platform === 'resy'
-                    ? 'Resy'
-                    : platform === 'opentable'
-                      ? 'OpenTable'
-                      : platform === 'walkin'
-                        ? t('form.reservationWalkin')
-                        : t('form.reservationCustom')}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          {platformChoice !== 'walkin' && (
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label={t('form.reservationUrl')}
-                value={formData.reservationUrl || ''}
-                onChange={(e) =>
-                  setFormData({ ...formData, reservationUrl: e.target.value })
-                }
-                placeholder="https://resy.com/..."
-                type="url"
-              />
-            </Grid>
-          )}
+              <Typography component="span" sx={{ ...sectionLabelSx, mb: 0 }}>
+                {t('form.locations')}
+              </Typography>
+              <Button size="small" startIcon={<Add />} onClick={addLocation}>
+                {t('form.addLocation')}
+              </Button>
+            </Box>
 
-          {/* Custom reservation platform name — shown only when "Custom" is selected */}
-          {platformChoice === 'custom' && (
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label={t('form.customPlatformName')}
-                placeholder={t('form.customPlatformPlaceholder')}
-                value={isCustomPlatform(formData.reservationPlatform) ? formData.reservationPlatform : ''}
-                onChange={(e) =>
-                  setFormData({ ...formData, reservationPlatform: e.target.value })
-                }
-              />
-            </Grid>
-          )}
+            {locations.length > 1 && (
+              <Tabs
+                value={activeLocation}
+                onChange={(_, v: number) => switchLocation(v)}
+                variant="scrollable"
+                scrollButtons="auto"
+                sx={{ mb: 1.5, minHeight: 40 }}
+              >
+                {locations.map((l, i) => (
+                  <Tab
+                    key={i}
+                    label={l.label?.trim() || t('form.locationN', { n: i + 1 })}
+                    sx={{ minHeight: 40, textTransform: 'none' }}
+                  />
+                ))}
+              </Tabs>
+            )}
+
+            <Box
+              sx={{
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: '12px',
+                p: 2,
+              }}
+            >
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={locations.length > 1 ? 10 : 12}>
+                  <TextField
+                    fullWidth
+                    label={t('form.locationLabel')}
+                    placeholder={t('form.locationLabelPlaceholder')}
+                    value={loc.label ?? ''}
+                    onChange={(e) => updateActiveLocation({ label: e.target.value })}
+                  />
+                </Grid>
+                {locations.length > 1 && (
+                  <Grid
+                    item
+                    xs={12}
+                    sm={2}
+                    sx={{ display: 'flex', alignItems: 'center' }}
+                  >
+                    <IconButton
+                      onClick={() => removeLocation(activeLocation)}
+                      aria-label={t('form.removeLocation')}
+                      color="error"
+                    >
+                      <DeleteOutline />
+                    </IconButton>
+                  </Grid>
+                )}
+
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label={t('form.address')}
+                    placeholder={t('form.addressPlaceholder')}
+                    value={loc.address ?? ''}
+                    onChange={(e) => updateActiveLocation({ address: e.target.value })}
+                    helperText={t('form.addressHelp')}
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label={t('form.email')}
+                    value={loc.email ?? ''}
+                    onChange={(e) => updateActiveLocation({ email: e.target.value })}
+                    type="email"
+                    placeholder="contact@restaurant.com"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label={t('form.phone')}
+                    value={loc.phone ?? ''}
+                    onChange={(e) => updateActiveLocation({ phone: e.target.value })}
+                    type="tel"
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    select
+                    label={t('form.reservationPlatform')}
+                    value={platformChoice}
+                    onChange={(e) => handlePlatformChange(e.target.value)}
+                  >
+                    <MenuItem value="">{t('form.reservationNone')}</MenuItem>
+                    {reservationPlatforms.map((platform) => (
+                      <MenuItem key={platform} value={platform}>
+                        {platform === 'resy'
+                          ? 'Resy'
+                          : platform === 'opentable'
+                            ? 'OpenTable'
+                            : platform === 'walkin'
+                              ? t('form.reservationWalkin')
+                              : t('form.reservationCustom')}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Grid>
+                {platformChoice !== 'walkin' && platformChoice !== 'custom' && (
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label={t('form.reservationUrl')}
+                      value={loc.reservationUrl ?? ''}
+                      onChange={(e) =>
+                        updateActiveLocation({ reservationUrl: e.target.value })
+                      }
+                      placeholder="https://resy.com/..."
+                      type="url"
+                    />
+                  </Grid>
+                )}
+                {platformChoice === 'custom' && (
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label={t('form.customPlatformName')}
+                      placeholder={t('form.customPlatformPlaceholder')}
+                      value={isCustomPlatform(loc.reservationPlatform) ? loc.reservationPlatform : ''}
+                      onChange={(e) =>
+                        updateActiveLocation({ reservationPlatform: e.target.value })
+                      }
+                    />
+                  </Grid>
+                )}
+                {platformChoice === 'custom' && (
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label={t('form.reservationUrl')}
+                      value={loc.reservationUrl ?? ''}
+                      onChange={(e) =>
+                        updateActiveLocation({ reservationUrl: e.target.value })
+                      }
+                      placeholder="https://..."
+                      type="url"
+                    />
+                  </Grid>
+                )}
+              </Grid>
+            </Box>
+          </Grid>
 
           {/* Comment */}
           <Grid item xs={12}>

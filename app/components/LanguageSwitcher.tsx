@@ -55,11 +55,11 @@ export default function LanguageSwitcher() {
                 fontWeight: 600,
                 fontFamily: 'inherit',
                 lineHeight: 1.4,
-                background: active ? 'primary.main' : 'transparent',
+                backgroundColor: active ? 'primary.main' : 'transparent',
                 color: active ? 'primary.contrastText' : 'text.primary',
                 '&:hover': {
                   color: active ? 'primary.contrastText' : 'text.primary',
-                  background: active ? 'primary.main' : alpha(theme.palette.text.primary, 0.08),
+                  backgroundColor: active ? 'primary.main' : alpha(theme.palette.text.primary, 0.08),
                 },
               }}
             >

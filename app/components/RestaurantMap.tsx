@@ -1,9 +1,16 @@
 import { useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import type { Restaurant } from '~/types/restaurant';
+import type { Restaurant, RestaurantLocation } from '~/types/restaurant';
 
-type Located = Restaurant & { lat: number; lng: number };
+/** A single plottable pin: a restaurant paired with one of its located branches. */
+interface LocatedPin {
+  restaurant: Restaurant;
+  location: RestaurantLocation;
+  lat: number;
+  lng: number;
+  key: string;
+}
 
 // Default view when nothing is geocoded yet (Ottawa — "Ottawa & beyond").
 const DEFAULT_CENTER: [number, number] = [45.4215, -75.6972];
@@ -21,7 +28,7 @@ function pinIcon(accent: string) {
 }
 
 /** Pan/zoom the map to fit all pins whenever the set of points changes. */
-function FitBounds({ points }: { points: Located[] }) {
+function FitBounds({ points }: { points: LocatedPin[] }) {
   const map = useMap();
   useEffect(() => {
     if (points.length === 0) return;
@@ -44,14 +51,24 @@ export default function RestaurantMap({
   accent,
   onSelect,
 }: RestaurantMapProps) {
-  const points = useMemo(
-    () =>
-      restaurants.filter(
-        (r): r is Located =>
-          typeof r.lat === 'number' && typeof r.lng === 'number'
-      ),
-    [restaurants]
-  );
+  // One pin per located location (a restaurant can have several branches).
+  const points = useMemo(() => {
+    const pins: LocatedPin[] = [];
+    for (const r of restaurants) {
+      (r.locations ?? []).forEach((location, i) => {
+        if (typeof location.lat === 'number' && typeof location.lng === 'number') {
+          pins.push({
+            restaurant: r,
+            location,
+            lat: location.lat,
+            lng: location.lng,
+            key: `${r.id ?? r.name}-${i}`,
+          });
+        }
+      });
+    }
+    return pins;
+  }, [restaurants]);
   const icon = useMemo(() => pinIcon(accent), [accent]);
 
   return (
@@ -66,37 +83,41 @@ export default function RestaurantMap({
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       <FitBounds points={points} />
-      {points.map((r) => (
-        <Marker
-          key={r.id}
-          position={[r.lat, r.lng]}
-          icon={icon}
-          eventHandlers={{ click: () => onSelect(r) }}
-        >
-          <Popup>
-            <strong>{r.name}</strong>
-            {r.cuisineType ? (
-              <>
-                <br />
-                {r.cuisineType}
-              </>
-            ) : null}
-            {r.reservationUrl ? (
-              <>
-                <br />
-                <a href={r.reservationUrl} target="_blank" rel="noopener noreferrer">
-                  Reserve on {r.reservationPlatform === 'resy' ? 'Resy' : r.reservationPlatform === 'opentable' ? 'OpenTable' : r.reservationPlatform}
-                </a>
-              </>
-            ) : r.reservationPlatform === 'walkin' ? (
-              <>
-                <br />
-                Walk-ins welcome
-              </>
-            ) : null}
-          </Popup>
-        </Marker>
-      ))}
+      {points.map((p) => {
+        const { restaurant: r, location } = p;
+        const title = location.label ? `${r.name} (${location.label})` : r.name;
+        return (
+          <Marker
+            key={p.key}
+            position={[p.lat, p.lng]}
+            icon={icon}
+            eventHandlers={{ click: () => onSelect(r) }}
+          >
+            <Popup>
+              <strong>{title}</strong>
+              {r.cuisineType ? (
+                <>
+                  <br />
+                  {r.cuisineType}
+                </>
+              ) : null}
+              {location.reservationUrl ? (
+                <>
+                  <br />
+                  <a href={location.reservationUrl} target="_blank" rel="noopener noreferrer">
+                    Reserve on {location.reservationPlatform === 'resy' ? 'Resy' : location.reservationPlatform === 'opentable' ? 'OpenTable' : location.reservationPlatform}
+                  </a>
+                </>
+              ) : location.reservationPlatform === 'walkin' ? (
+                <>
+                  <br />
+                  Walk-ins welcome
+                </>
+              ) : null}
+            </Popup>
+          </Marker>
+        );
+      })}
     </MapContainer>
   );
 }

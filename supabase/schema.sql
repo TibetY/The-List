@@ -116,6 +116,36 @@ alter table public.restaurants
   add column if not exists email text;
 alter table public.restaurants
   add column if not exists phone text;
+-- Menu / service styles (Fine Dining, Tasting Menu, …): same open-ended
+-- multi-select pattern as dietary_tags/place_types.
+alter table public.restaurants
+  add column if not exists menu_types text[] not null default '{}'::text[];
+-- Multiple locations per restaurant (e.g. chain branches). Stored as a JSONB
+-- array; each entry: { label, address, lat, lng, phone, email,
+-- reservationPlatform, reservationUrl }. The legacy scalar columns above are
+-- kept in sync with locations[0] by the app for back-compat.
+alter table public.restaurants
+  add column if not exists locations jsonb not null default '[]'::jsonb;
+-- Backfill: wrap the existing single-location columns into a one-element array
+-- for any row that doesn't have a locations array yet.
+update public.restaurants
+  set locations = jsonb_build_array(
+    jsonb_strip_nulls(jsonb_build_object(
+      'address', address,
+      'lat', latitude,
+      'lng', longitude,
+      'phone', phone,
+      'email', email,
+      'reservationPlatform', reservation_platform,
+      'reservationUrl', reservation_url
+    ))
+  )
+  where (locations is null or locations = '[]'::jsonb)
+    and (address is not null
+      or latitude is not null
+      or phone is not null
+      or email is not null
+      or reservation_url is not null);
 -- Carry any legacy owner value into added_by, then retire user_id usage.
 update public.restaurants set added_by = user_id where added_by is null;
 

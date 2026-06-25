@@ -240,7 +240,7 @@ function mapPosition(seed: string): { px: number; py: number } {
 function decorate(r: Restaurant): DecoratedRestaurant {
   const rating = Math.round(r.rating ?? 0);
   const rated = rating > 0;
-  const cuisine = r.cuisineType || 'Restaurant';
+  const cuisine = r.cuisineType || r.placeTypes?.[0] || 'Restaurant';
   const status = r.status ?? 'want';
   return {
     ...r,
@@ -392,10 +392,18 @@ export default function Dashboard() {
   const total = decorated.length;
   const beenCount = decorated.filter((r) => r.isBeen).length;
   const wantCount = decorated.filter((r) => r.isWant).length;
-  // How many of the currently-shown places can't be plotted (no coordinates).
-  const mapMissingCount = filtered.filter(
-    (r) => typeof r.lat !== 'number' || typeof r.lng !== 'number'
-  ).length;
+  // How many locations (across the currently-shown places) have an address but
+  // can't be plotted yet (no coordinates).
+  const mapMissingCount = filtered.reduce(
+    (sum, r) =>
+      sum +
+      (r.locations ?? []).filter(
+        (l) =>
+          (l.address ?? '').trim() !== '' &&
+          (typeof l.lat !== 'number' || typeof l.lng !== 'number')
+      ).length,
+    0
+  );
 
   const shownMembers = members.slice(0, 3);
   const extraMembers = members.length - shownMembers.length;
@@ -432,24 +440,29 @@ export default function Dashboard() {
       }
       const dataToSave: Partial<Restaurant> = { ...restaurantData, image: imageUrl };
 
-      // Geocode the address for the map, but only when it actually changed
-      // (keeps us within Nominatim's rate limits and avoids needless lookups).
-      const newAddress = (restaurantData.address ?? '').trim();
-      const addressChanged = newAddress !== (selectedRestaurant?.address ?? '').trim();
+      // Geocode each location for the map. Re-geocode when an address changed or
+      // when it has an address but no coordinates yet (the latter back-fills rows
+      // saved before geocoding succeeded, e.g. older international entries). We go
+      // location-by-location to stay within Nominatim's ~1/sec rate limit.
+      const prevLocations = selectedRestaurant?.locations ?? [];
+      const locations = dataToSave.locations ?? [];
       let geocodeFailed = false;
-      if (newAddress && addressChanged) {
-        const point = await geocodeAddress(newAddress);
-        dataToSave.lat = point?.lat;
-        dataToSave.lng = point?.lng;
-        geocodeFailed = !point;
-      } else if (!newAddress) {
-        dataToSave.lat = undefined;
-        dataToSave.lng = undefined;
-      } else {
-        // Address unchanged — preserve the previously geocoded coordinates.
-        dataToSave.lat = selectedRestaurant?.lat;
-        dataToSave.lng = selectedRestaurant?.lng;
+      for (let i = 0; i < locations.length; i++) {
+        const loc = locations[i];
+        const address = (loc.address ?? '').trim();
+        if (!address) {
+          locations[i] = { ...loc, lat: undefined, lng: undefined };
+          continue;
+        }
+        const prev = prevLocations[i];
+        const addressChanged = (prev?.address ?? '').trim() !== address;
+        const hasCoords = loc.lat != null && loc.lng != null;
+        if (!addressChanged && hasCoords) continue; // keep existing coordinates
+        const point = await geocodeAddress(address);
+        locations[i] = { ...loc, lat: point?.lat, lng: point?.lng };
+        if (!point) geocodeFailed = true;
       }
+      dataToSave.locations = locations;
 
       if (selectedRestaurant?.id) {
         await updateRestaurant(selectedRestaurant.id, dataToSave, activeList.id, userId);
@@ -705,7 +718,7 @@ export default function Dashboard() {
             border: 0,
           }}
         >
-          {(activeList?.name ?? 'My List') + ' — The List'}
+          {(activeList?.name ?? 'My List') + ' — ' + tr('brand')}
         </Box>
 
         {/* header */}
@@ -1107,7 +1120,14 @@ export default function Dashboard() {
                             <Box component="span" sx={{ fontFamily: serif, fontSize: 20 }}>{r.name}</Box>
                             <Box component="span" sx={{ color: t.cost, fontSize: 14, fontWeight: 600, letterSpacing: '.03em' }}>{r.costStr}</Box>
                           </Box>
-                          <Box sx={{ color: t.muted, fontSize: 13, mt: '4px' }}>{r.meta}</Box>
+                          <Box sx={{ color: t.muted, fontSize: 13, mt: '4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <Box component="span">{r.meta}</Box>
+                            {(r.locations?.length ?? 0) > 1 && (
+                              <Box component="span" sx={{ fontSize: 11.5, color: t.faint }}>
+                                · {tr('dashboard.locationsCount', { count: r.locations?.length ?? 0 })}
+                              </Box>
+                            )}
+                          </Box>
                           {((r.michelinStars ?? 0) > 0 || r.bibGourmand) && (
                             <Box sx={{ display: 'flex', gap: '6px', mt: '6px', flexWrap: 'wrap' }}>
                               {(r.michelinStars ?? 0) > 0 && (
@@ -1196,7 +1216,15 @@ export default function Dashboard() {
                         </Box>
                         <Box sx={{ flex: 1, minWidth: 0 }}>
                           <Box sx={{ fontFamily: serif, fontSize: 18 }}>{r.name}</Box>
-                          <Box sx={{ color: t.muted, fontSize: 13, mt: '1px' }}>{r.meta}</Box>
+                          <Box sx={{ color: t.muted, fontSize: 13, mt: '1px' }}>
+                            {r.meta}
+                            {(r.locations?.length ?? 0) > 1 && (
+                              <Box component="span" sx={{ color: t.faint }}>
+                                {' · '}
+                                {tr('dashboard.locationsCount', { count: r.locations?.length ?? 0 })}
+                              </Box>
+                            )}
+                          </Box>
                           {((r.michelinStars ?? 0) > 0 || r.bibGourmand) && (
                             <Box sx={{ display: 'flex', gap: '6px', mt: '3px', flexWrap: 'wrap' }}>
                               {(r.michelinStars ?? 0) > 0 && (
