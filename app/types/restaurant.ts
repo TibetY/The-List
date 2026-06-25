@@ -7,6 +7,26 @@ export interface SocialMediaLinks {
 
 export type RestaurantStatus = 'been' | 'want';
 
+export type ReservationPlatform = 'resy' | 'opentable' | string;
+
+/** Shared with the website-scrape endpoint, which only ever returns one of these. */
+export const cuisineTypes = [
+  'Italian',
+  'Chinese',
+  'Japanese',
+  'Mexican',
+  'Indian',
+  'Thai',
+  'French',
+  'American',
+  'Mediterranean',
+  'Korean',
+  'Vietnamese',
+  'Greek',
+  'Spanish',
+  'Other',
+];
+
 export interface Restaurant {
   id?: string;
   listId?: string; // The list this entry belongs to
@@ -18,6 +38,8 @@ export interface Restaurant {
   priceRange?: string; // $, $$, $$$, $$$$
   comment?: string;
   cuisineType?: string;
+  reservationPlatform?: ReservationPlatform;
+  reservationUrl?: string;
   status?: RestaurantStatus; // 'been' (visited) or 'want' (want to try)
   address?: string; // Human-entered address, used for the map
   lat?: number; // Geocoded latitude (set on save from the address)

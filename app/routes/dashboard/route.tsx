@@ -33,6 +33,7 @@ import {
   Delete as DeleteIcon,
   PersonAddAlt1,
   Person,
+  EventSeat,
 } from '@mui/icons-material';
 import { createSupabaseServerClient } from '~/supabase.server';
 import { getRestaurants } from '~/services/restaurants.server';
@@ -216,6 +217,12 @@ type FilterMode = 'all' | 'been' | 'want';
 
 const STAR_FULL = '★★★★★';
 const STAR_EMPTY = '☆☆☆☆☆';
+
+function reservationLabel(platform: string): string {
+  if (platform === 'resy') return 'Resy';
+  if (platform === 'opentable') return 'OpenTable';
+  return platform;
+}
 
 /** Stable pseudo-random map coordinates derived from the restaurant id/name. */
 function mapPosition(seed: string): { px: number; py: number } {
@@ -1082,6 +1089,21 @@ export default function Dashboard() {
                               <Box component="span" sx={{ color: t.notRated, fontSize: 13, fontStyle: 'italic' }}>Not rated yet</Box>
                             )}
                           </Box>
+                          {r.reservationUrl && (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              component="a"
+                              href={r.reservationUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                              startIcon={<EventSeat sx={{ fontSize: 15 }} />}
+                              sx={{ mt: '11px' }}
+                            >
+                              {tr('dashboard.reserveOn', { platform: reservationLabel(r.reservationPlatform || '') })}
+                            </Button>
+                          )}
                         </Box>
                       </Box>
                     ))}
@@ -1121,6 +1143,21 @@ export default function Dashboard() {
                           <Box sx={{ fontFamily: serif, fontSize: 18 }}>{r.name}</Box>
                           <Box sx={{ color: t.muted, fontSize: 13, mt: '1px' }}>{r.meta}</Box>
                         </Box>
+                        {r.reservationUrl && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            component="a"
+                            href={r.reservationUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                            startIcon={<EventSeat sx={{ fontSize: 15 }} />}
+                            sx={{ flex: 'none', display: { xs: 'none', md: 'inline-flex' } }}
+                          >
+                            {tr('dashboard.reserveOn', { platform: reservationLabel(r.reservationPlatform || '') })}
+                          </Button>
+                        )}
                         <Box sx={{ width: 90, color: t.cost, fontSize: 14, fontWeight: 600, display: { xs: 'none', sm: 'block' } }}>{r.costStr}</Box>
                         <Box sx={{ width: 110, color: t.rating, fontSize: 14, letterSpacing: '1px', display: { xs: 'none', sm: 'block' } }}>{r.ratingStr}</Box>
                         <Box

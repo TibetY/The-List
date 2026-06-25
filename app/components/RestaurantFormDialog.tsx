@@ -21,6 +21,7 @@ import {
 import { CloudUpload, Close, Check, BookmarkBorder } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import type { Restaurant, RestaurantStatus } from '~/types/restaurant';
+import { cuisineTypes } from '~/types/restaurant';
 
 interface RestaurantFormDialogProps {
   open: boolean;
@@ -29,24 +30,8 @@ interface RestaurantFormDialogProps {
   onSave: (restaurant: Partial<Restaurant>, imageFile?: File) => Promise<void>;
 }
 
-const cuisineTypes = [
-  'Italian',
-  'Chinese',
-  'Japanese',
-  'Mexican',
-  'Indian',
-  'Thai',
-  'French',
-  'American',
-  'Mediterranean',
-  'Korean',
-  'Vietnamese',
-  'Greek',
-  'Spanish',
-  'Other',
-];
-
 const priceRanges = ['$', '$$', '$$$', '$$$$'];
+const reservationPlatforms = ['resy', 'opentable'] as const;
 
 export default function RestaurantFormDialog({
   open,
@@ -66,6 +51,8 @@ export default function RestaurantFormDialog({
     priceRange: '$$',
     comment: '',
     cuisineType: '',
+    reservationPlatform: '',
+    reservationUrl: '',
     status: 'want',
     socialMedia: {
       facebook: '',
@@ -77,6 +64,7 @@ export default function RestaurantFormDialog({
   const [imageFile, setImageFile] = useState<File | undefined>();
   const [imagePreview, setImagePreview] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [fetchingInfo, setFetchingInfo] = useState(false);
 
   useEffect(() => {
     if (restaurant) {
@@ -88,6 +76,8 @@ export default function RestaurantFormDialog({
         priceRange: restaurant.priceRange || '$$',
         comment: restaurant.comment || '',
         cuisineType: restaurant.cuisineType || '',
+        reservationPlatform: restaurant.reservationPlatform || '',
+        reservationUrl: restaurant.reservationUrl || '',
         status: restaurant.status || 'want',
         socialMedia: {
           facebook: restaurant.socialMedia?.facebook || '',
@@ -106,6 +96,8 @@ export default function RestaurantFormDialog({
         priceRange: '$$',
         comment: '',
         cuisineType: '',
+        reservationPlatform: '',
+        reservationUrl: '',
         status: 'want',
         socialMedia: {
           facebook: '',
@@ -118,6 +110,37 @@ export default function RestaurantFormDialog({
     }
     setImageFile(undefined);
   }, [restaurant, open]);
+
+  const handleWebsiteBlur = async () => {
+    const url = formData.url?.trim();
+    if (!url || !/^https?:\/\/.+/i.test(url)) return;
+
+    setFetchingInfo(true);
+    try {
+      const res = await fetch(`/api/scrape-website?url=${encodeURIComponent(url)}`);
+      const data = (await res.json()) as {
+        image: string | null;
+        cuisineType: string | null;
+        reservationPlatform: 'resy' | 'opentable' | null;
+        reservationUrl: string | null;
+      };
+      setFormData((prev) => ({
+        ...prev,
+        cuisineType: prev.cuisineType || data.cuisineType || prev.cuisineType,
+        reservationPlatform:
+          prev.reservationPlatform || data.reservationPlatform || prev.reservationPlatform,
+        reservationUrl: prev.reservationUrl || data.reservationUrl || prev.reservationUrl,
+      }));
+      if (data.image && !imagePreview && !imageFile) {
+        setImagePreview(data.image);
+        setFormData((prev) => ({ ...prev, image: data.image ?? undefined }));
+      }
+    } catch {
+      // Best-effort enrichment; silently ignore failures.
+    } finally {
+      setFetchingInfo(false);
+    }
+  };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -303,7 +326,7 @@ export default function RestaurantFormDialog({
             />
           </Grid>
 
-          {/* Website URL */}
+          {/* Website URL — auto-fetches image/cuisine/reservation link on blur */}
           <Grid item xs={12}>
             <TextField
               fullWidth
@@ -312,7 +335,46 @@ export default function RestaurantFormDialog({
               onChange={(e) =>
                 setFormData({ ...formData, url: e.target.value })
               }
+              onBlur={handleWebsiteBlur}
               placeholder="https://..."
+              type="url"
+              InputProps={{
+                endAdornment: fetchingInfo ? (
+                  <CircularProgress size={18} />
+                ) : undefined,
+              }}
+              helperText={fetchingInfo ? t('form.fetchingInfo') : undefined}
+            />
+          </Grid>
+
+          {/* Reservation link — auto-filled from the website, manually editable */}
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              select
+              label={t('form.reservationPlatform')}
+              value={formData.reservationPlatform || ''}
+              onChange={(e) =>
+                setFormData({ ...formData, reservationPlatform: e.target.value })
+              }
+            >
+              <MenuItem value="">{t('form.reservationNone')}</MenuItem>
+              {reservationPlatforms.map((platform) => (
+                <MenuItem key={platform} value={platform}>
+                  {platform === 'resy' ? 'Resy' : 'OpenTable'}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              label={t('form.reservationUrl')}
+              value={formData.reservationUrl || ''}
+              onChange={(e) =>
+                setFormData({ ...formData, reservationUrl: e.target.value })
+              }
+              placeholder="https://resy.com/..."
               type="url"
             />
           </Grid>

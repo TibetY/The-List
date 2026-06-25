@@ -17,6 +17,8 @@ export interface RestaurantRow {
   price_range: string | null;
   comment: string | null;
   cuisine_type: string | null;
+  reservation_platform: string | null;
+  reservation_url: string | null;
   status: RestaurantStatus | null;
   address: string | null;
   latitude: number | null;
@@ -39,6 +41,8 @@ export function rowToRestaurant(row: RestaurantRow): Restaurant {
     priceRange: row.price_range ?? undefined,
     comment: row.comment ?? undefined,
     cuisineType: row.cuisine_type ?? undefined,
+    reservationPlatform: row.reservation_platform ?? undefined,
+    reservationUrl: row.reservation_url ?? undefined,
     status: row.status ?? 'want',
     address: row.address ?? undefined,
     lat: row.latitude ?? undefined,
@@ -69,6 +73,8 @@ export function restaurantToRow(
     price_range: data.priceRange ?? null,
     comment: data.comment ?? null,
     cuisine_type: data.cuisineType ?? null,
+    reservation_platform: data.reservationPlatform ?? null,
+    reservation_url: data.reservationUrl ?? null,
     status: data.status ?? 'want',
     address: data.address ?? null,
     latitude: data.lat ?? null,
