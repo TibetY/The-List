@@ -111,6 +111,11 @@ alter table public.restaurants
     check (michelin_stars between 0 and 3);
 alter table public.restaurants
   add column if not exists bib_gourmand boolean not null default false;
+-- Contact info, best-effort scraped from the restaurant's own website.
+alter table public.restaurants
+  add column if not exists email text;
+alter table public.restaurants
+  add column if not exists phone text;
 -- Carry any legacy owner value into added_by, then retire user_id usage.
 update public.restaurants set added_by = user_id where added_by is null;
 

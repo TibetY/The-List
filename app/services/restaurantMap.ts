@@ -23,6 +23,8 @@ export interface RestaurantRow {
   bib_gourmand: boolean | null;
   reservation_platform: string | null;
   reservation_url: string | null;
+  email: string | null;
+  phone: string | null;
   status: RestaurantStatus | null;
   address: string | null;
   latitude: number | null;
@@ -51,6 +53,8 @@ export function rowToRestaurant(row: RestaurantRow): Restaurant {
     bibGourmand: row.bib_gourmand ?? undefined,
     reservationPlatform: row.reservation_platform ?? undefined,
     reservationUrl: row.reservation_url ?? undefined,
+    email: row.email ?? undefined,
+    phone: row.phone ?? undefined,
     status: row.status ?? 'want',
     address: row.address ?? undefined,
     lat: row.latitude ?? undefined,
@@ -87,6 +91,8 @@ export function restaurantToRow(
     bib_gourmand: data.bibGourmand ?? false,
     reservation_platform: data.reservationPlatform ?? null,
     reservation_url: data.reservationUrl ?? null,
+    email: data.email ?? null,
+    phone: data.phone ?? null,
     status: data.status ?? 'want',
     address: data.address ?? null,
     latitude: data.lat ?? null,
