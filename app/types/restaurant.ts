@@ -24,8 +24,41 @@ export const cuisineTypes = [
   'Vietnamese',
   'Greek',
   'Spanish',
-  'Other',
+  'Turkish',
+  'Lebanese',
+  'Ethiopian',
+  'Caribbean',
+  'Brazilian',
+  'Peruvian',
+  'German',
+  'Portuguese',
+  'Filipino',
+  'Indonesian',
+  'Malaysian',
+  'Moroccan',
+  'Persian',
+  'Seafood',
+  'Steakhouse',
+  'BBQ',
+  'Pizza',
+  'Burgers',
+  'Sushi',
+  'Ramen',
+  'Fusion',
+  'Other', // When selected, the user types a free-text cuisine stored in cuisineType.
 ];
+
+/** Dietary options, multi-select. Stored as a string[] on the restaurant. */
+export const dietaryTags = [
+  'Vegetarian',
+  'Vegan',
+  'Halal',
+  'Kosher',
+  'Gluten-Free',
+] as const;
+
+/** Place types, multi-select (a venue can be e.g. both a Bar and a Cafe). */
+export const placeTypes = ['Restaurant', 'Bar', 'Cafe', 'Bakery'] as const;
 
 export interface Restaurant {
   id?: string;
@@ -35,9 +68,13 @@ export interface Restaurant {
   url?: string;
   socialMedia?: SocialMediaLinks;
   rating?: number; // 0-5
-  priceRange?: string; // $, $$, $$$, $$$$
+  priceRange?: string; // $, $$, $$$, $$$$, $$$$$
   comment?: string;
   cuisineType?: string;
+  dietaryTags?: string[]; // e.g. Vegan, Halal — multi-select
+  placeTypes?: string[]; // e.g. Restaurant, Bar, Cafe — multi-select
+  michelinStars?: number; // 0-3 Michelin stars
+  bibGourmand?: boolean; // Michelin Bib Gourmand recognition
   reservationPlatform?: ReservationPlatform;
   reservationUrl?: string;
   status?: RestaurantStatus; // 'been' (visited) or 'want' (want to try)

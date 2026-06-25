@@ -4,15 +4,20 @@
 -- status = 'OK'. Any 'MISSING' / 'WRONG' means re-run supabase/schema.sql.
 -- ============================================================
 
--- 1. restaurants has the location + list/status/added_by + reservation columns
+-- 1. restaurants has the location + list/status/added_by + reservation +
+--    dietary/type/recognition columns
 select
   'restaurants.columns' as check,
-  case when count(*) = 8 then 'OK' else 'MISSING' end as status,
+  case when count(*) = 12 then 'OK' else 'MISSING' end as status,
   string_agg(column_name, ', ' order by column_name) as found
 from information_schema.columns
 where table_schema = 'public'
   and table_name = 'restaurants'
-  and column_name in ('address', 'latitude', 'longitude', 'status', 'added_by', 'list_id', 'reservation_platform', 'reservation_url');
+  and column_name in (
+    'address', 'latitude', 'longitude', 'status', 'added_by', 'list_id',
+    'reservation_platform', 'reservation_url',
+    'dietary_tags', 'place_types', 'michelin_stars', 'bib_gourmand'
+  );
 
 -- 2. legacy restaurants.user_id is nullable (NOT NULL would block inserts)
 select
