@@ -12,6 +12,7 @@ import {
   Box,
 } from '@mui/material';
 import { Close, Email } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 
 interface EmailDialogProps {
   open: boolean;
@@ -20,19 +21,20 @@ interface EmailDialogProps {
 }
 
 export default function EmailDialog({ open, onClose, onSend }: EmailDialogProps) {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleSend = async () => {
     if (!email.trim()) {
-      setError('Email is required');
+      setError(t('email.required'));
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      setError('Please enter a valid email address');
+      setError(t('email.invalid'));
       return;
     }
 
@@ -44,7 +46,7 @@ export default function EmailDialog({ open, onClose, onSend }: EmailDialogProps)
       setEmail('');
       onClose();
     } catch (err) {
-      setError('Failed to send email. Please try again.');
+      setError(t('email.failed'));
       console.error('Error sending email:', err);
     } finally {
       setLoading(false);
@@ -87,11 +89,11 @@ export default function EmailDialog({ open, onClose, onSend }: EmailDialogProps)
           >
             <Email sx={{ color: '#E8734A', fontSize: 20 }} />
           </Box>
-          Share Your List
+          {t('email.title')}
         </Box>
         <IconButton
           onClick={handleClose}
-          aria-label="Close dialog"
+          aria-label={t('email.close')}
           sx={{ color: 'text.secondary' }}
         >
           <Close />
@@ -102,13 +104,12 @@ export default function EmailDialog({ open, onClose, onSend }: EmailDialogProps)
           variant="body2"
           sx={{ color: 'text.secondary', mb: 2.5, lineHeight: 1.6 }}
         >
-          Enter the email address where you&apos;d like to send your curated
-          restaurant list.
+          {t('email.intro')}
         </Typography>
         <TextField
           required
           fullWidth
-          label="Email Address"
+          label={t('email.email')}
           type="email"
           value={email}
           onChange={(e) => {
@@ -118,7 +119,7 @@ export default function EmailDialog({ open, onClose, onSend }: EmailDialogProps)
           error={!!error}
           helperText={error}
           disabled={loading}
-          placeholder="friend@example.com"
+          placeholder={t('email.placeholder')}
         />
       </DialogContent>
       <DialogActions sx={{ px: 3, py: 2 }}>
@@ -127,7 +128,7 @@ export default function EmailDialog({ open, onClose, onSend }: EmailDialogProps)
           disabled={loading}
           sx={{ color: 'text.secondary' }}
         >
-          Cancel
+          {t('email.cancel')}
         </Button>
         <Button
           onClick={handleSend}
@@ -135,7 +136,7 @@ export default function EmailDialog({ open, onClose, onSend }: EmailDialogProps)
           disabled={loading}
           sx={{ minWidth: 100 }}
         >
-          {loading ? <CircularProgress size={24} color="inherit" /> : 'Send'}
+          {loading ? <CircularProgress size={24} color="inherit" /> : t('email.send')}
         </Button>
       </DialogActions>
     </Dialog>

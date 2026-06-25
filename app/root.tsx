@@ -11,19 +11,28 @@ import {
   Scripts,
   ScrollRestoration,
   useLoaderData,
+  useRouteError,
+  isRouteErrorResponse,
+  Link as RemixLink,
 } from "@remix-run/react";
 
 import { CacheProvider } from "@emotion/react";
 import createEmotionCache from "./createEmotionCache";
 
-import { ThemeProvider, CssBaseline } from "@mui/material";
+import { ThemeProvider, CssBaseline, Box, Button, Typography } from "@mui/material";
 import theme from "./theme";
 
 import { json } from "@remix-run/node";
+import { useTranslation } from "react-i18next";
+import { useChangeLanguage } from "remix-i18next/react";
 import { createSupabaseServerClient } from "~/supabase.server";
 import { getServerSupabaseEnv, type PublicEnv } from "~/supabaseConfig";
+import i18nextServer from "~/i18next.server";
+import { resources, fallbackLng } from "~/i18n";
 import Navbar from "./components/Navbar";
 import tailwindHref from "~/tailwind.css?url";
+
+export const handle = { i18n: "common" };
 
 export const links: LinksFunction = () => [
   { rel: "stylesheet", href: tailwindHref },
@@ -43,11 +52,13 @@ export const links: LinksFunction = () => [
   },
 ];
 
-export const meta: MetaFunction = () => {
+export const meta: MetaFunction = ({ data }) => {
+  const locale = (data as { locale?: string } | undefined)?.locale ?? fallbackLng;
+  const m = (resources[locale as keyof typeof resources] ?? resources[fallbackLng]).common.meta;
   return [
     { charset: "utf-8" },
-    { title: "The Foodiedex — Your Personal Restaurant Guide" },
-    { name: "description", content: "Discover, rate, and remember your favorite restaurants. Your personal dining companion." },
+    { title: m.title },
+    { name: "description", content: m.description },
     { name: "viewport", content: "width=device-width,initial-scale=1" },
     { name: "theme-color", content: "#0a0a0f" },
   ];
@@ -59,22 +70,26 @@ export const loader: LoaderFunction = async ({ request }) => {
     data: { user },
   } = await supabase.auth.getUser();
   const ENV = getServerSupabaseEnv();
-  return json({ isLoggedIn: !!user, ENV });
+  const locale = await i18nextServer.getLocale(request);
+  return json({ isLoggedIn: !!user, ENV, locale });
 };
 
 export default function App() {
   const clientSideEmotionCache = createEmotionCache();
-  const { ENV } = useLoaderData<{ ENV: PublicEnv }>();
+  const { ENV, locale } = useLoaderData<{ ENV: PublicEnv; locale: string }>();
+  const { t, i18n } = useTranslation();
+  // Keep the i18next client instance in sync with the server-detected locale.
+  useChangeLanguage(locale);
 
   return (
-    <html lang="en">
+    <html lang={locale} dir={i18n.dir(locale)}>
       <head>
         <Meta />
         <Links />
       </head>
       <body>
         <a href="#main-content" className="skip-to-main">
-          Skip to main content
+          {t("a11y.skipToMain")}
         </a>
         <CacheProvider value={clientSideEmotionCache}>
           <ThemeProvider theme={theme}>
@@ -93,6 +108,59 @@ export default function App() {
         />
         <Scripts />
         <LiveReload />
+      </body>
+    </html>
+  );
+}
+
+/**
+ * App-wide error boundary. Replaces the whole document tree when a loader or
+ * render throws, so users see a friendly localized page instead of a raw stack
+ * trace. Distinguishes 404 from other failures.
+ */
+export function ErrorBoundary() {
+  const error = useRouteError();
+  const { t } = useTranslation();
+
+  const isNotFound = isRouteErrorResponse(error) && error.status === 404;
+  const title = isNotFound ? t("errors.notFoundTitle") : t("errors.title");
+  const body = isNotFound ? t("errors.notFoundBody") : t("errors.genericBody");
+
+  return (
+    <html lang="en">
+      <head>
+        <title>{title}</title>
+        <Meta />
+        <Links />
+      </head>
+      <body>
+        <ThemeProvider theme={theme}>
+          <CssBaseline />
+          <Box
+            component="main"
+            sx={{
+              minHeight: "100vh",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              textAlign: "center",
+              gap: 2,
+              px: 3,
+            }}
+          >
+            <Typography variant="h3" component="h1" sx={{ fontWeight: 800 }}>
+              {title}
+            </Typography>
+            <Typography variant="body1" sx={{ color: "text.secondary", maxWidth: 440 }}>
+              {body}
+            </Typography>
+            <Button component={RemixLink} to="/" variant="contained" sx={{ mt: 1 }}>
+              {t("errors.backHome")}
+            </Button>
+          </Box>
+        </ThemeProvider>
+        <Scripts />
       </body>
     </html>
   );

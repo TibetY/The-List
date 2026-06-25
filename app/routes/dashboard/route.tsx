@@ -55,6 +55,7 @@ import DeleteConfirmDialog from '~/components/DeleteConfirmDialog';
 import EmailDialog from '~/components/EmailDialog';
 import ListSwitcher from '~/components/ListSwitcher';
 import ShareListDialog from '~/components/ShareListDialog';
+import LanguageSwitcher from '~/components/LanguageSwitcher';
 import { uploadRestaurantImage } from '~/services/storage.client';
 import {
   createRestaurant,
@@ -62,7 +63,7 @@ import {
   deleteRestaurant,
   setRestaurantStatus,
 } from '~/services/restaurants.client';
-import { createList } from '~/services/lists.client';
+import { createList, updateList, deleteList } from '~/services/lists.client';
 import { geocodeAddress } from '~/services/geocode.client';
 import type { RestaurantMapProps } from '~/components/RestaurantMap';
 
@@ -80,6 +81,7 @@ export const links: LinksFunction = () => [
   { rel: 'stylesheet', href: leafletStylesHref },
 ];
 import { sendRestaurantListViaMailto } from '~/services/email.client';
+import { useTranslation } from 'react-i18next';
 import { listTokens, makeListTheme, getStoredMode, storeMode, type ListMode } from '~/listTheme';
 
 /**
@@ -259,6 +261,7 @@ export default function Dashboard() {
     error,
   } = data;
   const revalidator = useRevalidator();
+  const { t: tr, i18n } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -276,6 +279,14 @@ export default function Dashboard() {
   const [view, setView] = useState<ViewMode>('tile');
   const [filter, setFilter] = useState<FilterMode>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  // Dropdown filters (cuisine / cost / minimum rating).
+  const [cuisineFilter, setCuisineFilter] = useState('');
+  const [costFilter, setCostFilter] = useState('');
+  const [ratingFilter, setRatingFilter] = useState(0);
+  const [filterMenu, setFilterMenu] = useState<{
+    kind: 'cuisine' | 'cost' | 'rating';
+    anchor: HTMLElement;
+  } | null>(null);
 
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -283,6 +294,9 @@ export default function Dashboard() {
   const [shareOpen, setShareOpen] = useState(false);
   const [newListOpen, setNewListOpen] = useState(false);
   const [newListName, setNewListName] = useState('');
+  const [renameListTarget, setRenameListTarget] = useState<RestaurantList | null>(null);
+  const [renameListName, setRenameListName] = useState('');
+  const [deleteListTarget, setDeleteListTarget] = useState<RestaurantList | null>(null);
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
   const [restaurantToDelete, setRestaurantToDelete] = useState<{
     id: string;
@@ -308,6 +322,22 @@ export default function Dashboard() {
 
   const decorated = useMemo(() => restaurants.map(decorate), [restaurants]);
 
+  // Distinct cuisine / cost values present in this list, for the filter menus.
+  const cuisineOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(restaurants.map((r) => r.cuisineType).filter(Boolean) as string[])
+      ).sort(),
+    [restaurants]
+  );
+  const costOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(restaurants.map((r) => r.priceRange).filter(Boolean) as string[])
+      ).sort((a, b) => a.length - b.length),
+    [restaurants]
+  );
+
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return decorated.filter((r) => {
@@ -320,9 +350,33 @@ export default function Dashboard() {
         r.name.toLowerCase().includes(q) ||
         r.cuisine.toLowerCase().includes(q) ||
         r.comment?.toLowerCase().includes(q);
-      return matchesStatus && matchesSearch;
+      const matchesCuisine = !cuisineFilter || r.cuisineType === cuisineFilter;
+      const matchesCost = !costFilter || r.priceRange === costFilter;
+      const matchesRating = ratingFilter === 0 || (r.rating ?? 0) >= ratingFilter;
+      return (
+        matchesStatus &&
+        matchesSearch &&
+        matchesCuisine &&
+        matchesCost &&
+        matchesRating
+      );
     });
-  }, [decorated, filter, searchQuery]);
+  }, [decorated, filter, searchQuery, cuisineFilter, costFilter, ratingFilter]);
+
+  const hasActiveFilters =
+    filter !== 'all' ||
+    !!searchQuery ||
+    !!cuisineFilter ||
+    !!costFilter ||
+    ratingFilter > 0;
+
+  const clearFilters = () => {
+    setFilter('all');
+    setSearchQuery('');
+    setCuisineFilter('');
+    setCostFilter('');
+    setRatingFilter(0);
+  };
 
   const total = decorated.length;
   const beenCount = decorated.filter((r) => r.isBeen).length;
@@ -379,16 +433,16 @@ export default function Dashboard() {
 
       if (selectedRestaurant?.id) {
         await updateRestaurant(selectedRestaurant.id, dataToSave, activeList.id, userId);
-        setSnackbar({ open: true, message: 'Restaurant updated successfully!', severity: 'success' });
+        setSnackbar({ open: true, message: tr('dashboard.snackUpdated'), severity: 'success' });
       } else {
         await createRestaurant(dataToSave, activeList.id, userId);
-        setSnackbar({ open: true, message: 'Restaurant added successfully!', severity: 'success' });
+        setSnackbar({ open: true, message: tr('dashboard.snackAdded'), severity: 'success' });
       }
       revalidator.revalidate();
       setFormOpen(false);
     } catch (error) {
       console.error('Error saving restaurant:', error);
-      setSnackbar({ open: true, message: 'Failed to save restaurant. Please try again.', severity: 'error' });
+      setSnackbar({ open: true, message: tr('dashboard.snackSaveFailed'), severity: 'error' });
       throw error;
     }
   };
@@ -400,7 +454,7 @@ export default function Dashboard() {
       revalidator.revalidate();
     } catch (error) {
       console.error('Error updating status:', error);
-      setSnackbar({ open: true, message: 'Failed to update status.', severity: 'error' });
+      setSnackbar({ open: true, message: tr('dashboard.snackStatusFailed'), severity: 'error' });
     }
   };
 
@@ -416,19 +470,30 @@ export default function Dashboard() {
     if (!restaurantToDelete) return;
     try {
       await deleteRestaurant(restaurantToDelete.id);
-      setSnackbar({ open: true, message: 'Restaurant deleted successfully!', severity: 'success' });
+      setSnackbar({ open: true, message: tr('dashboard.snackDeleted'), severity: 'success' });
       revalidator.revalidate();
       setDeleteOpen(false);
       setRestaurantToDelete(null);
     } catch (error) {
       console.error('Error deleting restaurant:', error);
-      setSnackbar({ open: true, message: 'Failed to delete restaurant. Please try again.', severity: 'error' });
+      setSnackbar({ open: true, message: tr('dashboard.snackDeleteFailed'), severity: 'error' });
     }
   };
 
   const handleSendEmail = async (email: string) => {
-    sendRestaurantListViaMailto(restaurants, email);
-    setSnackbar({ open: true, message: 'Opening email client...', severity: 'success' });
+    sendRestaurantListViaMailto(restaurants, email, {
+      subject: tr('email.subject'),
+      heading: tr('email.heading'),
+      cuisine: tr('email.labelCuisine'),
+      rating: tr('email.labelRating'),
+      price: tr('email.labelPrice'),
+      website: tr('email.labelWebsite'),
+      notes: tr('email.labelNotes'),
+      social: tr('email.labelSocial'),
+      total: (count) => tr('email.total', { count }),
+      generated: (date) => tr('email.generated', { date }),
+    }, i18n.language);
+    setSnackbar({ open: true, message: tr('dashboard.snackEmailOpening'), severity: 'success' });
   };
 
   const handleSelectList = (listId: string) => {
@@ -447,10 +512,46 @@ export default function Dashboard() {
       const params = new URLSearchParams(searchParams);
       params.set('list', id);
       setSearchParams(params);
-      setSnackbar({ open: true, message: 'List created!', severity: 'success' });
+      setSnackbar({ open: true, message: tr('dashboard.snackListCreated'), severity: 'success' });
     } catch (error) {
       console.error('Error creating list:', error);
-      setSnackbar({ open: true, message: 'Failed to create list.', severity: 'error' });
+      setSnackbar({ open: true, message: tr('dashboard.snackListFailed'), severity: 'error' });
+    }
+  };
+
+  const handleRenameList = (list: RestaurantList) => {
+    setRenameListTarget(list);
+    setRenameListName(list.name);
+  };
+
+  const handleConfirmRename = async () => {
+    const name = renameListName.trim();
+    if (!renameListTarget || !name) return;
+    try {
+      await updateList(renameListTarget.id, { name });
+      setRenameListTarget(null);
+      revalidator.revalidate();
+      setSnackbar({ open: true, message: tr('dashboard.snackListRenamed'), severity: 'success' });
+    } catch (error) {
+      console.error('Error renaming list:', error);
+      setSnackbar({ open: true, message: tr('dashboard.snackListUpdateFailed'), severity: 'error' });
+    }
+  };
+
+  const handleConfirmDeleteList = async () => {
+    if (!deleteListTarget) return;
+    try {
+      await deleteList(deleteListTarget.id);
+      setDeleteListTarget(null);
+      // Move off the deleted list (drop the ?list param so the loader picks the default).
+      const params = new URLSearchParams(searchParams);
+      params.delete('list');
+      setSearchParams(params);
+      revalidator.revalidate();
+      setSnackbar({ open: true, message: tr('dashboard.snackListDeleted'), severity: 'success' });
+    } catch (error) {
+      console.error('Error deleting list:', error);
+      setSnackbar({ open: true, message: tr('dashboard.snackListUpdateFailed'), severity: 'error' });
     }
   };
 
@@ -518,9 +619,9 @@ export default function Dashboard() {
     return (
       <Box
         key={m.id}
-        title={name || 'Member'}
+        title={name || tr('share.member')}
         role="img"
-        aria-label={name || 'Member'}
+        aria-label={name || tr('share.member')}
         sx={{
           width: 30,
           height: 30,
@@ -609,7 +710,7 @@ export default function Dashboard() {
               <Box sx={{ width: 9, height: 9, background: t.panelBg, borderRadius: '50%', transform: 'rotate(-45deg)' }} />
             </Box>
             <Box component="span" sx={{ fontFamily: serif, fontSize: 26, letterSpacing: '.01em' }}>
-              The Foodiedex
+              {tr('brand')}
             </Box>
           </Box>
 
@@ -634,8 +735,8 @@ export default function Dashboard() {
                 component="input"
                 value={searchQuery}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
-                placeholder="Search places…"
-                aria-label="Search places"
+                placeholder={tr('dashboard.searchPlaceholder')}
+                aria-label={tr('dashboard.searchLabel')}
                 sx={{
                   border: 'none',
                   outline: 'none',
@@ -649,21 +750,24 @@ export default function Dashboard() {
               />
             </Box>
 
+            {/* language toggle */}
+            <LanguageSwitcher />
+
             {/* theme toggle */}
             <Box sx={{ display: 'flex', background: t.searchBg, border: `1px solid ${t.border}`, borderRadius: '999px', padding: '3px' }}>
-              <Box component="button" onClick={() => changeMode('light')} title="Light" aria-label="Light theme"
+              <Box component="button" onClick={() => changeMode('light')} title={tr('dashboard.themeLight')} aria-label={tr('dashboard.themeLight')}
                 sx={{ border: 'none', cursor: 'pointer', width: 30, height: 26, borderRadius: '999px', fontSize: 13, ...themeBtn('light') }}>☀</Box>
-              <Box component="button" onClick={() => changeMode('dark')} title="Dark" aria-label="Dark theme"
+              <Box component="button" onClick={() => changeMode('dark')} title={tr('dashboard.themeDark')} aria-label={tr('dashboard.themeDark')}
                 sx={{ border: 'none', cursor: 'pointer', width: 30, height: 26, borderRadius: '999px', fontSize: 13, ...themeBtn('dark') }}>☾</Box>
             </Box>
 
             {/* add */}
             {canEdit && (
-              <Tooltip title="Add a place">
+              <Tooltip title={tr('dashboard.addPlace')}>
                 <Box
                   component="button"
                   onClick={handleAddRestaurant}
-                  aria-label="Add restaurant"
+                  aria-label={tr('dashboard.addRestaurant')}
                   sx={{
                     display: { xs: 'none', sm: 'inline-flex' },
                     alignItems: 'center',
@@ -679,14 +783,14 @@ export default function Dashboard() {
                     borderRadius: '999px',
                   }}
                 >
-                  <Add sx={{ fontSize: 17 }} /> Add
+                  <Add sx={{ fontSize: 17 }} /> {tr('dashboard.add')}
                 </Box>
               </Tooltip>
             )}
 
             {/* share */}
-            <Tooltip title="Share & members">
-              <IconButton onClick={() => setShareOpen(true)} aria-label="Share and members" sx={{ color: t.muted }}>
+            <Tooltip title={tr('dashboard.shareMembers')}>
+              <IconButton onClick={() => setShareOpen(true)} aria-label={tr('dashboard.shareMembersLabel')} sx={{ color: t.muted }}>
                 <PersonAddAlt1 />
               </IconButton>
             </Tooltip>
@@ -695,7 +799,7 @@ export default function Dashboard() {
             <Box
               component="button"
               onClick={(e: React.MouseEvent<HTMLButtonElement>) => setMenuAnchor(e.currentTarget)}
-              aria-label="Account menu"
+              aria-label={tr('dashboard.accountMenu')}
               aria-haspopup="true"
               sx={{ display: 'flex', border: 'none', background: 'transparent', cursor: 'pointer', p: 0 }}
             >
@@ -721,19 +825,19 @@ export default function Dashboard() {
             >
               <MenuItem onClick={() => { setMenuAnchor(null); navigate('/profile'); }}>
                 <ListItemIcon><Person fontSize="small" sx={{ color: t.muted }} /></ListItemIcon>
-                <ListItemText>Profile</ListItemText>
+                <ListItemText>{tr('nav.profile')}</ListItemText>
               </MenuItem>
               <MenuItem onClick={() => { setMenuAnchor(null); setShareOpen(true); }}>
                 <ListItemIcon><PersonAddAlt1 fontSize="small" sx={{ color: t.muted }} /></ListItemIcon>
-                <ListItemText>Share &amp; members</ListItemText>
+                <ListItemText>{tr('dashboard.shareMembers')}</ListItemText>
               </MenuItem>
               <MenuItem onClick={() => { setMenuAnchor(null); setEmailOpen(true); }} disabled={restaurants.length === 0}>
                 <ListItemIcon><Email fontSize="small" sx={{ color: t.muted }} /></ListItemIcon>
-                <ListItemText>Email list</ListItemText>
+                <ListItemText>{tr('dashboard.emailList')}</ListItemText>
               </MenuItem>
               <MenuItem onClick={() => { setMenuAnchor(null); handleLogout(); }}>
                 <ListItemIcon><Logout fontSize="small" sx={{ color: t.muted }} /></ListItemIcon>
-                <ListItemText>Sign out</ListItemText>
+                <ListItemText>{tr('dashboard.signOut')}</ListItemText>
               </MenuItem>
             </Menu>
           </Box>
@@ -743,8 +847,7 @@ export default function Dashboard() {
         <Box sx={{ flexGrow: 1, width: '100%', maxWidth: 1320, mx: 'auto', padding: { xs: '24px 18px 0', md: '30px 40px 0' } }}>
           {error && (
             <Alert severity="error" sx={{ mb: 3 }} role="alert">
-              Couldn&apos;t load your lists: {error}. If this persists, confirm the
-              database schema has been applied and the Supabase key is correct.
+              {tr('dashboard.loadError', { error })}
             </Alert>
           )}
           {/* title + view toggle */}
@@ -756,30 +859,105 @@ export default function Dashboard() {
                 serifFont={serif}
                 onSelect={handleSelectList}
                 onCreate={() => setNewListOpen(true)}
+                onRename={handleRenameList}
+                onDelete={(l) => setDeleteListTarget(l)}
               />
               <Box component="p" sx={{ color: t.muted, fontSize: 15, mt: '8px', mb: 0 }}>
-                {total} places · {beenCount} been · {wantCount} want to try
-                {activeList && role !== 'owner' && ` · ${role}`}
+                {tr('dashboard.stats', { total, been: beenCount, want: wantCount })}
+                {activeList && role !== 'owner' && ` · ${tr(`roles.${role}`)}`}
               </Box>
             </Box>
             <Box sx={{ display: 'flex', background: t.searchBg, border: `1px solid ${t.border}`, borderRadius: '999px', padding: '4px' }}>
-              <Box component="button" onClick={() => setView('tile')} sx={{ ...segBtnStyle, ...seg('tile') }}>Tile</Box>
-              <Box component="button" onClick={() => setView('list')} sx={{ ...segBtnStyle, ...seg('list') }}>List</Box>
-              <Box component="button" onClick={() => setView('map')} sx={{ ...segBtnStyle, ...seg('map') }}>Map</Box>
+              <Box component="button" onClick={() => setView('tile')} sx={{ ...segBtnStyle, ...seg('tile') }}>{tr('dashboard.viewTile')}</Box>
+              <Box component="button" onClick={() => setView('list')} sx={{ ...segBtnStyle, ...seg('list') }}>{tr('dashboard.viewList')}</Box>
+              <Box component="button" onClick={() => setView('map')} sx={{ ...segBtnStyle, ...seg('map') }}>{tr('dashboard.viewMap')}</Box>
             </Box>
           </Box>
 
           {/* filters */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: '10px', mt: '22px', flexWrap: 'wrap' }}>
-            <Box component="button" onClick={() => setFilter('all')} sx={{ ...filterBtnStyle, ...pill('all') }}>All</Box>
-            <Box component="button" onClick={() => setFilter('been')} sx={{ ...filterBtnStyle, ...pill('been') }}>Been</Box>
-            <Box component="button" onClick={() => setFilter('want')} sx={{ ...filterBtnStyle, ...pill('want') }}>Want to try</Box>
+            <Box component="button" onClick={() => setFilter('all')} sx={{ ...filterBtnStyle, ...pill('all') }}>{tr('dashboard.filterAll')}</Box>
+            <Box component="button" onClick={() => setFilter('been')} sx={{ ...filterBtnStyle, ...pill('been') }}>{tr('dashboard.filterBeen')}</Box>
+            <Box component="button" onClick={() => setFilter('want')} sx={{ ...filterBtnStyle, ...pill('want') }}>{tr('dashboard.filterWant')}</Box>
             <Box sx={{ width: '1px', height: 22, background: t.divider, mx: '4px' }} />
-            <Box sx={dropChipStyle}>Cuisine ▾</Box>
-            <Box sx={dropChipStyle}>Cost ▾</Box>
-            <Box sx={dropChipStyle}>Rating ▾</Box>
-            <Box sx={{ ml: 'auto', fontSize: 13, color: t.faint }}>{filtered.length} showing</Box>
+            <Box
+              component="button"
+              type="button"
+              aria-haspopup="true"
+              onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'cuisine', anchor: e.currentTarget })}
+              sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: cuisineFilter ? t.pBg : 'transparent', color: cuisineFilter ? t.pFg : t.chip }}
+            >
+              {cuisineFilter ? tr(`cuisines.${cuisineFilter}`, cuisineFilter) : tr('dashboard.cuisine')} ▾
+            </Box>
+            <Box
+              component="button"
+              type="button"
+              aria-haspopup="true"
+              onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'cost', anchor: e.currentTarget })}
+              sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: costFilter ? t.pBg : 'transparent', color: costFilter ? t.pFg : t.chip }}
+            >
+              {costFilter || tr('dashboard.cost')} ▾
+            </Box>
+            <Box
+              component="button"
+              type="button"
+              aria-haspopup="true"
+              onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'rating', anchor: e.currentTarget })}
+              sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: ratingFilter ? t.pBg : 'transparent', color: ratingFilter ? t.pFg : t.chip }}
+            >
+              {ratingFilter ? tr('dashboard.ratingStars', { count: ratingFilter }) : tr('dashboard.rating')} ▾
+            </Box>
+            {hasActiveFilters && (
+              <Box
+                component="button"
+                type="button"
+                onClick={clearFilters}
+                sx={{ ...filterBtnStyle, background: 'transparent', color: t.muted }}
+              >
+                {tr('dashboard.clearFilters')}
+              </Box>
+            )}
+            <Box sx={{ ml: 'auto', fontSize: 13, color: t.faint }}>{tr('dashboard.showing', { count: filtered.length })}</Box>
           </Box>
+
+          {/* filter dropdown menu */}
+          <Menu
+            anchorEl={filterMenu?.anchor ?? null}
+            open={Boolean(filterMenu)}
+            onClose={() => setFilterMenu(null)}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+          >
+            {filterMenu?.kind === 'cuisine' && [
+              <MenuItem key="any" selected={!cuisineFilter} onClick={() => { setCuisineFilter(''); setFilterMenu(null); }}>
+                {tr('dashboard.anyCuisine')}
+              </MenuItem>,
+              ...cuisineOptions.map((c) => (
+                <MenuItem key={c} selected={cuisineFilter === c} onClick={() => { setCuisineFilter(c); setFilterMenu(null); }}>
+                  {tr(`cuisines.${c}`, c)}
+                </MenuItem>
+              )),
+            ]}
+            {filterMenu?.kind === 'cost' && [
+              <MenuItem key="any" selected={!costFilter} onClick={() => { setCostFilter(''); setFilterMenu(null); }}>
+                {tr('dashboard.anyCost')}
+              </MenuItem>,
+              ...costOptions.map((c) => (
+                <MenuItem key={c} selected={costFilter === c} onClick={() => { setCostFilter(c); setFilterMenu(null); }}>
+                  {c}
+                </MenuItem>
+              )),
+            ]}
+            {filterMenu?.kind === 'rating' && [
+              <MenuItem key="0" selected={ratingFilter === 0} onClick={() => { setRatingFilter(0); setFilterMenu(null); }}>
+                {tr('dashboard.anyRating')}
+              </MenuItem>,
+              ...[5, 4, 3, 2, 1].map((n) => (
+                <MenuItem key={n} selected={ratingFilter === n} onClick={() => { setRatingFilter(n); setFilterMenu(null); }}>
+                  {tr('dashboard.ratingStars', { count: n })}
+                </MenuItem>
+              )),
+            ]}
+          </Menu>
 
           {/* empty state */}
           {filtered.length === 0 ? (
@@ -796,16 +974,16 @@ export default function Dashboard() {
               }}
             >
               <Box sx={{ fontFamily: serif, fontSize: 30, mb: 1 }}>
-                {searchQuery || filter !== 'all' ? 'No matches' : 'This list is empty'}
+                {hasActiveFilters ? tr('dashboard.noMatchesTitle') : tr('dashboard.emptyTitle')}
               </Box>
               <Box sx={{ color: t.muted, fontSize: 15, mb: 3, maxWidth: 420, mx: 'auto' }}>
-                {searchQuery || filter !== 'all'
-                  ? 'Try a different search or filter.'
+                {hasActiveFilters
+                  ? tr('dashboard.emptyTryFilter')
                   : canEdit
-                  ? 'Add your first restaurant to start building the list.'
-                  : 'Nothing here yet.'}
+                  ? tr('dashboard.emptyAddFirst')
+                  : tr('dashboard.emptyNothing')}
               </Box>
-              {!searchQuery && filter === 'all' && canEdit && (
+              {!hasActiveFilters && canEdit && (
                 <Box
                   component="button"
                   onClick={handleAddRestaurant}
@@ -824,7 +1002,7 @@ export default function Dashboard() {
                     borderRadius: '999px',
                   }}
                 >
-                  <Add sx={{ fontSize: 18 }} /> Add your first restaurant
+                  <Add sx={{ fontSize: 18 }} /> {tr('dashboard.addFirst')}
                 </Box>
               )}
             </Box>
@@ -861,8 +1039,8 @@ export default function Dashboard() {
                             component={canEdit ? 'button' : 'span'}
                             type={canEdit ? 'button' : undefined}
                             onClick={canEdit ? (e: React.MouseEvent) => { e.stopPropagation(); handleToggleStatus(r); } : undefined}
-                            title={canEdit ? 'Toggle been / want' : undefined}
-                            aria-label={canEdit ? `${r.name}: mark as ${r.isBeen ? 'want to try' : 'been'}` : undefined}
+                            title={canEdit ? tr('dashboard.toggleStatus') : undefined}
+                            aria-label={canEdit ? tr('dashboard.markAs', { name: r.name, status: r.isBeen ? tr('dashboard.markWant') : tr('dashboard.markBeen') }) : undefined}
                             sx={{
                               position: 'absolute',
                               top: 12,
@@ -878,14 +1056,14 @@ export default function Dashboard() {
                               cursor: canEdit ? 'pointer' : 'default',
                             }}
                           >
-                            {r.isBeen ? '✓ Been' : 'Want to try'}
+                            {r.isBeen ? tr('dashboard.statusBeen') : tr('dashboard.statusWant')}
                           </Box>
                           {canEdit && (
                             <Box className="card-actions" sx={{ position: 'absolute', top: 10, left: 10, display: 'flex', gap: '6px', opacity: 0, transition: 'opacity .15s' }}>
-                              <CardAction label={`Edit ${r.name}`} onClick={() => handleEditRestaurant(r)} tokens={t}>
+                              <CardAction label={tr('dashboard.editX', { name: r.name })} onClick={() => handleEditRestaurant(r)} tokens={t}>
                                 <EditIcon sx={{ fontSize: 15 }} />
                               </CardAction>
-                              <CardAction label={`Delete ${r.name}`} onClick={() => r.id && handleDeleteClick(r.id)} tokens={t} danger>
+                              <CardAction label={tr('dashboard.deleteX', { name: r.name })} onClick={() => r.id && handleDeleteClick(r.id)} tokens={t} danger>
                                 <DeleteIcon sx={{ fontSize: 15 }} />
                               </CardAction>
                             </Box>
@@ -949,7 +1127,7 @@ export default function Dashboard() {
                           component={canEdit ? 'button' : 'span'}
                           type={canEdit ? 'button' : undefined}
                           onClick={canEdit ? (e: React.MouseEvent) => { e.stopPropagation(); handleToggleStatus(r); } : undefined}
-                          aria-label={canEdit ? `${r.name}: mark as ${r.isBeen ? 'want to try' : 'been'}` : undefined}
+                          aria-label={canEdit ? tr('dashboard.markAs', { name: r.name, status: r.isBeen ? tr('dashboard.markWant') : tr('dashboard.markBeen') }) : undefined}
                           sx={{
                             width: 96,
                             textAlign: 'center',
@@ -965,14 +1143,14 @@ export default function Dashboard() {
                             cursor: canEdit ? 'pointer' : 'default',
                           }}
                         >
-                          {r.isBeen ? '✓ Been' : 'Want to try'}
+                          {r.isBeen ? tr('dashboard.statusBeen') : tr('dashboard.statusWant')}
                         </Box>
                         {canEdit && (
                           <Box className="row-actions" sx={{ display: 'flex', gap: '4px', opacity: 0, transition: 'opacity .15s' }}>
-                            <CardAction label={`Edit ${r.name}`} onClick={() => handleEditRestaurant(r)} tokens={t} solid>
+                            <CardAction label={tr('dashboard.editX', { name: r.name })} onClick={() => handleEditRestaurant(r)} tokens={t} solid>
                               <EditIcon sx={{ fontSize: 15 }} />
                             </CardAction>
-                            <CardAction label={`Delete ${r.name}`} onClick={() => r.id && handleDeleteClick(r.id)} tokens={t} solid danger>
+                            <CardAction label={tr('dashboard.deleteX', { name: r.name })} onClick={() => r.id && handleDeleteClick(r.id)} tokens={t} solid danger>
                               <DeleteIcon sx={{ fontSize: 15 }} />
                             </CardAction>
                           </Box>
@@ -1002,7 +1180,7 @@ export default function Dashboard() {
                         <Suspense
                           fallback={
                             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: t.muted }}>
-                              Loading map…
+                              {tr('dashboard.loadingMap')}
                             </Box>
                           }
                         >
@@ -1017,7 +1195,7 @@ export default function Dashboard() {
                     </Box>
                     {mapMissingCount > 0 && (
                       <Box sx={{ color: t.faint, fontSize: 12.5 }}>
-                        {mapMissingCount} {mapMissingCount === 1 ? 'place has' : 'places have'} no address yet — add one to show {mapMissingCount === 1 ? 'it' : 'them'} on the map.
+                        {tr('dashboard.missingAddress', { count: mapMissingCount })}
                       </Box>
                     )}
                   </Box>
@@ -1065,10 +1243,10 @@ export default function Dashboard() {
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: '9px', color: t.muted, fontSize: 13 }}>
             <Box aria-hidden sx={{ width: 16, height: 16, background: t.accent, borderRadius: '50% 50% 50% 2px', transform: 'rotate(45deg)' }} />
-            <Box component="span" sx={{ fontFamily: serif, fontSize: 16, color: t.ink }}>The Foodiedex</Box>
-            <Box component="span" sx={{ ml: '6px' }}>a shared table for a few good friends</Box>
+            <Box component="span" sx={{ fontFamily: serif, fontSize: 16, color: t.ink }}>{tr('brand')}</Box>
+            <Box component="span" sx={{ ml: '6px' }}>{tr('dashboard.footerTagline')}</Box>
           </Box>
-          <Box sx={{ color: t.faint, fontSize: '12.5px' }}>Ottawa &amp; beyond · {total} spots and counting</Box>
+          <Box sx={{ color: t.faint, fontSize: '12.5px' }}>{tr('dashboard.footerSpots', { count: total })}</Box>
         </Box>
 
         {/* mobile FAB */}
@@ -1076,7 +1254,7 @@ export default function Dashboard() {
           <Box
             component="button"
             onClick={handleAddRestaurant}
-            aria-label="Add restaurant"
+            aria-label={tr('dashboard.addRestaurant')}
             sx={{
               display: { xs: 'flex', sm: 'none' },
               alignItems: 'center',
@@ -1126,11 +1304,11 @@ export default function Dashboard() {
 
         {/* new list dialog */}
         <Dialog open={newListOpen} onClose={() => setNewListOpen(false)} maxWidth="xs" fullWidth>
-          <DialogTitle sx={{ fontWeight: 700 }}>New list</DialogTitle>
+          <DialogTitle sx={{ fontWeight: 700 }}>{tr('dashboard.newList')}</DialogTitle>
           <DialogContent>
             <TextField
               fullWidth
-              label="List name"
+              label={tr('dashboard.listName')}
               value={newListName}
               onChange={(e) => setNewListName(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleCreateList(); }}
@@ -1138,8 +1316,41 @@ export default function Dashboard() {
             />
           </DialogContent>
           <DialogActions sx={{ px: 3, py: 2 }}>
-            <Button onClick={() => setNewListOpen(false)} sx={{ color: 'text.secondary' }}>Cancel</Button>
-            <Button onClick={handleCreateList} variant="contained" disabled={!newListName.trim()}>Create</Button>
+            <Button onClick={() => setNewListOpen(false)} sx={{ color: 'text.secondary' }}>{tr('dashboard.cancel')}</Button>
+            <Button onClick={handleCreateList} variant="contained" disabled={!newListName.trim()}>{tr('dashboard.create')}</Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* rename list dialog */}
+        <Dialog open={Boolean(renameListTarget)} onClose={() => setRenameListTarget(null)} maxWidth="xs" fullWidth>
+          <DialogTitle sx={{ fontWeight: 700 }}>{tr('lists.renameTitle')}</DialogTitle>
+          <DialogContent>
+            <TextField
+              fullWidth
+              label={tr('dashboard.listName')}
+              value={renameListName}
+              onChange={(e) => setRenameListName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmRename(); }}
+              sx={{ mt: 1 }}
+            />
+          </DialogContent>
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button onClick={() => setRenameListTarget(null)} sx={{ color: 'text.secondary' }}>{tr('dashboard.cancel')}</Button>
+            <Button onClick={handleConfirmRename} variant="contained" disabled={!renameListName.trim()}>{tr('lists.rename')}</Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* delete list confirmation */}
+        <Dialog open={Boolean(deleteListTarget)} onClose={() => setDeleteListTarget(null)} maxWidth="xs" fullWidth>
+          <DialogTitle sx={{ fontWeight: 700 }}>{tr('lists.deleteTitle')}</DialogTitle>
+          <DialogContent>
+            <Box sx={{ color: 'text.secondary' }}>
+              {tr('lists.deleteConfirm', { name: deleteListTarget?.name ?? '' })}
+            </Box>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button onClick={() => setDeleteListTarget(null)} sx={{ color: 'text.secondary' }}>{tr('dashboard.cancel')}</Button>
+            <Button onClick={handleConfirmDeleteList} variant="contained" color="error">{tr('lists.delete')}</Button>
           </DialogActions>
         </Dialog>
 

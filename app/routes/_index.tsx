@@ -1,5 +1,6 @@
 import { Box, Container, Typography, Button, Grid } from "@mui/material";
 import { Link } from "@remix-run/react";
+import { useTranslation } from "react-i18next";
 import {
   RestaurantMenu,
   Star,
@@ -7,28 +8,27 @@ import {
 } from "@mui/icons-material";
 import Logo from "~/components/Logo";
 
-const features = [
-  {
-    icon: <RestaurantMenu sx={{ fontSize: 32, color: "#E8734A" }} />,
-    title: "Curate Your List",
-    description:
-      "Save every restaurant you visit with ratings, photos, and personal notes.",
-  },
-  {
-    icon: <Star sx={{ fontSize: 32, color: "#E8734A" }} />,
-    title: "Rate & Review",
-    description:
-      "Your honest ratings and comments — no fake reviews, just your real experience.",
-  },
-  {
-    icon: <Share sx={{ fontSize: 32, color: "#E8734A" }} />,
-    title: "Share Favorites",
-    description:
-      "Email your curated restaurant list to friends who always ask where to eat.",
-  },
-];
-
 export default function Index() {
+  const { t } = useTranslation();
+
+  const features = [
+    {
+      icon: <RestaurantMenu sx={{ fontSize: 32, color: "#E8734A" }} />,
+      title: t("landing.curateTitle"),
+      description: t("landing.curateDesc"),
+    },
+    {
+      icon: <Star sx={{ fontSize: 32, color: "#E8734A" }} />,
+      title: t("landing.rateTitle"),
+      description: t("landing.rateDesc"),
+    },
+    {
+      icon: <Share sx={{ fontSize: 32, color: "#E8734A" }} />,
+      title: t("landing.shareTitle"),
+      description: t("landing.shareDesc"),
+    },
+  ];
+
   return (
     <Box
       sx={{
@@ -105,10 +105,10 @@ export default function Index() {
             letterSpacing: "-0.03em",
           }}
         >
-          Your personal
+          {t("landing.titleLine1")}
           <br />
           <Box component="span" className="gradient-text">
-            restaurant guide
+            {t("landing.titleLine2")}
           </Box>
         </Typography>
 
@@ -125,8 +125,7 @@ export default function Index() {
             lineHeight: 1.6,
           }}
         >
-          Discover. Taste. Remember. Track every meal, rate every bite, and
-          never forget a great restaurant again.
+          {t("landing.subtitle")}
         </Typography>
 
         <Box
@@ -149,7 +148,7 @@ export default function Index() {
               fontSize: "1.05rem",
             }}
           >
-            Get Started
+            {t("landing.getStarted")}
           </Button>
           <Button
             component={Link}
@@ -163,7 +162,7 @@ export default function Index() {
               color: "text.secondary",
             }}
           >
-            Sign In
+            {t("landing.signIn")}
           </Button>
         </Box>
       </Container>
@@ -230,7 +229,7 @@ export default function Index() {
         }}
       >
         <Typography variant="body2" sx={{ color: "text.secondary" }}>
-          Built with love for food lovers everywhere.
+          {t("landing.footer")}
         </Typography>
       </Box>
     </Box>

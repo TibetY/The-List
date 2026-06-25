@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLocation, useRouteLoaderData, Link } from "@remix-run/react";
+import { useTranslation } from "react-i18next";
 import {
   AppBar,
   Toolbar,
@@ -16,9 +17,11 @@ import {
 } from "@mui/material";
 import { Menu as MenuIcon, Close as CloseIcon } from "@mui/icons-material";
 import Logo from "./Logo";
+import LanguageSwitcher from "./LanguageSwitcher";
 
 export default function Navbar() {
   const location = useLocation();
+  const { t } = useTranslation();
   const rootData = useRouteLoaderData("root") as { isLoggedIn: boolean } | undefined;
   const isLoggedIn = !!rootData?.isLoggedIn;
   const theme = useTheme();
@@ -30,19 +33,19 @@ export default function Navbar() {
 
   const navLinks = isLoggedIn
     ? [
-        { label: "Dashboard", to: "/dashboard" },
-        { label: "Profile", to: "/profile" },
+        { label: t("nav.dashboard"), to: "/dashboard" },
+        { label: t("nav.profile"), to: "/profile" },
       ]
     : [
-        { label: "Login", to: "/login" },
-        { label: "Sign Up", to: "/signup" },
+        { label: t("nav.login"), to: "/login" },
+        { label: t("nav.signup"), to: "/signup" },
       ];
 
   return (
     <AppBar
       position="fixed"
       component="nav"
-      aria-label="Main navigation"
+      aria-label={t("nav.main")}
       sx={{
         background: "rgba(10, 10, 15, 0.6)",
         backdropFilter: "blur(20px)",
@@ -58,16 +61,17 @@ export default function Navbar() {
           px: { xs: 2, sm: 3 },
         }}
       >
-        <Link to="/" style={{ textDecoration: "none" }} aria-label="The Foodiedex - Home">
+        <Link to="/" style={{ textDecoration: "none" }} aria-label={t("nav.home")}>
           <Logo />
         </Link>
 
         {isMobile ? (
-          <>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <LanguageSwitcher />
             <IconButton
               color="inherit"
               onClick={() => setDrawerOpen(true)}
-              aria-label="Open navigation menu"
+              aria-label={t("nav.openMenu")}
               sx={{ color: "text.primary" }}
             >
               <MenuIcon />
@@ -87,13 +91,13 @@ export default function Navbar() {
               <Box sx={{ display: "flex", justifyContent: "flex-end", p: 1 }}>
                 <IconButton
                   onClick={() => setDrawerOpen(false)}
-                  aria-label="Close navigation menu"
+                  aria-label={t("nav.closeMenu")}
                   sx={{ color: "text.primary" }}
                 >
                   <CloseIcon />
                 </IconButton>
               </Box>
-              <List role="navigation" aria-label="Mobile navigation">
+              <List role="navigation" aria-label={t("nav.mobileNav")}>
                 {navLinks.map((link) => (
                   <ListItem key={link.to} disablePadding>
                     <ListItemButton
@@ -120,11 +124,12 @@ export default function Navbar() {
                 ))}
               </List>
             </Drawer>
-          </>
+          </Box>
         ) : (
           <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+            <LanguageSwitcher />
             {navLinks.map((link) =>
-              link.label === "Sign Up" ? (
+              link.to === "/signup" ? (
                 <Button
                   key={link.to}
                   component={Link}

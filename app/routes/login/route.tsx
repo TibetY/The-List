@@ -9,9 +9,9 @@ import {
 import type { LoaderFunction, ActionFunction } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
 import { Form, useActionData, useLoaderData, Link } from "@remix-run/react";
+import { useTranslation } from "react-i18next";
 import { createSupabaseServerClient } from "~/supabase.server";
 import { safeRedirect } from "~/utils/safeRedirect";
-import GoogleIcon from "@mui/icons-material/Google";
 
 type ActionData = {
   error?: string;
@@ -56,6 +56,7 @@ export const action: ActionFunction = async ({ request }) => {
 export default function LoginPage() {
   const actionData = useActionData<ActionData>();
   const { next, error: loaderError } = useLoaderData<LoaderData>();
+  const { t } = useTranslation();
 
   return (
     <Container
@@ -86,10 +87,10 @@ export default function LoginPage() {
           component="h1"
           sx={{ fontWeight: 800, mb: 1, letterSpacing: "-0.02em" }}
         >
-          Welcome back
+          {t("login.title")}
         </Typography>
         <Typography variant="body1" sx={{ color: "text.secondary", mb: 4 }}>
-          Don&apos;t have an account?{" "}
+          {t("login.noAccount")}{" "}
           <Box
             component={Link}
             to={`/signup?next=${encodeURIComponent(next)}`}
@@ -100,7 +101,7 @@ export default function LoginPage() {
               "&:hover": { textDecoration: "underline" },
             }}
           >
-            Create one free
+            {t("login.createFree")}
           </Box>
         </Typography>
 
@@ -119,7 +120,7 @@ export default function LoginPage() {
             fullWidth
             id="email"
             name="email"
-            label="Email Address"
+            label={t("login.email")}
             autoComplete="email"
             sx={{ mb: 2 }}
           />
@@ -130,7 +131,7 @@ export default function LoginPage() {
             fullWidth
             name="password"
             id="password"
-            label="Password"
+            label={t("login.password")}
             type="password"
             autoComplete="current-password"
             sx={{ mb: 3 }}
@@ -140,53 +141,9 @@ export default function LoginPage() {
             variant="contained"
             fullWidth
             size="large"
-            sx={{ mb: 2, py: 1.5 }}
+            sx={{ py: 1.5 }}
           >
-            Sign In
-          </Button>
-
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 2,
-              mb: 2,
-            }}
-          >
-            <Box
-              sx={{
-                flex: 1,
-                height: "1px",
-                background: "rgba(255,255,255,0.1)",
-              }}
-              aria-hidden="true"
-            />
-            <Typography variant="body2" sx={{ color: "text.secondary" }}>
-              or
-            </Typography>
-            <Box
-              sx={{
-                flex: 1,
-                height: "1px",
-                background: "rgba(255,255,255,0.1)",
-              }}
-              aria-hidden="true"
-            />
-          </Box>
-
-          <Button
-            variant="outlined"
-            fullWidth
-            size="large"
-            startIcon={<GoogleIcon />}
-            disabled
-            sx={{
-              py: 1.5,
-              color: "text.secondary",
-              borderColor: "rgba(255,255,255,0.1)",
-            }}
-          >
-            Continue with Google
+            {t("login.submit")}
           </Button>
         </Form>
       </Box>

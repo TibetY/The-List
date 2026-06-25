@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { LoaderFunction } from '@remix-run/node';
 import { json, redirect } from '@remix-run/node';
 import { useLoaderData, useNavigate } from '@remix-run/react';
+import { useTranslation } from 'react-i18next';
 import {
   Box,
   Container,
@@ -20,6 +21,7 @@ import { getProfile } from '~/services/profiles.server';
 import { updateProfile, uploadAvatar } from '~/services/profiles.client';
 import { makeListTheme, getStoredMode, type ListMode } from '~/listTheme';
 import type { Profile } from '~/types/restaurant';
+import LanguageSwitcher from '~/components/LanguageSwitcher';
 
 type LoaderData = { userId: string; profile: Profile | null };
 
@@ -37,6 +39,7 @@ export const loader: LoaderFunction = async ({ request }) => {
 export default function ProfilePage() {
   const { userId, profile } = useLoaderData<LoaderData>();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [mode, setMode] = useState<ListMode>('light');
   useEffect(() => setMode(getStoredMode()), []);
   const theme = makeListTheme(mode);
@@ -70,10 +73,10 @@ export default function ProfilePage() {
         setAvatarUrl(url);
       }
       await updateProfile(userId, { displayName: displayName.trim(), avatarUrl: url });
-      setSnackbar({ open: true, message: 'Profile saved!', severity: 'success' });
+      setSnackbar({ open: true, message: t('profile.saved'), severity: 'success' });
     } catch (error) {
       console.error('Error saving profile:', error);
-      setSnackbar({ open: true, message: 'Failed to save profile.', severity: 'error' });
+      setSnackbar({ open: true, message: t('profile.saveFailed'), severity: 'error' });
     } finally {
       setSaving(false);
     }
@@ -83,35 +86,38 @@ export default function ProfilePage() {
     <ThemeProvider theme={theme}>
       <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', fontFamily: "'DM Sans',sans-serif" }}>
         <Container maxWidth="sm" sx={{ pt: { xs: 6, sm: 10 }, pb: 8 }}>
-          <Button
-            startIcon={<ArrowBack />}
-            onClick={() => navigate('/dashboard')}
-            sx={{ mb: 3, color: 'text.secondary' }}
-          >
-            Back to dashboard
-          </Button>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3, gap: 2 }}>
+            <Button
+              startIcon={<ArrowBack />}
+              onClick={() => navigate('/dashboard')}
+              sx={{ color: 'text.secondary' }}
+            >
+              {t('profile.back')}
+            </Button>
+            <LanguageSwitcher />
+          </Box>
 
           <Typography
             variant="h4"
             component="h1"
             sx={{ fontFamily: "'Instrument Serif',serif", fontWeight: 400, mb: 4 }}
           >
-            Your profile
+            {t('profile.title')}
           </Typography>
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, mb: 4 }}>
-            <Avatar src={preview} alt="Your profile photo" sx={{ width: 88, height: 88, fontSize: 32 }}>
+            <Avatar src={preview} alt={t('profile.photoAlt')} sx={{ width: 88, height: 88, fontSize: 32 }}>
               {(displayName?.[0] ?? '?').toUpperCase()}
             </Avatar>
             <Button variant="outlined" component="label" startIcon={<PhotoCamera />}>
-              {preview ? 'Change photo' : 'Upload photo'}
-              <input type="file" hidden accept="image/*" onChange={handleFile} aria-label="Upload avatar" />
+              {preview ? t('profile.changePhoto') : t('profile.uploadPhoto')}
+              <input type="file" hidden accept="image/*" onChange={handleFile} aria-label={t('profile.uploadAvatar')} />
             </Button>
           </Box>
 
           <TextField
             fullWidth
-            label="Display name"
+            label={t('profile.displayName')}
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             sx={{ mb: 3 }}
@@ -123,7 +129,7 @@ export default function ProfilePage() {
             disabled={saving}
             sx={{ minWidth: 140 }}
           >
-            {saving ? <CircularProgress size={22} color="inherit" /> : 'Save changes'}
+            {saving ? <CircularProgress size={22} color="inherit" /> : t('profile.save')}
           </Button>
         </Container>
 
