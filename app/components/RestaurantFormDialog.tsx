@@ -34,12 +34,18 @@ interface RestaurantFormDialogProps {
 }
 
 const priceRanges = ['$', '$$', '$$$', '$$$$', '$$$$$'];
-const reservationPlatforms = ['resy', 'opentable'] as const;
+const reservationPlatforms = ['resy', 'opentable', 'walkin', 'custom'] as const;
+const knownReservationPlatforms = ['resy', 'opentable', 'walkin'];
 const michelinStarOptions = [0, 1, 2, 3];
 
 /** Cuisine value isn't in the predefined list, so it's a custom "Other" entry. */
 function isCustomCuisine(cuisine: string | undefined): boolean {
   return !!cuisine && cuisine !== '' && !cuisineTypes.includes(cuisine);
+}
+
+/** Reservation platform isn't one of the predefined options, so it's a custom entry. */
+function isCustomPlatform(platform: string | undefined): boolean {
+  return !!platform && !knownReservationPlatforms.includes(platform);
 }
 
 export default function RestaurantFormDialog({
@@ -66,6 +72,8 @@ export default function RestaurantFormDialog({
     bibGourmand: false,
     reservationPlatform: '',
     reservationUrl: '',
+    email: '',
+    phone: '',
     status: 'want',
     socialMedia: {
       facebook: '',
@@ -77,8 +85,11 @@ export default function RestaurantFormDialog({
   // Dropdown selection for cuisine; 'Other' reveals a free-text field whose value
   // is what actually gets stored in formData.cuisineType.
   const [cuisineChoice, setCuisineChoice] = useState<string>('');
+  // Same pattern for the reservation platform select ('custom' reveals a free-text field).
+  const [platformChoice, setPlatformChoice] = useState<string>('');
   const [imageFile, setImageFile] = useState<File | undefined>();
   const [imagePreview, setImagePreview] = useState<string>('');
+  const [dragActive, setDragActive] = useState(false);
   const [loading, setLoading] = useState(false);
   const [fetchingInfo, setFetchingInfo] = useState(false);
 
@@ -98,6 +109,8 @@ export default function RestaurantFormDialog({
         bibGourmand: restaurant.bibGourmand || false,
         reservationPlatform: restaurant.reservationPlatform || '',
         reservationUrl: restaurant.reservationUrl || '',
+        email: restaurant.email || '',
+        phone: restaurant.phone || '',
         status: restaurant.status || 'want',
         socialMedia: {
           facebook: restaurant.socialMedia?.facebook || '',
@@ -110,6 +123,11 @@ export default function RestaurantFormDialog({
         isCustomCuisine(restaurant.cuisineType)
           ? 'Other'
           : restaurant.cuisineType || ''
+      );
+      setPlatformChoice(
+        isCustomPlatform(restaurant.reservationPlatform)
+          ? 'custom'
+          : restaurant.reservationPlatform || ''
       );
       setImagePreview(restaurant.image || '');
     } else {
@@ -127,6 +145,8 @@ export default function RestaurantFormDialog({
         bibGourmand: false,
         reservationPlatform: '',
         reservationUrl: '',
+        email: '',
+        phone: '',
         status: 'want',
         socialMedia: {
           facebook: '',
@@ -136,6 +156,7 @@ export default function RestaurantFormDialog({
         },
       });
       setCuisineChoice('');
+      setPlatformChoice('');
       setImagePreview('');
     }
     setImageFile(undefined);
@@ -153,6 +174,9 @@ export default function RestaurantFormDialog({
         cuisineType: string | null;
         reservationPlatform: 'resy' | 'opentable' | null;
         reservationUrl: string | null;
+        address: string | null;
+        email: string | null;
+        phone: string | null;
       };
       setFormData((prev) => ({
         ...prev,
@@ -160,10 +184,21 @@ export default function RestaurantFormDialog({
         reservationPlatform:
           prev.reservationPlatform || data.reservationPlatform || prev.reservationPlatform,
         reservationUrl: prev.reservationUrl || data.reservationUrl || prev.reservationUrl,
+        address: prev.address || data.address || prev.address,
+        email: prev.email || data.email || prev.email,
+        phone: prev.phone || data.phone || prev.phone,
       }));
       // Keep the cuisine dropdown in sync if the scraper supplied a known cuisine.
       if (data.cuisineType && !formData.cuisineType && cuisineTypes.includes(data.cuisineType)) {
         setCuisineChoice(data.cuisineType);
+      }
+      // Keep the reservation-platform dropdown in sync if the scraper found a link.
+      if (
+        data.reservationPlatform &&
+        !formData.reservationPlatform &&
+        knownReservationPlatforms.includes(data.reservationPlatform)
+      ) {
+        setPlatformChoice(data.reservationPlatform);
       }
       if (data.image && !imagePreview && !imageFile) {
         setImagePreview(data.image);
@@ -176,16 +211,31 @@ export default function RestaurantFormDialog({
     }
   };
 
+  const applyImageFile = (file: File) => {
+    setImageFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImagePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setImageFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
+    if (file) applyImageFile(file);
+  };
+
+  const handleImageDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragActive(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) applyImageFile(file);
+  };
+
+  const handleImageUrlPaste = (value: string) => {
+    setImagePreview(value);
+    setFormData((prev) => ({ ...prev, image: value }));
+    setImageFile(undefined);
   };
 
   const handleCuisineChange = (value: string) => {
@@ -199,6 +249,22 @@ export default function RestaurantFormDialog({
       }));
     } else {
       setFormData((prev) => ({ ...prev, cuisineType: value }));
+    }
+  };
+
+  const handlePlatformChange = (value: string) => {
+    setPlatformChoice(value);
+    if (value === 'custom') {
+      setFormData((prev) => ({
+        ...prev,
+        reservationPlatform: isCustomPlatform(prev.reservationPlatform)
+          ? prev.reservationPlatform
+          : '',
+      }));
+    } else if (value === 'walkin') {
+      setFormData((prev) => ({ ...prev, reservationPlatform: 'walkin', reservationUrl: '' }));
+    } else {
+      setFormData((prev) => ({ ...prev, reservationPlatform: value }));
     }
   };
 
@@ -287,6 +353,27 @@ export default function RestaurantFormDialog({
                 setFormData({ ...formData, address: e.target.value })
               }
               helperText={t('form.addressHelp')}
+            />
+          </Grid>
+
+          {/* Contact info — auto-filled from the website, manually editable */}
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              label={t('form.email')}
+              value={formData.email ?? ''}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              type="email"
+              placeholder="contact@restaurant.com"
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              label={t('form.phone')}
+              value={formData.phone ?? ''}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              type="tel"
             />
           </Grid>
 
@@ -519,31 +606,52 @@ export default function RestaurantFormDialog({
               fullWidth
               select
               label={t('form.reservationPlatform')}
-              value={formData.reservationPlatform || ''}
-              onChange={(e) =>
-                setFormData({ ...formData, reservationPlatform: e.target.value })
-              }
+              value={platformChoice}
+              onChange={(e) => handlePlatformChange(e.target.value)}
             >
               <MenuItem value="">{t('form.reservationNone')}</MenuItem>
               {reservationPlatforms.map((platform) => (
                 <MenuItem key={platform} value={platform}>
-                  {platform === 'resy' ? 'Resy' : 'OpenTable'}
+                  {platform === 'resy'
+                    ? 'Resy'
+                    : platform === 'opentable'
+                      ? 'OpenTable'
+                      : platform === 'walkin'
+                        ? t('form.reservationWalkin')
+                        : t('form.reservationCustom')}
                 </MenuItem>
               ))}
             </TextField>
           </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label={t('form.reservationUrl')}
-              value={formData.reservationUrl || ''}
-              onChange={(e) =>
-                setFormData({ ...formData, reservationUrl: e.target.value })
-              }
-              placeholder="https://resy.com/..."
-              type="url"
-            />
-          </Grid>
+          {platformChoice !== 'walkin' && (
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label={t('form.reservationUrl')}
+                value={formData.reservationUrl || ''}
+                onChange={(e) =>
+                  setFormData({ ...formData, reservationUrl: e.target.value })
+                }
+                placeholder="https://resy.com/..."
+                type="url"
+              />
+            </Grid>
+          )}
+
+          {/* Custom reservation platform name — shown only when "Custom" is selected */}
+          {platformChoice === 'custom' && (
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label={t('form.customPlatformName')}
+                placeholder={t('form.customPlatformPlaceholder')}
+                value={isCustomPlatform(formData.reservationPlatform) ? formData.reservationPlatform : ''}
+                onChange={(e) =>
+                  setFormData({ ...formData, reservationPlatform: e.target.value })
+                }
+              />
+            </Grid>
+          )}
 
           {/* Comment */}
           <Grid item xs={12}>
@@ -645,33 +753,54 @@ export default function RestaurantFormDialog({
             />
           </Grid>
 
-          {/* Image Upload */}
+          {/* Image Upload — file picker, drag-and-drop, or a pasted URL */}
           <Grid item xs={12}>
-            <Button
-              variant="outlined"
-              component="label"
-              startIcon={<CloudUpload />}
-              fullWidth
-              sx={{
-                py: 2,
-                borderStyle: 'dashed',
-                borderColor: 'rgba(255,255,255,0.15)',
-                color: 'text.secondary',
-                '&:hover': {
-                  borderColor: 'primary.main',
-                  backgroundColor: 'rgba(232, 115, 74, 0.04)',
-                },
+            <Box
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragActive(true);
               }}
+              onDragLeave={() => setDragActive(false)}
+              onDrop={handleImageDrop}
             >
-              {imagePreview ? t('form.changeImage') : t('form.uploadImage')}
-              <input
-                type="file"
-                hidden
-                accept="image/*"
-                onChange={handleImageChange}
-                aria-label={t('form.uploadImageLabel')}
-              />
-            </Button>
+              <Button
+                variant="outlined"
+                component="label"
+                startIcon={<CloudUpload />}
+                fullWidth
+                sx={{
+                  py: 2,
+                  borderStyle: 'dashed',
+                  borderColor: dragActive ? 'primary.main' : 'rgba(255,255,255,0.15)',
+                  backgroundColor: dragActive ? 'rgba(232, 115, 74, 0.08)' : undefined,
+                  color: 'text.secondary',
+                  '&:hover': {
+                    borderColor: 'primary.main',
+                    backgroundColor: 'rgba(232, 115, 74, 0.04)',
+                  },
+                }}
+              >
+                {imagePreview ? t('form.changeImage') : t('form.uploadImage')}
+                <input
+                  type="file"
+                  hidden
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  aria-label={t('form.uploadImageLabel')}
+                />
+              </Button>
+            </Box>
+          </Grid>
+
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              label={t('form.pasteImageUrl')}
+              placeholder={t('form.pasteImageUrlPlaceholder')}
+              value={imageFile ? '' : imagePreview}
+              onChange={(e) => handleImageUrlPaste(e.target.value)}
+              type="url"
+            />
           </Grid>
 
           {imagePreview && (

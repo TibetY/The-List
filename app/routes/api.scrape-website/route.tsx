@@ -11,6 +11,9 @@ interface ScrapeResult {
   cuisineType: string | null;
   reservationPlatform: 'resy' | 'opentable' | null;
   reservationUrl: string | null;
+  address: string | null;
+  email: string | null;
+  phone: string | null;
 }
 
 const EMPTY_RESULT: ScrapeResult = {
@@ -18,13 +21,17 @@ const EMPTY_RESULT: ScrapeResult = {
   cuisineType: null,
   reservationPlatform: null,
   reservationUrl: null,
+  address: null,
+  email: null,
+  phone: null,
 };
 
 /**
  * Best-effort metadata fetch for a restaurant's own website — used to
- * pre-fill the add/edit form (photo, cuisine, reservation link). Never
- * throws: a broken/slow/unreachable site just yields an empty result so the
- * form degrades gracefully instead of failing to save.
+ * pre-fill the add/edit form (photo, cuisine, address, contact info,
+ * reservation link). Never throws: a broken/slow/unreachable site just
+ * yields an empty result so the form degrades gracefully instead of failing
+ * to save.
  */
 export async function loader({ request }: LoaderFunctionArgs) {
   const targetUrl = new URL(request.url).searchParams.get('url');
@@ -92,6 +99,9 @@ async function fetchWithLimits(targetUrl: string): Promise<string> {
   return html;
 }
 
+type CheerioRoot = ReturnType<typeof load>;
+type JsonLdEntry = Record<string, unknown>;
+
 function scrapeHtml(html: string, baseUrl: string): ScrapeResult {
   if (!html) return EMPTY_RESULT;
   const $ = load(html);
@@ -101,7 +111,8 @@ function scrapeHtml(html: string, baseUrl: string): ScrapeResult {
     $('meta[name="twitter:image"]').attr('content') ||
     null;
 
-  const cuisineType = findCuisine($);
+  const restaurantEntry = findRestaurantJsonLd($);
+  const cuisineType = extractCuisine(restaurantEntry) ?? findCuisineFallback($);
   const reservation = findReservationLink($, baseUrl);
 
   return {
@@ -109,11 +120,16 @@ function scrapeHtml(html: string, baseUrl: string): ScrapeResult {
     cuisineType,
     reservationPlatform: reservation?.platform ?? null,
     reservationUrl: reservation?.url ?? null,
+    address: extractAddress(restaurantEntry),
+    email: extractEmail(restaurantEntry) ?? findMailto($),
+    phone: extractPhone(restaurantEntry) ?? findTel($),
   };
 }
 
-function findCuisine($: ReturnType<typeof load>): string | null {
-  let found: string | null = null;
+/** Finds the first JSON-LD entry whose @type looks like a Restaurant, shared by
+ *  the cuisine/address/email/phone extractors so the markup is only parsed once. */
+function findRestaurantJsonLd($: CheerioRoot): JsonLdEntry | null {
+  let found: JsonLdEntry | null = null;
   $('script[type="application/ld+json"]').each((_, el) => {
     if (found) return;
     let data: unknown;
@@ -123,9 +139,8 @@ function findCuisine($: ReturnType<typeof load>): string | null {
       return;
     }
     for (const entry of Array.isArray(data) ? data : [data]) {
-      const cuisine = extractCuisineFromJsonLd(entry);
-      if (cuisine) {
-        found = cuisine;
+      if (isRestaurantEntry(entry)) {
+        found = entry as JsonLdEntry;
         return;
       }
     }
@@ -133,17 +148,19 @@ function findCuisine($: ReturnType<typeof load>): string | null {
   return found;
 }
 
-function extractCuisineFromJsonLd(entry: unknown): string | null {
-  if (!entry || typeof entry !== 'object') return null;
-  const obj = entry as Record<string, unknown>;
-  const type = obj['@type'];
-  const typeMatches =
+function isRestaurantEntry(entry: unknown): boolean {
+  if (!entry || typeof entry !== 'object') return false;
+  const type = (entry as JsonLdEntry)['@type'];
+  return (
     (typeof type === 'string' && type.toLowerCase().includes('restaurant')) ||
     (Array.isArray(type) &&
-      type.some((t) => typeof t === 'string' && t.toLowerCase().includes('restaurant')));
-  if (!typeMatches) return null;
+      type.some((t) => typeof t === 'string' && t.toLowerCase().includes('restaurant')))
+  );
+}
 
-  const cuisine = obj.servesCuisine;
+function extractCuisine(entry: JsonLdEntry | null): string | null {
+  if (!entry) return null;
+  const cuisine = entry.servesCuisine;
   const candidates = Array.isArray(cuisine) ? cuisine : [cuisine];
   for (const candidate of candidates) {
     if (typeof candidate !== 'string') continue;
@@ -155,8 +172,63 @@ function extractCuisineFromJsonLd(entry: unknown): string | null {
   return null;
 }
 
+/** Many sites skip JSON-LD entirely, so fall back to a whole-word match of a
+ *  known cuisine name against the title/description meta tags. */
+function findCuisineFallback($: CheerioRoot): string | null {
+  const text = [
+    $('title').first().text(),
+    $('meta[name="description"]').attr('content') ?? '',
+    $('meta[property="og:description"]').attr('content') ?? '',
+  ].join(' ');
+  if (!text.trim()) return null;
+  for (const cuisine of cuisineTypes) {
+    if (cuisine === 'Other') continue;
+    const re = new RegExp(`\\b${escapeRegExp(cuisine)}\\b`, 'i');
+    if (re.test(text)) return cuisine;
+  }
+  return null;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function extractAddress(entry: JsonLdEntry | null): string | null {
+  const addr = entry?.address;
+  if (!addr || typeof addr !== 'object') return null;
+  const a = addr as JsonLdEntry;
+  const parts = [a.streetAddress, a.addressLocality, a.addressRegion, a.postalCode].filter(
+    (p): p is string => typeof p === 'string' && p.trim() !== ''
+  );
+  return parts.length > 0 ? parts.join(', ') : null;
+}
+
+function extractEmail(entry: JsonLdEntry | null): string | null {
+  const value = entry?.email;
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function extractPhone(entry: JsonLdEntry | null): string | null {
+  const value = entry?.telephone;
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function findMailto($: CheerioRoot): string | null {
+  const href = $('a[href^="mailto:" i]').first().attr('href');
+  if (!href) return null;
+  const email = href.replace(/^mailto:/i, '').split('?')[0].trim();
+  return email || null;
+}
+
+function findTel($: CheerioRoot): string | null {
+  const href = $('a[href^="tel:" i]').first().attr('href');
+  if (!href) return null;
+  const phone = href.replace(/^tel:/i, '').trim();
+  return phone || null;
+}
+
 function findReservationLink(
-  $: ReturnType<typeof load>,
+  $: CheerioRoot,
   baseUrl: string
 ): { platform: 'resy' | 'opentable'; url: string } | null {
   let result: { platform: 'resy' | 'opentable'; url: string } | null = null;

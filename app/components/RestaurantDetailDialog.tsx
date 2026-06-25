@@ -15,16 +15,20 @@ import {
   Facebook,
   Instagram,
   Twitter,
+  Email as EmailIcon,
+  Phone as PhoneIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import type { Restaurant } from '~/types/restaurant';
 import type { listTokens } from '~/listTheme';
+import RestaurantThumb from '~/components/RestaurantThumb';
 
 type Tokens = (typeof listTokens)['light'];
 
 function reservationLabel(platform: string): string {
   if (platform === 'resy') return 'Resy';
   if (platform === 'opentable') return 'OpenTable';
+  if (platform === 'walkin') return '';
   return platform;
 }
 
@@ -86,14 +90,16 @@ export default function RestaurantDetailDialog({
       }}
     >
       {/* Hero image / initial */}
-      <Box sx={{ position: 'relative', height: 200, background: t.monoGrad, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {r.image ? (
-          <Box component="img" src={r.image} alt={r.name} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-        ) : (
-          <Box component="span" sx={{ fontFamily: serifFont, fontSize: 88, color: t.monoInitial, lineHeight: 1 }}>
-            {initial}
-          </Box>
-        )}
+      <Box sx={{ position: 'relative', height: 200 }}>
+        <RestaurantThumb
+          image={r.image}
+          alt={r.name}
+          initial={initial}
+          serifFont={serifFont}
+          tokens={t}
+          initialFontSize={88}
+          sx={{ height: '100%' }}
+        />
         <IconButton
           onClick={onClose}
           aria-label={tr('form.close')}
@@ -204,6 +210,22 @@ export default function RestaurantDetailDialog({
           </Box>
         )}
 
+        {/* Contact: phone + email */}
+        {(r.phone || r.email) && (
+          <Box sx={{ display: 'flex', gap: '4px', mt: '14px' }}>
+            {r.phone && (
+              <IconButton component="a" href={`tel:${r.phone}`} aria-label={tr('detail.phone')} sx={{ color: t.muted }}>
+                <PhoneIcon fontSize="small" />
+              </IconButton>
+            )}
+            {r.email && (
+              <IconButton component="a" href={`mailto:${r.email}`} aria-label={tr('detail.email')} sx={{ color: t.muted }}>
+                <EmailIcon fontSize="small" />
+              </IconButton>
+            )}
+          </Box>
+        )}
+
         {/* Comment / notes */}
         {r.comment && (
           <Box sx={{ mt: '16px' }}>
@@ -225,6 +247,11 @@ export default function RestaurantDetailDialog({
             >
               {tr('dashboard.reserveOn', { platform: reservationLabel(r.reservationPlatform || '') })}
             </Button>
+          </Box>
+        )}
+        {!r.reservationUrl && r.reservationPlatform === 'walkin' && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: '6px', mt: '18px', color: t.muted, fontSize: 14 }}>
+            <EventSeat fontSize="small" /> {tr('detail.walkinBadge')}
           </Box>
         )}
 

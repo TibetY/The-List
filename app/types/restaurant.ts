@@ -77,6 +77,8 @@ export interface Restaurant {
   bibGourmand?: boolean; // Michelin Bib Gourmand recognition
   reservationPlatform?: ReservationPlatform;
   reservationUrl?: string;
+  email?: string; // Best-effort scraped from the restaurant's website
+  phone?: string;
   status?: RestaurantStatus; // 'been' (visited) or 'want' (want to try)
   address?: string; // Human-entered address, used for the map
   lat?: number; // Geocoded latitude (set on save from the address)

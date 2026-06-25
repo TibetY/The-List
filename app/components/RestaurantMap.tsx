@@ -88,6 +88,11 @@ export default function RestaurantMap({
                   Reserve on {r.reservationPlatform === 'resy' ? 'Resy' : r.reservationPlatform === 'opentable' ? 'OpenTable' : r.reservationPlatform}
                 </a>
               </>
+            ) : r.reservationPlatform === 'walkin' ? (
+              <>
+                <br />
+                Walk-ins welcome
+              </>
             ) : null}
           </Popup>
         </Marker>

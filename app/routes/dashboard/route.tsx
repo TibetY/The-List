@@ -53,6 +53,7 @@ import type {
 } from '~/types/restaurant';
 import RestaurantFormDialog from '~/components/RestaurantFormDialog';
 import RestaurantDetailDialog from '~/components/RestaurantDetailDialog';
+import RestaurantThumb from '~/components/RestaurantThumb';
 import DeleteConfirmDialog from '~/components/DeleteConfirmDialog';
 import EmailDialog from '~/components/EmailDialog';
 import ListSwitcher from '~/components/ListSwitcher';
@@ -222,6 +223,7 @@ const STAR_EMPTY = '☆☆☆☆☆';
 function reservationLabel(platform: string): string {
   if (platform === 'resy') return 'Resy';
   if (platform === 'opentable') return 'OpenTable';
+  if (platform === 'walkin') return '';
   return platform;
 }
 
@@ -1057,12 +1059,15 @@ export default function Dashboard() {
                           '&:hover .card-actions, &:focus-within .card-actions': { opacity: 1 },
                         }}
                       >
-                        <Box sx={{ position: 'relative', height: 158, background: t.monoGrad, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          {r.image ? (
-                            <Box component="img" src={r.image} alt={r.name} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          ) : (
-                            <Box component="span" sx={{ fontFamily: serif, fontSize: 68, color: t.monoInitial, lineHeight: 1 }}>{r.initial}</Box>
-                          )}
+                        <Box sx={{ position: 'relative', height: 158 }}>
+                          <RestaurantThumb
+                            image={r.image}
+                            alt={r.name}
+                            initial={r.initial}
+                            serifFont={serif}
+                            tokens={t}
+                            sx={{ height: '100%' }}
+                          />
                           <Box
                             component={canEdit ? 'button' : 'span'}
                             type={canEdit ? 'button' : undefined}
@@ -1103,6 +1108,23 @@ export default function Dashboard() {
                             <Box component="span" sx={{ color: t.cost, fontSize: 14, fontWeight: 600, letterSpacing: '.03em' }}>{r.costStr}</Box>
                           </Box>
                           <Box sx={{ color: t.muted, fontSize: 13, mt: '4px' }}>{r.meta}</Box>
+                          {((r.michelinStars ?? 0) > 0 || r.bibGourmand) && (
+                            <Box sx={{ display: 'flex', gap: '6px', mt: '6px', flexWrap: 'wrap' }}>
+                              {(r.michelinStars ?? 0) > 0 && (
+                                <Box component="span" sx={{ fontSize: 12, color: t.rating }}>
+                                  {'★'.repeat(r.michelinStars ?? 0)}
+                                </Box>
+                              )}
+                              {r.bibGourmand && (
+                                <Box
+                                  component="span"
+                                  sx={{ fontSize: 11, fontWeight: 600, color: t.accent, border: `1px solid ${t.accent}`, borderRadius: '999px', padding: '1px 8px' }}
+                                >
+                                  {tr('dashboard.bibGourmand')}
+                                </Box>
+                              )}
+                            </Box>
+                          )}
                           <Box sx={{ mt: '11px', height: 18 }}>
                             {r.rated ? (
                               <Box component="span" sx={{ color: t.rating, fontSize: 15, letterSpacing: '2px' }}>{r.ratingStr}</Box>
@@ -1124,6 +1146,14 @@ export default function Dashboard() {
                             >
                               {tr('dashboard.reserveOn', { platform: reservationLabel(r.reservationPlatform || '') })}
                             </Button>
+                          )}
+                          {!r.reservationUrl && r.reservationPlatform === 'walkin' && (
+                            <Box
+                              component="span"
+                              sx={{ display: 'inline-flex', alignItems: 'center', gap: '4px', mt: '11px', fontSize: 12.5, color: t.muted }}
+                            >
+                              <EventSeat sx={{ fontSize: 15 }} /> {tr('dashboard.walkinBadge')}
+                            </Box>
                           )}
                         </Box>
                       </Box>
@@ -1153,16 +1183,37 @@ export default function Dashboard() {
                           '&:last-of-type': { borderBottom: 'none' },
                         }}
                       >
-                        <Box sx={{ width: 46, height: 46, borderRadius: '11px', background: t.monoGrad, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', overflow: 'hidden' }}>
-                          {r.image ? (
-                            <Box component="img" src={r.image} alt={r.name} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          ) : (
-                            <Box component="span" sx={{ fontFamily: serif, fontSize: 24, color: t.monoInitial }}>{r.initial}</Box>
-                          )}
+                        <Box sx={{ width: 46, height: 46, borderRadius: '11px', flex: 'none' }}>
+                          <RestaurantThumb
+                            image={r.image}
+                            alt={r.name}
+                            initial={r.initial}
+                            serifFont={serif}
+                            tokens={t}
+                            initialFontSize={24}
+                            sx={{ width: '100%', height: '100%', borderRadius: '11px' }}
+                          />
                         </Box>
                         <Box sx={{ flex: 1, minWidth: 0 }}>
                           <Box sx={{ fontFamily: serif, fontSize: 18 }}>{r.name}</Box>
                           <Box sx={{ color: t.muted, fontSize: 13, mt: '1px' }}>{r.meta}</Box>
+                          {((r.michelinStars ?? 0) > 0 || r.bibGourmand) && (
+                            <Box sx={{ display: 'flex', gap: '6px', mt: '3px', flexWrap: 'wrap' }}>
+                              {(r.michelinStars ?? 0) > 0 && (
+                                <Box component="span" sx={{ fontSize: 11.5, color: t.rating }}>
+                                  {'★'.repeat(r.michelinStars ?? 0)}
+                                </Box>
+                              )}
+                              {r.bibGourmand && (
+                                <Box
+                                  component="span"
+                                  sx={{ fontSize: 10.5, fontWeight: 600, color: t.accent, border: `1px solid ${t.accent}`, borderRadius: '999px', padding: '0px 7px' }}
+                                >
+                                  {tr('dashboard.bibGourmand')}
+                                </Box>
+                              )}
+                            </Box>
+                          )}
                         </Box>
                         {r.reservationUrl && (
                           <Button
@@ -1178,6 +1229,14 @@ export default function Dashboard() {
                           >
                             {tr('dashboard.reserveOn', { platform: reservationLabel(r.reservationPlatform || '') })}
                           </Button>
+                        )}
+                        {!r.reservationUrl && r.reservationPlatform === 'walkin' && (
+                          <Box
+                            component="span"
+                            sx={{ display: { xs: 'none', md: 'inline-flex' }, alignItems: 'center', gap: '4px', flex: 'none', fontSize: 12.5, color: t.muted }}
+                          >
+                            <EventSeat sx={{ fontSize: 15 }} /> {tr('dashboard.walkinBadge')}
+                          </Box>
                         )}
                         <Box sx={{ width: 90, color: t.cost, fontSize: 14, fontWeight: 600, display: { xs: 'none', sm: 'block' } }}>{r.costStr}</Box>
                         <Box sx={{ width: 110, color: t.rating, fontSize: 14, letterSpacing: '1px', display: { xs: 'none', sm: 'block' } }}>{r.ratingStr}</Box>
@@ -1263,12 +1322,16 @@ export default function Dashboard() {
                         onClick={() => handleViewRestaurant(r)}
                         sx={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderBottom: `1px solid ${t.borderSoft}`, cursor: 'pointer', '&:hover': { filter: 'brightness(0.98)' } }}
                       >
-                        <Box sx={{ width: 34, height: 34, borderRadius: '9px', background: t.monoGrad, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', overflow: 'hidden' }}>
-                          {r.image ? (
-                            <Box component="img" src={r.image} alt={r.name} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          ) : (
-                            <Box component="span" sx={{ fontFamily: serif, fontSize: 18, color: t.monoInitial }}>{r.initial}</Box>
-                          )}
+                        <Box sx={{ width: 34, height: 34, borderRadius: '9px', flex: 'none' }}>
+                          <RestaurantThumb
+                            image={r.image}
+                            alt={r.name}
+                            initial={r.initial}
+                            serifFont={serif}
+                            tokens={t}
+                            initialFontSize={18}
+                            sx={{ width: '100%', height: '100%', borderRadius: '9px' }}
+                          />
                         </Box>
                         <Box sx={{ flex: 1, minWidth: 0 }}>
                           <Box sx={{ fontSize: 14, fontWeight: 500 }}>{r.name}</Box>
