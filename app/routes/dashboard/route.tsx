@@ -48,6 +48,7 @@ import {
 import { getProfile } from '~/services/profiles.server';
 import type {
   Restaurant,
+  RestaurantLocation,
   RestaurantList,
   ListMember,
   InviteLink,
@@ -296,9 +297,12 @@ export default function Dashboard() {
   const [cuisineFilter, setCuisineFilter] = useState('');
   const [costFilter, setCostFilter] = useState('');
   const [ratingFilter, setRatingFilter] = useState(0);
+  const [placeFilter, setPlaceFilter] = useState('');
+  const [dietFilter, setDietFilter] = useState('');
+  const [menuFilter, setMenuFilter] = useState('');
   const [sort, setSort] = useState<SortMode>('recent');
   const [filterMenu, setFilterMenu] = useState<{
-    kind: 'cuisine' | 'cost' | 'rating' | 'sort';
+    kind: 'cuisine' | 'cost' | 'rating' | 'place' | 'diet' | 'menu' | 'sort';
     anchor: HTMLElement;
   } | null>(null);
 
@@ -352,6 +356,19 @@ export default function Dashboard() {
       ).sort((a, b) => a.length - b.length),
     [restaurants]
   );
+  // Distinct multi-select facet values actually present in this list.
+  const placeOptions = useMemo(
+    () => Array.from(new Set(restaurants.flatMap((r) => r.placeTypes ?? []))).sort(),
+    [restaurants]
+  );
+  const dietOptions = useMemo(
+    () => Array.from(new Set(restaurants.flatMap((r) => r.dietaryTags ?? []))).sort(),
+    [restaurants]
+  );
+  const menuOptions = useMemo(
+    () => Array.from(new Set(restaurants.flatMap((r) => r.menuTypes ?? []))).sort(),
+    [restaurants]
+  );
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -368,15 +385,21 @@ export default function Dashboard() {
       const matchesCuisine = !cuisineFilter || r.cuisineType === cuisineFilter;
       const matchesCost = !costFilter || r.priceRange === costFilter;
       const matchesRating = ratingFilter === 0 || (r.rating ?? 0) >= ratingFilter;
+      const matchesPlace = !placeFilter || (r.placeTypes ?? []).includes(placeFilter);
+      const matchesDiet = !dietFilter || (r.dietaryTags ?? []).includes(dietFilter);
+      const matchesMenu = !menuFilter || (r.menuTypes ?? []).includes(menuFilter);
       return (
         matchesStatus &&
         matchesSearch &&
         matchesCuisine &&
         matchesCost &&
-        matchesRating
+        matchesRating &&
+        matchesPlace &&
+        matchesDiet &&
+        matchesMenu
       );
     });
-  }, [decorated, filter, searchQuery, cuisineFilter, costFilter, ratingFilter]);
+  }, [decorated, filter, searchQuery, cuisineFilter, costFilter, ratingFilter, placeFilter, dietFilter, menuFilter]);
 
   // Apply the chosen sort to the filtered set (order-independent metrics like
   // counts still read from `filtered`).
@@ -416,6 +439,9 @@ export default function Dashboard() {
     !!cuisineFilter ||
     !!costFilter ||
     ratingFilter > 0 ||
+    !!placeFilter ||
+    !!dietFilter ||
+    !!menuFilter ||
     sort !== 'recent';
 
   const clearFilters = () => {
@@ -424,6 +450,9 @@ export default function Dashboard() {
     setCuisineFilter('');
     setCostFilter('');
     setRatingFilter(0);
+    setPlaceFilter('');
+    setDietFilter('');
+    setMenuFilter('');
     setSort('recent');
   };
 
@@ -1017,6 +1046,39 @@ export default function Dashboard() {
             >
               {ratingFilter ? tr('dashboard.ratingStars', { count: ratingFilter }) : tr('dashboard.rating')} ▾
             </Box>
+            {placeOptions.length > 0 && (
+              <Box
+                component="button"
+                type="button"
+                aria-haspopup="true"
+                onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'place', anchor: e.currentTarget })}
+                sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: placeFilter ? t.pBg : 'transparent', color: placeFilter ? t.pFg : t.chip }}
+              >
+                {placeFilter ? tr(`placeTypes.${placeFilter}`, placeFilter) : tr('dashboard.placeType')} ▾
+              </Box>
+            )}
+            {dietOptions.length > 0 && (
+              <Box
+                component="button"
+                type="button"
+                aria-haspopup="true"
+                onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'diet', anchor: e.currentTarget })}
+                sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: dietFilter ? t.pBg : 'transparent', color: dietFilter ? t.pFg : t.chip }}
+              >
+                {dietFilter ? tr(`dietary.${dietFilter}`, dietFilter) : tr('dashboard.dietary')} ▾
+              </Box>
+            )}
+            {menuOptions.length > 0 && (
+              <Box
+                component="button"
+                type="button"
+                aria-haspopup="true"
+                onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'menu', anchor: e.currentTarget })}
+                sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: menuFilter ? t.pBg : 'transparent', color: menuFilter ? t.pFg : t.chip }}
+              >
+                {menuFilter ? tr(`menuTypes.${menuFilter}`, menuFilter) : tr('dashboard.menuType')} ▾
+              </Box>
+            )}
             <Box
               component="button"
               type="button"
@@ -1073,6 +1135,36 @@ export default function Dashboard() {
               ...[5, 4, 3, 2, 1].map((n) => (
                 <MenuItem key={n} selected={ratingFilter === n} onClick={() => { setRatingFilter(n); setFilterMenu(null); }}>
                   {tr('dashboard.ratingStars', { count: n })}
+                </MenuItem>
+              )),
+            ]}
+            {filterMenu?.kind === 'place' && [
+              <MenuItem key="any" selected={!placeFilter} onClick={() => { setPlaceFilter(''); setFilterMenu(null); }}>
+                {tr('dashboard.anyPlaceType')}
+              </MenuItem>,
+              ...placeOptions.map((p) => (
+                <MenuItem key={p} selected={placeFilter === p} onClick={() => { setPlaceFilter(p); setFilterMenu(null); }}>
+                  {tr(`placeTypes.${p}`, p)}
+                </MenuItem>
+              )),
+            ]}
+            {filterMenu?.kind === 'diet' && [
+              <MenuItem key="any" selected={!dietFilter} onClick={() => { setDietFilter(''); setFilterMenu(null); }}>
+                {tr('dashboard.anyDietary')}
+              </MenuItem>,
+              ...dietOptions.map((d) => (
+                <MenuItem key={d} selected={dietFilter === d} onClick={() => { setDietFilter(d); setFilterMenu(null); }}>
+                  {tr(`dietary.${d}`, d)}
+                </MenuItem>
+              )),
+            ]}
+            {filterMenu?.kind === 'menu' && [
+              <MenuItem key="any" selected={!menuFilter} onClick={() => { setMenuFilter(''); setFilterMenu(null); }}>
+                {tr('dashboard.anyMenuType')}
+              </MenuItem>,
+              ...menuOptions.map((m) => (
+                <MenuItem key={m} selected={menuFilter === m} onClick={() => { setMenuFilter(m); setFilterMenu(null); }}>
+                  {tr(`menuTypes.${m}`, m)}
                 </MenuItem>
               )),
             ]}
@@ -1235,8 +1327,11 @@ export default function Dashboard() {
                           {((r.michelinStars ?? 0) > 0 || r.bibGourmand) && (
                             <Box sx={{ display: 'flex', gap: '6px', mt: '6px', flexWrap: 'wrap' }}>
                               {(r.michelinStars ?? 0) > 0 && (
-                                <Box component="span" sx={{ fontSize: 12, color: t.rating }}>
-                                  {'★'.repeat(r.michelinStars ?? 0)}
+                                <Box
+                                  component="span"
+                                  sx={{ fontSize: 11, fontWeight: 600, color: t.accent, border: `1px solid ${t.accent}`, borderRadius: '999px', padding: '1px 8px' }}
+                                >
+                                  {'★'.repeat(r.michelinStars ?? 0)} {tr('dashboard.michelinChip')}
                                 </Box>
                               )}
                               {r.bibGourmand && (
@@ -1256,29 +1351,12 @@ export default function Dashboard() {
                               <Box component="span" sx={{ color: t.notRated, fontSize: 13, fontStyle: 'italic' }}>{tr('dashboard.notRated')}</Box>
                             )}
                           </Box>
-                          {r.reservationUrl && (
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              component="a"
-                              href={r.reservationUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                              startIcon={<EventSeat sx={{ fontSize: 15 }} />}
-                              sx={{ mt: '11px' }}
-                            >
-                              {tr('dashboard.reserveOn', { platform: reservationLabel(r.reservationPlatform || '') })}
-                            </Button>
-                          )}
-                          {!r.reservationUrl && r.reservationPlatform === 'walkin' && (
-                            <Box
-                              component="span"
-                              sx={{ display: 'inline-flex', alignItems: 'center', gap: '4px', mt: '11px', fontSize: 12.5, color: t.muted }}
-                            >
-                              <EventSeat sx={{ fontSize: 15 }} /> {tr('dashboard.walkinBadge')}
-                            </Box>
-                          )}
+                          <CardReservations
+                            locations={r.locations ?? []}
+                            multi={(r.locations?.length ?? 0) > 1}
+                            tokens={t}
+                            tr={tr}
+                          />
                         </Box>
                       </Box>
                     ))}
@@ -1342,8 +1420,11 @@ export default function Dashboard() {
                           {((r.michelinStars ?? 0) > 0 || r.bibGourmand) && (
                             <Box sx={{ display: 'flex', gap: '6px', mt: '3px', flexWrap: 'wrap' }}>
                               {(r.michelinStars ?? 0) > 0 && (
-                                <Box component="span" sx={{ fontSize: 11.5, color: t.rating }}>
-                                  {'★'.repeat(r.michelinStars ?? 0)}
+                                <Box
+                                  component="span"
+                                  sx={{ fontSize: 10.5, fontWeight: 600, color: t.accent, border: `1px solid ${t.accent}`, borderRadius: '999px', padding: '0px 7px' }}
+                                >
+                                  {'★'.repeat(r.michelinStars ?? 0)} {tr('dashboard.michelinChip')}
                                 </Box>
                               )}
                               {r.bibGourmand && (
@@ -1357,29 +1438,13 @@ export default function Dashboard() {
                             </Box>
                           )}
                         </Box>
-                        {r.reservationUrl && (
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            component="a"
-                            href={r.reservationUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                            startIcon={<EventSeat sx={{ fontSize: 15 }} />}
-                            sx={{ flex: 'none', display: { xs: 'none', md: 'inline-flex' } }}
-                          >
-                            {tr('dashboard.reserveOn', { platform: reservationLabel(r.reservationPlatform || '') })}
-                          </Button>
-                        )}
-                        {!r.reservationUrl && r.reservationPlatform === 'walkin' && (
-                          <Box
-                            component="span"
-                            sx={{ display: { xs: 'none', md: 'inline-flex' }, alignItems: 'center', gap: '4px', flex: 'none', fontSize: 12.5, color: t.muted }}
-                          >
-                            <EventSeat sx={{ fontSize: 15 }} /> {tr('dashboard.walkinBadge')}
-                          </Box>
-                        )}
+                        <CardReservations
+                          locations={r.locations ?? []}
+                          multi={(r.locations?.length ?? 0) > 1}
+                          tokens={t}
+                          tr={tr}
+                          listMode
+                        />
                         <Box sx={{ width: 90, color: t.cost, fontSize: 14, fontWeight: 600, display: { xs: 'none', sm: 'block' } }}>{r.costStr}</Box>
                         <Box sx={{ width: 110, color: t.rating, fontSize: 14, letterSpacing: '1px', display: { xs: 'none', sm: 'block' } }}>{r.ratingStr}</Box>
                         {canEdit ? (
@@ -1663,6 +1728,74 @@ export default function Dashboard() {
         </Snackbar>
       </Box>
     </ThemeProvider>
+  );
+}
+
+/**
+ * Reservation / walk-in info for a card, one entry per location. When a
+ * restaurant has more than one location, each booking is prefixed with its
+ * branch label so the buttons aren't ambiguous.
+ */
+function CardReservations({
+  locations,
+  multi,
+  tokens: t,
+  tr,
+  listMode,
+}: {
+  locations: RestaurantLocation[];
+  multi: boolean;
+  tokens: (typeof listTokens)['light'];
+  tr: (key: string, opts?: Record<string, unknown>) => string;
+  listMode?: boolean;
+}) {
+  const booking = locations.filter(
+    (l) => l.reservationUrl || l.reservationPlatform === 'walkin'
+  );
+  if (booking.length === 0) return null;
+  return (
+    <Box
+      sx={{
+        display: listMode ? { xs: 'none', md: 'flex' } : 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-start',
+        gap: '6px',
+        mt: listMode ? 0 : '11px',
+        flex: listMode ? 'none' : undefined,
+      }}
+    >
+      {booking.map((l, i) => {
+        const prefix = multi && l.label?.trim() ? `${l.label.trim()}: ` : '';
+        if (l.reservationUrl) {
+          return (
+            <Button
+              key={i}
+              size="small"
+              variant="outlined"
+              component="a"
+              href={l.reservationUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
+              startIcon={<EventSeat sx={{ fontSize: 15 }} />}
+            >
+              {prefix}
+              {tr('dashboard.reserveOn', { platform: reservationLabel(l.reservationPlatform || '') })}
+            </Button>
+          );
+        }
+        return (
+          <Box
+            key={i}
+            component="span"
+            sx={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: 12.5, color: t.muted }}
+          >
+            <EventSeat sx={{ fontSize: 15 }} /> {prefix}
+            {tr('dashboard.walkinBadge')}
+          </Box>
+        );
+      })}
+    </Box>
   );
 }
 
