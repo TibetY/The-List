@@ -39,6 +39,8 @@ import {
   FavoriteBorder,
   Close,
   Search,
+  ArrowUpward,
+  ArrowDownward,
 } from '@mui/icons-material';
 import { createSupabaseServerClient } from '~/supabase.server';
 import { getRestaurants } from '~/services/restaurants.server';
@@ -309,6 +311,10 @@ export default function Dashboard() {
   const [dietFilter, setDietFilter] = useState<string[]>([]);
   const [menuFilter, setMenuFilter] = useState<string[]>([]);
   const [sort, setSort] = useState<SortMode>('recent');
+  // Flip whatever the chosen sort's natural order is (e.g. Name Z→A, oldest
+  // first, lowest rated first). Kept separate from `sort` so the dropdown still
+  // names the primary key.
+  const [sortReversed, setSortReversed] = useState(false);
   const [filterMenu, setFilterMenu] = useState<{
     kind: 'cuisine' | 'cost' | 'rating' | 'place' | 'diet' | 'menu' | 'sort';
     anchor: HTMLElement;
@@ -431,33 +437,35 @@ export default function Dashboard() {
   // counts still read from `filtered`).
   const sorted = useMemo(() => {
     const arr = [...filtered];
+    const dir = sortReversed ? -1 : 1;
     switch (sort) {
       case 'rating':
-        arr.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+        arr.sort((a, b) => dir * ((b.rating ?? 0) - (a.rating ?? 0)));
         break;
       case 'name':
-        arr.sort((a, b) => a.name.localeCompare(b.name));
+        arr.sort((a, b) => dir * a.name.localeCompare(b.name));
         break;
       case 'price':
-        arr.sort((a, b) => (a.priceRange?.length ?? 0) - (b.priceRange?.length ?? 0));
+        arr.sort((a, b) => dir * ((a.priceRange?.length ?? 0) - (b.priceRange?.length ?? 0)));
         break;
       case 'visits':
-        arr.sort((a, b) => (b.visitCount ?? 0) - (a.visitCount ?? 0));
+        arr.sort((a, b) => dir * ((b.visitCount ?? 0) - (a.visitCount ?? 0)));
         break;
       case 'favorite':
         arr.sort(
           (a, b) =>
-            Number(b.favorite ?? false) - Number(a.favorite ?? false) ||
-            a.name.localeCompare(b.name)
+            dir *
+            (Number(b.favorite ?? false) - Number(a.favorite ?? false) ||
+              a.name.localeCompare(b.name))
         );
         break;
       case 'recent':
       default:
-        arr.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
+        arr.sort((a, b) => dir * (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
         break;
     }
     return arr;
-  }, [filtered, sort]);
+  }, [filtered, sort, sortReversed]);
 
   const hasActiveFilters =
     filter !== 'all' ||
@@ -468,7 +476,8 @@ export default function Dashboard() {
     placeFilter.length > 0 ||
     dietFilter.length > 0 ||
     menuFilter.length > 0 ||
-    sort !== 'recent';
+    sort !== 'recent' ||
+    sortReversed;
 
   const clearFilters = () => {
     setFilter('all');
@@ -480,6 +489,7 @@ export default function Dashboard() {
     setDietFilter([]);
     setMenuFilter([]);
     setSort('recent');
+    setSortReversed(false);
   };
 
   const total = decorated.length;
@@ -1228,6 +1238,25 @@ export default function Dashboard() {
               sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: sort !== 'recent' ? t.pBg : 'transparent', color: sort !== 'recent' ? t.pFg : t.chip }}
             >
               {tr(`dashboard.sort_${sort}`)} ▾
+            </Box>
+            <Box
+              component="button"
+              type="button"
+              onClick={() => setSortReversed((v) => !v)}
+              aria-label={tr('dashboard.sortReverse')}
+              aria-pressed={sortReversed}
+              title={tr('dashboard.sortReverse')}
+              sx={{
+                ...dropChipStyle,
+                display: 'inline-flex',
+                alignItems: 'center',
+                cursor: 'pointer',
+                padding: '7px 10px',
+                background: sortReversed ? t.pBg : 'transparent',
+                color: sortReversed ? t.pFg : t.chip,
+              }}
+            >
+              {sortReversed ? <ArrowUpward sx={{ fontSize: 16 }} /> : <ArrowDownward sx={{ fontSize: 16 }} />}
             </Box>
             {hasActiveFilters && (
               <Box
