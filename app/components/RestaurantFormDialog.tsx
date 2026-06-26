@@ -53,6 +53,17 @@ interface RestaurantFormDialogProps {
   onSave: (restaurant: Partial<Restaurant>, imageFile?: File) => Promise<void>;
 }
 
+/** Shape returned by /api/scrape-website. */
+type ScrapeData = {
+  image: string | null;
+  cuisineType: string | null;
+  reservationPlatform: 'resy' | 'opentable' | null;
+  reservationUrl: string | null;
+  address: string | null;
+  email: string | null;
+  phone: string | null;
+};
+
 const priceRanges = ['$', '$$', '$$$', '$$$$', '$$$$$'];
 const reservationPlatforms = ['resy', 'opentable', 'walkin', 'custom'] as const;
 const knownReservationPlatforms = ['resy', 'opentable', 'walkin'];
@@ -199,6 +210,39 @@ export default function RestaurantFormDialog({
     setPlatformChoice(platformChoiceFor(locations[index]));
   };
 
+  /** Fill blank brand/location fields from a scrape result (never overwrites). */
+  const applyScrape = (data: ScrapeData) => {
+    setFormData((prev) => ({
+      ...prev,
+      cuisineType: prev.cuisineType || data.cuisineType || prev.cuisineType,
+    }));
+    if (data.cuisineType && !formData.cuisineType && cuisineTypes.includes(data.cuisineType)) {
+      setCuisineChoice(data.cuisineType);
+    }
+
+    // Per-location enrichment targets the active location, filling only blanks.
+    const active = locations[activeLocation] ?? {};
+    const patch: Partial<RestaurantLocation> = {};
+    if (!active.address && data.address) patch.address = data.address;
+    if (!active.email && data.email) patch.email = data.email;
+    if (!active.phone && data.phone) patch.phone = data.phone;
+    if (!active.reservationUrl && data.reservationUrl) patch.reservationUrl = data.reservationUrl;
+    if (!active.reservationPlatform && data.reservationPlatform) {
+      patch.reservationPlatform = data.reservationPlatform;
+    }
+    if (Object.keys(patch).length > 0) {
+      updateActiveLocation(patch);
+      if (patch.reservationPlatform && knownReservationPlatforms.includes(patch.reservationPlatform)) {
+        setPlatformChoice(patch.reservationPlatform);
+      }
+    }
+
+    if (data.image && !imagePreview && !imageFile) {
+      setImagePreview(data.image);
+      setFormData((prev) => ({ ...prev, image: data.image ?? undefined }));
+    }
+  };
+
   const handleWebsiteBlur = async () => {
     const url = formData.url?.trim();
     if (!url || !/^https?:\/\/.+/i.test(url)) return;
@@ -206,16 +250,14 @@ export default function RestaurantFormDialog({
     setFetchingInfo(true);
     setScrapeStatus('idle');
     try {
-      const res = await fetch(`/api/scrape-website?url=${encodeURIComponent(url)}`);
-      const data = (await res.json()) as {
-        image: string | null;
-        cuisineType: string | null;
-        reservationPlatform: 'resy' | 'opentable' | null;
-        reservationUrl: string | null;
-        address: string | null;
-        email: string | null;
-        phone: string | null;
-      };
+      // Pass the active location's reservation link so the server can fill gaps
+      // from it even when the site itself doesn't link to it.
+      const activeRes = (locations[activeLocation]?.reservationUrl ?? '').trim();
+      const qs =
+        `url=${encodeURIComponent(url)}` +
+        (activeRes ? `&reservation=${encodeURIComponent(activeRes)}` : '');
+      const res = await fetch(`/api/scrape-website?${qs}`);
+      const data = (await res.json()) as ScrapeData;
       const foundAnything = Boolean(
         data.image ||
           data.cuisineType ||
@@ -226,42 +268,24 @@ export default function RestaurantFormDialog({
           data.phone
       );
       setScrapeStatus(foundAnything ? 'ok' : 'empty');
-
-      // Brand-level enrichment.
-      setFormData((prev) => ({
-        ...prev,
-        cuisineType: prev.cuisineType || data.cuisineType || prev.cuisineType,
-      }));
-      if (data.cuisineType && !formData.cuisineType && cuisineTypes.includes(data.cuisineType)) {
-        setCuisineChoice(data.cuisineType);
-      }
-
-      // Per-location enrichment targets the active location, filling only blanks.
-      const active = locations[activeLocation] ?? {};
-      const patch: Partial<RestaurantLocation> = {};
-      if (!active.address && data.address) patch.address = data.address;
-      if (!active.email && data.email) patch.email = data.email;
-      if (!active.phone && data.phone) patch.phone = data.phone;
-      if (!active.reservationUrl && data.reservationUrl) patch.reservationUrl = data.reservationUrl;
-      if (!active.reservationPlatform && data.reservationPlatform) {
-        patch.reservationPlatform = data.reservationPlatform;
-      }
-      if (Object.keys(patch).length > 0) {
-        updateActiveLocation(patch);
-        if (patch.reservationPlatform && knownReservationPlatforms.includes(patch.reservationPlatform)) {
-          setPlatformChoice(patch.reservationPlatform);
-        }
-      }
-
-      if (data.image && !imagePreview && !imageFile) {
-        setImagePreview(data.image);
-        setFormData((prev) => ({ ...prev, image: data.image ?? undefined }));
-      }
+      applyScrape(data);
     } catch {
       // Best-effort enrichment; treat a hard failure like "nothing found".
       setScrapeStatus('empty');
     } finally {
       setFetchingInfo(false);
+    }
+  };
+
+  /** Scrape a reservation link directly to fill in any details we still miss. */
+  const handleReservationBlur = async () => {
+    const resUrl = (locations[activeLocation]?.reservationUrl ?? '').trim();
+    if (!resUrl || !/^https?:\/\/.+/i.test(resUrl)) return;
+    try {
+      const res = await fetch(`/api/scrape-website?url=${encodeURIComponent(resUrl)}`);
+      applyScrape((await res.json()) as ScrapeData);
+    } catch {
+      // Best-effort — ignore failures.
     }
   };
 
@@ -808,6 +832,7 @@ export default function RestaurantFormDialog({
                       onChange={(e) =>
                         updateActiveLocation({ reservationUrl: e.target.value })
                       }
+                      onBlur={handleReservationBlur}
                       placeholder="https://resy.com/..."
                       type="url"
                     />
@@ -835,6 +860,7 @@ export default function RestaurantFormDialog({
                       onChange={(e) =>
                         updateActiveLocation({ reservationUrl: e.target.value })
                       }
+                      onBlur={handleReservationBlur}
                       placeholder="https://..."
                       type="url"
                     />

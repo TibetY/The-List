@@ -34,17 +34,52 @@ const EMPTY_RESULT: ScrapeResult = {
  * to save.
  */
 export async function loader({ request }: LoaderFunctionArgs) {
-  const targetUrl = new URL(request.url).searchParams.get('url');
+  const params = new URL(request.url).searchParams;
+  const targetUrl = params.get('url');
   if (!targetUrl || !isSafeExternalUrl(targetUrl)) {
     return json(EMPTY_RESULT);
   }
 
   try {
     const html = await fetchWithLimits(targetUrl);
-    return json(scrapeHtml(html, targetUrl));
+    let result = scrapeHtml(html, targetUrl);
+
+    // Enrich from the reservation page for anything the main site didn't expose
+    // (Resy/OpenTable listings usually carry full address/phone/cuisine in
+    // JSON-LD). Use the link we discovered, or one the caller already knows.
+    const passed = params.get('reservation');
+    const reservationUrl =
+      result.reservationUrl ?? (passed && isSafeExternalUrl(passed) ? passed : null);
+    if (reservationUrl && reservationUrl !== targetUrl && isIncomplete(result)) {
+      try {
+        const resHtml = await fetchWithLimits(reservationUrl);
+        result = mergeMissing(result, scrapeHtml(resHtml, reservationUrl));
+      } catch {
+        // Best-effort enrichment — ignore a failed reservation-page fetch.
+      }
+    }
+    return json(result);
   } catch {
     return json(EMPTY_RESULT);
   }
+}
+
+/** True while there's still a contact/cuisine/image field worth enriching. */
+function isIncomplete(r: ScrapeResult): boolean {
+  return !r.address || !r.phone || !r.cuisineType || !r.image || !r.email;
+}
+
+/** Fill only the null fields of `primary` from `extra` (primary always wins). */
+function mergeMissing(primary: ScrapeResult, extra: ScrapeResult): ScrapeResult {
+  return {
+    image: primary.image ?? extra.image,
+    cuisineType: primary.cuisineType ?? extra.cuisineType,
+    reservationPlatform: primary.reservationPlatform ?? extra.reservationPlatform,
+    reservationUrl: primary.reservationUrl ?? extra.reservationUrl,
+    address: primary.address ?? extra.address,
+    email: primary.email ?? extra.email,
+    phone: primary.phone ?? extra.phone,
+  };
 }
 
 /** Rejects anything that isn't a plausible public http(s) URL. Basic SSRF guard. */
