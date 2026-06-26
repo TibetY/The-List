@@ -195,19 +195,25 @@ export default function RestaurantDetailDialog({
         </Box>
 
         {/* Times visited */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: '10px', flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: '6px', mt: '10px' }}>
           <Box component="span" sx={{ color: t.muted, fontSize: 13.5 }}>
             {tr('detail.visitedTimes', { count: r.visitCount ?? 0 })}
           </Box>
           {canEdit && onAddVisit && (
-            <Button
+            <IconButton
               size="small"
-              variant="outlined"
-              startIcon={<AddIcon fontSize="small" />}
               onClick={() => onAddVisit(r)}
+              aria-label={tr('detail.addVisit')}
+              title={tr('detail.addVisit')}
+              sx={{
+                color: t.accent,
+                border: `1px solid ${t.pillBorder}`,
+                p: '3px',
+                '&:hover': { borderColor: t.accent, background: 'transparent' },
+              }}
             >
-              {tr('detail.addVisit')}
-            </Button>
+              <AddIcon sx={{ fontSize: 16 }} />
+            </IconButton>
           )}
         </Box>
 

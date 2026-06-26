@@ -24,6 +24,7 @@ import {
   DialogActions,
   Button,
   TextField,
+  Checkbox,
 } from '@mui/material';
 import {
   Add,
@@ -225,6 +226,11 @@ const SORT_MODES: SortMode[] = ['recent', 'rating', 'name', 'price', 'visits', '
 const STAR_FULL = '★★★★★';
 const STAR_EMPTY = '☆☆☆☆☆';
 
+/** Toggle a value's membership in a string[] (for multi-select filters). */
+function toggleValue(arr: string[], value: string): string[] {
+  return arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value];
+}
+
 /** Make a non-button clickable element keyboard-operable (Enter/Space). */
 function activateOnKey(fn: () => void) {
   return (e: React.KeyboardEvent) => {
@@ -297,9 +303,9 @@ export default function Dashboard() {
   const [cuisineFilter, setCuisineFilter] = useState('');
   const [costFilter, setCostFilter] = useState('');
   const [ratingFilter, setRatingFilter] = useState(0);
-  const [placeFilter, setPlaceFilter] = useState('');
-  const [dietFilter, setDietFilter] = useState('');
-  const [menuFilter, setMenuFilter] = useState('');
+  const [placeFilter, setPlaceFilter] = useState<string[]>([]);
+  const [dietFilter, setDietFilter] = useState<string[]>([]);
+  const [menuFilter, setMenuFilter] = useState<string[]>([]);
   const [sort, setSort] = useState<SortMode>('recent');
   const [filterMenu, setFilterMenu] = useState<{
     kind: 'cuisine' | 'cost' | 'rating' | 'place' | 'diet' | 'menu' | 'sort';
@@ -385,9 +391,10 @@ export default function Dashboard() {
       const matchesCuisine = !cuisineFilter || r.cuisineType === cuisineFilter;
       const matchesCost = !costFilter || r.priceRange === costFilter;
       const matchesRating = ratingFilter === 0 || (r.rating ?? 0) >= ratingFilter;
-      const matchesPlace = !placeFilter || (r.placeTypes ?? []).includes(placeFilter);
-      const matchesDiet = !dietFilter || (r.dietaryTags ?? []).includes(dietFilter);
-      const matchesMenu = !menuFilter || (r.menuTypes ?? []).includes(menuFilter);
+      // AND within a facet: a place must carry every selected tag.
+      const matchesPlace = placeFilter.every((v) => (r.placeTypes ?? []).includes(v));
+      const matchesDiet = dietFilter.every((v) => (r.dietaryTags ?? []).includes(v));
+      const matchesMenu = menuFilter.every((v) => (r.menuTypes ?? []).includes(v));
       return (
         matchesStatus &&
         matchesSearch &&
@@ -439,9 +446,9 @@ export default function Dashboard() {
     !!cuisineFilter ||
     !!costFilter ||
     ratingFilter > 0 ||
-    !!placeFilter ||
-    !!dietFilter ||
-    !!menuFilter ||
+    placeFilter.length > 0 ||
+    dietFilter.length > 0 ||
+    menuFilter.length > 0 ||
     sort !== 'recent';
 
   const clearFilters = () => {
@@ -450,9 +457,9 @@ export default function Dashboard() {
     setCuisineFilter('');
     setCostFilter('');
     setRatingFilter(0);
-    setPlaceFilter('');
-    setDietFilter('');
-    setMenuFilter('');
+    setPlaceFilter([]);
+    setDietFilter([]);
+    setMenuFilter([]);
     setSort('recent');
   };
 
@@ -558,8 +565,13 @@ export default function Dashboard() {
 
   const handleToggleStatus = async (r: DecoratedRestaurant) => {
     if (!canEdit || !r.id) return;
+    const newStatus = r.isBeen ? 'want' : 'been';
     try {
-      await setRestaurantStatus(r.id, r.isBeen ? 'want' : 'been');
+      await setRestaurantStatus(r.id, newStatus);
+      // Marking "been" with no recorded visits implies a first visit.
+      if (newStatus === 'been' && (r.visitCount ?? 0) === 0) {
+        await setRestaurantVisitCount(r.id, 1);
+      }
       revalidator.revalidate();
     } catch (error) {
       console.error('Error updating status:', error);
@@ -584,9 +596,16 @@ export default function Dashboard() {
   const handleAddVisit = async (r: Restaurant) => {
     if (!canEdit || !r.id) return;
     const next = (r.visitCount ?? 0) + 1;
+    const becomesBeen = r.status !== 'been';
     try {
       await setRestaurantVisitCount(r.id, next);
-      setSelectedRestaurant((cur) => (cur && cur.id === r.id ? { ...cur, visitCount: next } : cur));
+      // A recorded visit means the place has been visited.
+      if (becomesBeen) {
+        await setRestaurantStatus(r.id, 'been');
+      }
+      setSelectedRestaurant((cur) =>
+        cur && cur.id === r.id ? { ...cur, visitCount: next, status: 'been' } : cur
+      );
       revalidator.revalidate();
     } catch (error) {
       console.error('Error updating visit count:', error);
@@ -1052,9 +1071,13 @@ export default function Dashboard() {
                 type="button"
                 aria-haspopup="true"
                 onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'place', anchor: e.currentTarget })}
-                sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: placeFilter ? t.pBg : 'transparent', color: placeFilter ? t.pFg : t.chip }}
+                sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: placeFilter.length ? t.pBg : 'transparent', color: placeFilter.length ? t.pFg : t.chip }}
               >
-                {placeFilter ? tr(`placeTypes.${placeFilter}`, placeFilter) : tr('dashboard.placeType')} ▾
+                {placeFilter.length === 0
+                  ? tr('dashboard.placeType')
+                  : placeFilter.length === 1
+                    ? tr(`placeTypes.${placeFilter[0]}`, placeFilter[0])
+                    : `${tr('dashboard.placeType')} (${placeFilter.length})`}{' '}▾
               </Box>
             )}
             {dietOptions.length > 0 && (
@@ -1063,9 +1086,13 @@ export default function Dashboard() {
                 type="button"
                 aria-haspopup="true"
                 onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'diet', anchor: e.currentTarget })}
-                sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: dietFilter ? t.pBg : 'transparent', color: dietFilter ? t.pFg : t.chip }}
+                sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: dietFilter.length ? t.pBg : 'transparent', color: dietFilter.length ? t.pFg : t.chip }}
               >
-                {dietFilter ? tr(`dietary.${dietFilter}`, dietFilter) : tr('dashboard.dietary')} ▾
+                {dietFilter.length === 0
+                  ? tr('dashboard.dietary')
+                  : dietFilter.length === 1
+                    ? tr(`dietary.${dietFilter[0]}`, dietFilter[0])
+                    : `${tr('dashboard.dietary')} (${dietFilter.length})`}{' '}▾
               </Box>
             )}
             {menuOptions.length > 0 && (
@@ -1074,9 +1101,13 @@ export default function Dashboard() {
                 type="button"
                 aria-haspopup="true"
                 onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'menu', anchor: e.currentTarget })}
-                sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: menuFilter ? t.pBg : 'transparent', color: menuFilter ? t.pFg : t.chip }}
+                sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: menuFilter.length ? t.pBg : 'transparent', color: menuFilter.length ? t.pFg : t.chip }}
               >
-                {menuFilter ? tr(`menuTypes.${menuFilter}`, menuFilter) : tr('dashboard.menuType')} ▾
+                {menuFilter.length === 0
+                  ? tr('dashboard.menuType')
+                  : menuFilter.length === 1
+                    ? tr(`menuTypes.${menuFilter[0]}`, menuFilter[0])
+                    : `${tr('dashboard.menuType')} (${menuFilter.length})`}{' '}▾
               </Box>
             )}
             <Box
@@ -1139,31 +1170,34 @@ export default function Dashboard() {
               )),
             ]}
             {filterMenu?.kind === 'place' && [
-              <MenuItem key="any" selected={!placeFilter} onClick={() => { setPlaceFilter(''); setFilterMenu(null); }}>
+              <MenuItem key="any" selected={placeFilter.length === 0} onClick={() => { setPlaceFilter([]); setFilterMenu(null); }}>
                 {tr('dashboard.anyPlaceType')}
               </MenuItem>,
               ...placeOptions.map((p) => (
-                <MenuItem key={p} selected={placeFilter === p} onClick={() => { setPlaceFilter(p); setFilterMenu(null); }}>
+                <MenuItem key={p} onClick={() => setPlaceFilter((prev) => toggleValue(prev, p))}>
+                  <Checkbox edge="start" size="small" checked={placeFilter.includes(p)} tabIndex={-1} disableRipple sx={{ mr: 1, p: 0.25 }} />
                   {tr(`placeTypes.${p}`, p)}
                 </MenuItem>
               )),
             ]}
             {filterMenu?.kind === 'diet' && [
-              <MenuItem key="any" selected={!dietFilter} onClick={() => { setDietFilter(''); setFilterMenu(null); }}>
+              <MenuItem key="any" selected={dietFilter.length === 0} onClick={() => { setDietFilter([]); setFilterMenu(null); }}>
                 {tr('dashboard.anyDietary')}
               </MenuItem>,
               ...dietOptions.map((d) => (
-                <MenuItem key={d} selected={dietFilter === d} onClick={() => { setDietFilter(d); setFilterMenu(null); }}>
+                <MenuItem key={d} onClick={() => setDietFilter((prev) => toggleValue(prev, d))}>
+                  <Checkbox edge="start" size="small" checked={dietFilter.includes(d)} tabIndex={-1} disableRipple sx={{ mr: 1, p: 0.25 }} />
                   {tr(`dietary.${d}`, d)}
                 </MenuItem>
               )),
             ]}
             {filterMenu?.kind === 'menu' && [
-              <MenuItem key="any" selected={!menuFilter} onClick={() => { setMenuFilter(''); setFilterMenu(null); }}>
+              <MenuItem key="any" selected={menuFilter.length === 0} onClick={() => { setMenuFilter([]); setFilterMenu(null); }}>
                 {tr('dashboard.anyMenuType')}
               </MenuItem>,
               ...menuOptions.map((m) => (
-                <MenuItem key={m} selected={menuFilter === m} onClick={() => { setMenuFilter(m); setFilterMenu(null); }}>
+                <MenuItem key={m} onClick={() => setMenuFilter((prev) => toggleValue(prev, m))}>
+                  <Checkbox edge="start" size="small" checked={menuFilter.includes(m)} tabIndex={-1} disableRipple sx={{ mr: 1, p: 0.25 }} />
                   {tr(`menuTypes.${m}`, m)}
                 </MenuItem>
               )),

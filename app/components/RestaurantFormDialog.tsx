@@ -340,7 +340,14 @@ export default function RestaurantFormDialog({
 
     setLoading(true);
     try {
-      await onSave({ ...formData, locations }, imageFile);
+      // Keep been-status and visit count consistent regardless of edit path.
+      const payload: Partial<Restaurant> = { ...formData, locations };
+      if ((payload.visitCount ?? 0) >= 1) {
+        payload.status = 'been';
+      } else if (payload.status === 'been') {
+        payload.visitCount = 1;
+      }
+      await onSave(payload, imageFile);
       onClose();
     } catch (error) {
       console.error('Error saving restaurant:', error);
@@ -420,7 +427,14 @@ export default function RestaurantFormDialog({
               exclusive
               value={formData.status || 'want'}
               onChange={(_, value: RestaurantStatus | null) => {
-                if (value) setFormData({ ...formData, status: value });
+                if (!value) return;
+                setFormData((prev) => ({
+                  ...prev,
+                  status: value,
+                  // Marking a place "been" implies at least one visit.
+                  visitCount:
+                    value === 'been' && (prev.visitCount ?? 0) === 0 ? 1 : prev.visitCount,
+                }));
               }}
               size="small"
               aria-label={t('form.statusLabel')}
@@ -459,12 +473,15 @@ export default function RestaurantFormDialog({
               type="number"
               label={t('form.visitCount')}
               value={formData.visitCount ?? 0}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  visitCount: Math.max(0, Math.floor(Number(e.target.value) || 0)),
-                })
-              }
+              onChange={(e) => {
+                const n = Math.max(0, Math.floor(Number(e.target.value) || 0));
+                setFormData((prev) => ({
+                  ...prev,
+                  visitCount: n,
+                  // Any recorded visit implies the place has been visited.
+                  status: n >= 1 ? 'been' : prev.status,
+                }));
+              }}
               inputProps={{ min: 0, 'aria-label': t('form.visitCount') }}
             />
           </Grid>
