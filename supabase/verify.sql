@@ -5,10 +5,11 @@
 -- ============================================================
 
 -- 1. restaurants has the location + list/status/added_by + reservation +
---    dietary/type/recognition + contact + menu_types/locations columns
+--    dietary/type/recognition + contact + menu_types/locations +
+--    visit_count/favorite columns
 select
   'restaurants.columns' as check,
-  case when count(*) = 16 then 'OK' else 'MISSING' end as status,
+  case when count(*) = 18 then 'OK' else 'MISSING' end as status,
   string_agg(column_name, ', ' order by column_name) as found
 from information_schema.columns
 where table_schema = 'public'
@@ -17,7 +18,8 @@ where table_schema = 'public'
     'address', 'latitude', 'longitude', 'status', 'added_by', 'list_id',
     'reservation_platform', 'reservation_url',
     'dietary_tags', 'place_types', 'michelin_stars', 'bib_gourmand',
-    'email', 'phone', 'menu_types', 'locations'
+    'email', 'phone', 'menu_types', 'locations',
+    'visit_count', 'favorite'
   );
 
 -- 2. legacy restaurants.user_id is nullable (NOT NULL would block inserts)

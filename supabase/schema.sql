@@ -120,6 +120,11 @@ alter table public.restaurants
 -- multi-select pattern as dietary_tags/place_types.
 alter table public.restaurants
   add column if not exists menu_types text[] not null default '{}'::text[];
+-- How many times the user has visited, and whether it's a favourite.
+alter table public.restaurants
+  add column if not exists visit_count integer not null default 0;
+alter table public.restaurants
+  add column if not exists favorite boolean not null default false;
 -- Multiple locations per restaurant (e.g. chain branches). Stored as a JSONB
 -- array; each entry: { label, address, lat, lng, phone, email,
 -- reservationPlatform, reservationUrl }. The legacy scalar columns above are

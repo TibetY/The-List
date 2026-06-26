@@ -104,6 +104,9 @@ export interface Restaurant {
   michelinStars?: number; // 0-3 Michelin stars
   bibGourmand?: boolean; // Michelin Bib Gourmand recognition
   status?: RestaurantStatus; // 'been' (visited) or 'want' (want to try)
+  visitCount?: number; // How many times the user has visited
+  favorite?: boolean; // Marked as a favourite
+
   // Canonical per-location data (address/pin/contact/booking). A restaurant
   // always has at least one location.
   locations?: RestaurantLocation[];

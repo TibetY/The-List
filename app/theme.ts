@@ -124,10 +124,12 @@ const theme = createTheme({
           transition: 'all 0.2s ease',
         },
         contained: {
-          background: 'linear-gradient(135deg, #E8734A 0%, #C45A35 100%)',
+          // Deepened from the bright #E8734A gradient so white label text clears
+          // WCAG AA (4.5:1); the original was ~3:1. Still warm terracotta.
+          background: 'linear-gradient(135deg, #B05030 0%, #984026 100%)',
           boxShadow: '0 4px 15px rgba(232, 115, 74, 0.3)',
           '&:hover': {
-            background: 'linear-gradient(135deg, #F2956F 0%, #E8734A 100%)',
+            background: 'linear-gradient(135deg, #BD5730 0%, #A4462A 100%)',
             boxShadow: '0 6px 20px rgba(232, 115, 74, 0.4)',
             transform: 'translateY(-1px)',
           },

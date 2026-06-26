@@ -59,6 +59,32 @@ export async function setRestaurantStatus(
   if (error) throw error;
 }
 
+/** Quick favourite toggle without opening the full editor. */
+export async function setRestaurantFavorite(
+  id: string,
+  favorite: boolean
+): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase
+    .from('restaurants')
+    .update({ favorite })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+/** Quick visit-count update (e.g. +1) without opening the full editor. */
+export async function setRestaurantVisitCount(
+  id: string,
+  visitCount: number
+): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase
+    .from('restaurants')
+    .update({ visit_count: Math.max(0, Math.round(visitCount)) })
+    .eq('id', id);
+  if (error) throw error;
+}
+
 /** Delete a restaurant by id. */
 export async function deleteRestaurant(id: string): Promise<void> {
   const supabase = getSupabaseBrowserClient();

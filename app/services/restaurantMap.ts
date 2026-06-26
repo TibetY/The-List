@@ -23,6 +23,8 @@ export interface RestaurantRow {
   menu_types: string[] | null;
   michelin_stars: number | null;
   bib_gourmand: boolean | null;
+  visit_count: number | null;
+  favorite: boolean | null;
   reservation_platform: string | null;
   reservation_url: string | null;
   email: string | null;
@@ -95,6 +97,8 @@ export function rowToRestaurant(row: RestaurantRow): Restaurant {
     menuTypes: row.menu_types ?? undefined,
     michelinStars: row.michelin_stars ?? undefined,
     bibGourmand: row.bib_gourmand ?? undefined,
+    visitCount: row.visit_count ?? 0,
+    favorite: row.favorite ?? false,
     status: row.status ?? 'want',
     locations,
     // Deprecated mirrors of the primary location for any older read path.
@@ -155,6 +159,8 @@ export function restaurantToRow(
     menu_types: data.menuTypes ?? [],
     michelin_stars: data.michelinStars ?? 0,
     bib_gourmand: data.bibGourmand ?? false,
+    visit_count: data.visitCount ?? 0,
+    favorite: data.favorite ?? false,
     status: data.status ?? 'want',
     locations: rawLocations,
     // Mirror the primary location into the legacy scalar columns.

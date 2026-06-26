@@ -8,6 +8,8 @@ import {
   Chip,
   Tabs,
   Tab,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Close,
@@ -20,6 +22,9 @@ import {
   Twitter,
   Email as EmailIcon,
   Phone as PhoneIcon,
+  Favorite,
+  FavoriteBorder,
+  Add as AddIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import type { Restaurant } from '~/types/restaurant';
@@ -44,6 +49,8 @@ interface RestaurantDetailDialogProps {
   onClose: () => void;
   onEdit: (restaurant: Restaurant) => void;
   onDelete: (id: string) => void;
+  onToggleFavorite?: (restaurant: Restaurant) => void;
+  onAddVisit?: (restaurant: Restaurant) => void;
 }
 
 export default function RestaurantDetailDialog({
@@ -55,8 +62,12 @@ export default function RestaurantDetailDialog({
   onClose,
   onEdit,
   onDelete,
+  onToggleFavorite,
+  onAddVisit,
 }: RestaurantDetailDialogProps) {
   const { t: tr } = useTranslation();
+  const muiTheme = useTheme();
+  const fullScreen = useMediaQuery(muiTheme.breakpoints.down('sm'));
   const [activeLoc, setActiveLoc] = useState(0);
   // Reset to the first location tab whenever a different restaurant is opened.
   useEffect(() => {
@@ -95,9 +106,10 @@ export default function RestaurantDetailDialog({
       onClose={onClose}
       maxWidth="sm"
       fullWidth
+      fullScreen={fullScreen}
       aria-labelledby="restaurant-detail-title"
       PaperProps={{
-        sx: { background: t.cardBg, color: t.ink, borderRadius: '18px', overflow: 'hidden' },
+        sx: { background: t.cardBg, color: t.ink, borderRadius: fullScreen ? 0 : '18px', overflow: 'hidden' },
       }}
     >
       {/* Hero image / initial */}
@@ -143,16 +155,30 @@ export default function RestaurantDetailDialog({
       </Box>
 
       <DialogContent sx={{ p: 3 }}>
-        {/* Name + price */}
-        <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 2 }}>
+        {/* Name + price + favourite */}
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
           <Box id="restaurant-detail-title" component="h2" sx={{ fontFamily: serifFont, fontSize: 30, m: 0, lineHeight: 1.1 }}>
             {r.name}
           </Box>
-          {r.priceRange && (
-            <Box component="span" sx={{ color: t.cost, fontSize: 17, fontWeight: 600, letterSpacing: '.03em', flex: 'none' }}>
-              {r.priceRange}
-            </Box>
-          )}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 'none' }}>
+            {r.priceRange && (
+              <Box component="span" sx={{ color: t.cost, fontSize: 17, fontWeight: 600, letterSpacing: '.03em' }}>
+                {r.priceRange}
+              </Box>
+            )}
+            {canEdit && onToggleFavorite ? (
+              <IconButton
+                onClick={() => onToggleFavorite(r)}
+                aria-label={tr(r.favorite ? 'dashboard.unfavorite' : 'dashboard.favorite', { name: r.name })}
+                aria-pressed={r.favorite ?? false}
+                sx={{ color: r.favorite ? '#C0492B' : t.muted }}
+              >
+                {r.favorite ? <Favorite /> : <FavoriteBorder />}
+              </IconButton>
+            ) : r.favorite ? (
+              <Favorite role="img" aria-label={tr('dashboard.favorited')} sx={{ color: '#C0492B' }} />
+            ) : null}
+          </Box>
         </Box>
 
         {/* Rating */}
@@ -165,6 +191,23 @@ export default function RestaurantDetailDialog({
             <Box component="span" sx={{ color: t.notRated, fontSize: 13, fontStyle: 'italic' }}>
               {tr('detail.notRated')}
             </Box>
+          )}
+        </Box>
+
+        {/* Times visited */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: '10px', flexWrap: 'wrap' }}>
+          <Box component="span" sx={{ color: t.muted, fontSize: 13.5 }}>
+            {tr('detail.visitedTimes', { count: r.visitCount ?? 0 })}
+          </Box>
+          {canEdit && onAddVisit && (
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<AddIcon fontSize="small" />}
+              onClick={() => onAddVisit(r)}
+            >
+              {tr('detail.addVisit')}
+            </Button>
           )}
         </Box>
 
