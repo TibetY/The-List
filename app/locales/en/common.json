@@ -207,6 +207,7 @@
     "websiteUrl": "Website URL",
     "fetchingInfo": "Fetching info from website…",
     "scrapeNoInfo": "Couldn't auto-fill details from this site. Add them manually below.",
+    "reservationScrapeNoInfo": "Couldn't read details from this reservation link.",
     "locations": "Locations",
     "locationLabel": "Location name",
     "locationLabelPlaceholder": "e.g. Carling, Downtown",

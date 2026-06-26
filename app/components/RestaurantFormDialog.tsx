@@ -132,6 +132,9 @@ export default function RestaurantFormDialog({
   const [fetchingInfo, setFetchingInfo] = useState(false);
   // Whether the last website scrape returned anything useful.
   const [scrapeStatus, setScrapeStatus] = useState<'idle' | 'ok' | 'empty'>('idle');
+  // Same, for scraping a reservation link directly (per active location).
+  const [resFetching, setResFetching] = useState(false);
+  const [resScrapeStatus, setResScrapeStatus] = useState<'idle' | 'ok' | 'empty'>('idle');
 
   useEffect(() => {
     if (restaurant) {
@@ -178,6 +181,8 @@ export default function RestaurantFormDialog({
       setImagePreview('');
     }
     setScrapeStatus('idle');
+    setResScrapeStatus('idle');
+    setResFetching(false);
     setImageFile(undefined);
   }, [restaurant, open]);
 
@@ -208,6 +213,8 @@ export default function RestaurantFormDialog({
   const switchLocation = (index: number) => {
     setActiveLocation(index);
     setPlatformChoice(platformChoiceFor(locations[index]));
+    setResScrapeStatus('idle');
+    setResFetching(false);
   };
 
   /** Fill blank brand/location fields from a scrape result (never overwrites). */
@@ -280,12 +287,25 @@ export default function RestaurantFormDialog({
   /** Scrape a reservation link directly to fill in any details we still miss. */
   const handleReservationBlur = async () => {
     const resUrl = (locations[activeLocation]?.reservationUrl ?? '').trim();
-    if (!resUrl || !/^https?:\/\/.+/i.test(resUrl)) return;
+    if (!resUrl || !/^https?:\/\/.+/i.test(resUrl)) {
+      setResScrapeStatus('idle');
+      return;
+    }
+    setResFetching(true);
+    setResScrapeStatus('idle');
     try {
       const res = await fetch(`/api/scrape-website?url=${encodeURIComponent(resUrl)}`);
-      applyScrape((await res.json()) as ScrapeData);
+      const data = (await res.json()) as ScrapeData;
+      // Reservation pages add contact/cuisine/image; the link itself isn't news.
+      const foundAnything = Boolean(
+        data.address || data.phone || data.email || data.cuisineType || data.image
+      );
+      setResScrapeStatus(foundAnything ? 'ok' : 'empty');
+      applyScrape(data);
     } catch {
-      // Best-effort — ignore failures.
+      setResScrapeStatus('empty');
+    } finally {
+      setResFetching(false);
     }
   };
 
@@ -382,6 +402,19 @@ export default function RestaurantFormDialog({
 
   const dialogTitle = restaurant ? t('form.editTitle') : t('form.addTitle');
   const loc = locations[activeLocation] ?? {};
+  // Shared feedback for the reservation-link scrape (spinner + "couldn't read").
+  const resHelperText = resFetching
+    ? t('form.fetchingInfo')
+    : resScrapeStatus === 'empty'
+      ? t('form.reservationScrapeNoInfo')
+      : undefined;
+  const resInputProps = {
+    endAdornment: resFetching ? <CircularProgress size={18} /> : undefined,
+  };
+  const handleReservationUrlChange = (value: string) => {
+    updateActiveLocation({ reservationUrl: value });
+    if (resScrapeStatus !== 'idle') setResScrapeStatus('idle');
+  };
   const sectionLabelSx = {
     display: 'block',
     mb: 0.5,
@@ -829,12 +862,13 @@ export default function RestaurantFormDialog({
                       fullWidth
                       label={t('form.reservationUrl')}
                       value={loc.reservationUrl ?? ''}
-                      onChange={(e) =>
-                        updateActiveLocation({ reservationUrl: e.target.value })
-                      }
+                      onChange={(e) => handleReservationUrlChange(e.target.value)}
                       onBlur={handleReservationBlur}
                       placeholder="https://resy.com/..."
                       type="url"
+                      error={resScrapeStatus === 'empty'}
+                      helperText={resHelperText}
+                      InputProps={resInputProps}
                     />
                   </Grid>
                 )}
@@ -857,12 +891,13 @@ export default function RestaurantFormDialog({
                       fullWidth
                       label={t('form.reservationUrl')}
                       value={loc.reservationUrl ?? ''}
-                      onChange={(e) =>
-                        updateActiveLocation({ reservationUrl: e.target.value })
-                      }
+                      onChange={(e) => handleReservationUrlChange(e.target.value)}
                       onBlur={handleReservationBlur}
                       placeholder="https://..."
                       type="url"
+                      error={resScrapeStatus === 'empty'}
+                      helperText={resHelperText}
+                      InputProps={resInputProps}
                     />
                   </Grid>
                 )}
