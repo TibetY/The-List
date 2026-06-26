@@ -207,6 +207,7 @@
     "websiteUrl": "Site web",
     "fetchingInfo": "Récupération des infos du site…",
     "scrapeNoInfo": "Impossible de remplir automatiquement à partir de ce site. Ajoutez les infos manuellement ci-dessous.",
+    "reservationScrapeNoInfo": "Impossible de lire les détails depuis ce lien de réservation.",
     "locations": "Emplacements",
     "locationLabel": "Nom de l'emplacement",
     "locationLabelPlaceholder": "p. ex. Carling, Centre-ville",
