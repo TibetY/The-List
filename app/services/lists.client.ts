@@ -75,6 +75,22 @@ export async function revokeInviteLink(linkId: string): Promise<void> {
   if (error) throw error;
 }
 
+/**
+ * Change the role an existing invite link grants (owner only). Keeps the same
+ * token/URL so any link already shared keeps working with the new role.
+ */
+export async function updateInviteLinkRole(
+  linkId: string,
+  role: Exclude<ListRole, 'owner'>
+): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase
+    .from('list_invite_links')
+    .update({ role })
+    .eq('id', linkId);
+  if (error) throw error;
+}
+
 /** Change a member's role (owner only). Cannot target the owner row. */
 export async function updateMemberRole(
   memberId: string,

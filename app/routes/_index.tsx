@@ -1,5 +1,7 @@
 import { Box, Container, Typography, Button, Grid } from "@mui/material";
 import { Link } from "@remix-run/react";
+import type { LoaderFunction } from "@remix-run/node";
+import { json, redirect } from "@remix-run/node";
 import { useTranslation } from "react-i18next";
 import {
   RestaurantMenu,
@@ -7,6 +9,18 @@ import {
   Share,
 } from "@mui/icons-material";
 import Logo from "~/components/Logo";
+import { createSupabaseServerClient } from "~/supabase.server";
+
+// Signed-in users don't need the marketing page — send them straight to their
+// lists so the hero's "Get Started / Sign In" CTAs are never shown out of context.
+export const loader: LoaderFunction = async ({ request }) => {
+  const { supabase } = createSupabaseServerClient(request);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user) return redirect("/dashboard");
+  return json({});
+};
 
 export default function Index() {
   const { t } = useTranslation();

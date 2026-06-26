@@ -13,12 +13,14 @@ import {
   CircularProgress,
   Snackbar,
   Alert,
+  Divider,
   ThemeProvider,
 } from '@mui/material';
 import { PhotoCamera, ArrowBack } from '@mui/icons-material';
 import { createSupabaseServerClient } from '~/supabase.server';
 import { getProfile } from '~/services/profiles.server';
 import { updateProfile, uploadAvatar } from '~/services/profiles.client';
+import { getSupabaseBrowserClient } from '~/supabase.client';
 import { makeListTheme, getStoredMode, type ListMode } from '~/listTheme';
 import type { Profile } from '~/types/restaurant';
 import LanguageSwitcher from '~/components/LanguageSwitcher';
@@ -49,6 +51,10 @@ export default function ProfilePage() {
   const [avatarFile, setAvatarFile] = useState<File | undefined>();
   const [preview, setPreview] = useState(profile?.avatarUrl ?? '');
   const [saving, setSaving] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
@@ -79,6 +85,32 @@ export default function ProfilePage() {
       setSnackbar({ open: true, message: t('profile.saveFailed'), severity: 'error' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleUpdatePassword = async () => {
+    if (newPassword.length < 6) {
+      setPasswordError(t('profile.passwordTooShort'));
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError(t('profile.passwordMismatch'));
+      return;
+    }
+    setSavingPassword(true);
+    setPasswordError('');
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      setNewPassword('');
+      setConfirmPassword('');
+      setSnackbar({ open: true, message: t('profile.passwordUpdated'), severity: 'success' });
+    } catch (error) {
+      console.error('Error updating password:', error);
+      setSnackbar({ open: true, message: t('profile.passwordUpdateFailed'), severity: 'error' });
+    } finally {
+      setSavingPassword(false);
     }
   };
 
@@ -131,6 +163,70 @@ export default function ProfilePage() {
           >
             {saving ? <CircularProgress size={22} color="inherit" /> : t('profile.save')}
           </Button>
+
+          <Divider sx={{ my: 5 }} />
+
+          <Typography
+            variant="h6"
+            component="h2"
+            sx={{ fontWeight: 700, mb: 0.5 }}
+          >
+            {t('profile.security')}
+          </Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
+            {t('profile.securityIntro')}
+          </Typography>
+
+          {passwordError && (
+            <Alert severity="error" sx={{ mb: 2 }} role="alert">
+              {passwordError}
+            </Alert>
+          )}
+
+          <Box
+            component="form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleUpdatePassword();
+            }}
+          >
+            <TextField
+              fullWidth
+              type="password"
+              label={t('profile.newPassword')}
+              value={newPassword}
+              onChange={(e) => {
+                setNewPassword(e.target.value);
+                if (passwordError) setPasswordError('');
+              }}
+              autoComplete="new-password"
+              sx={{ mb: 2 }}
+            />
+            <TextField
+              fullWidth
+              type="password"
+              label={t('profile.confirmPassword')}
+              value={confirmPassword}
+              onChange={(e) => {
+                setConfirmPassword(e.target.value);
+                if (passwordError) setPasswordError('');
+              }}
+              autoComplete="new-password"
+              sx={{ mb: 3 }}
+            />
+            <Button
+              type="submit"
+              variant="outlined"
+              disabled={savingPassword || !newPassword || !confirmPassword}
+              sx={{ minWidth: 160 }}
+            >
+              {savingPassword ? (
+                <CircularProgress size={22} color="inherit" />
+              ) : (
+                t('profile.updatePassword')
+              )}
+            </Button>
+          </Box>
         </Container>
 
         <Snackbar

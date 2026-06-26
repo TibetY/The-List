@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -28,6 +28,7 @@ import type {
 import {
   createInviteLink,
   revokeInviteLink,
+  updateInviteLinkRole,
   updateMemberRole,
   removeMember,
 } from '~/services/lists.client';
@@ -41,6 +42,7 @@ interface ShareListDialogProps {
   canManage: boolean;
   onClose: () => void;
   onChanged: () => void;
+  onLeave?: () => void;
 }
 
 function initials(member: ListMember): string {
@@ -57,14 +59,24 @@ export default function ShareListDialog({
   canManage,
   onClose,
   onChanged,
+  onLeave,
 }: ShareListDialogProps) {
   const { t } = useTranslation();
   const [role, setRole] = useState<Exclude<ListRole, 'owner'>>('editor');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+
+  // Don't keep a half-finished "leave" confirmation around after the dialog closes.
+  useEffect(() => {
+    if (!open) setConfirmLeave(false);
+  }, [open]);
 
   if (!list) return null;
+
+  const me = members.find((m) => m.userId === currentUserId);
+  const canLeave = !!onLeave && !!me && me.role !== 'owner';
 
   const linkUrl =
     inviteLink && typeof window !== 'undefined'
@@ -157,11 +169,27 @@ export default function ShareListDialog({
                   }}
                   aria-label={t('share.inviteLink')}
                 />
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1, flexWrap: 'wrap' }}>
                   <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                     {t('share.joinsAsLong')}
                   </Typography>
-                  <Chip size="small" label={t(`roles.${inviteLink.role}`)} />
+                  <Select
+                    size="small"
+                    value={inviteLink.role}
+                    disabled={busy}
+                    onChange={(e) =>
+                      run(() =>
+                        updateInviteLinkRole(
+                          inviteLink.id,
+                          e.target.value as Exclude<ListRole, 'owner'>
+                        )
+                      )
+                    }
+                    aria-label={t('share.changeRoleLabel')}
+                  >
+                    <MenuItem value="editor">{t('roles.editor')}</MenuItem>
+                    <MenuItem value="viewer">{t('roles.viewer')}</MenuItem>
+                  </Select>
                   <Button
                     size="small"
                     disabled={busy}
@@ -255,7 +283,41 @@ export default function ShareListDialog({
           ))}
         </Box>
       </DialogContent>
-      <DialogActions sx={{ px: 3, py: 2 }}>
+      <DialogActions sx={{ px: 3, py: 2, flexWrap: 'wrap' }}>
+        {canLeave &&
+          (confirmLeave ? (
+            <Box sx={{ mr: 'auto', display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                {t('share.leaveConfirm', { name: list.name })}
+              </Typography>
+              <Button
+                size="small"
+                color="error"
+                variant="contained"
+                disabled={busy}
+                onClick={() =>
+                  run(async () => {
+                    if (me) await removeMember(me.id);
+                    onLeave?.();
+                  })
+                }
+              >
+                {t('share.leaveList')}
+              </Button>
+              <Button size="small" disabled={busy} onClick={() => setConfirmLeave(false)} sx={{ color: 'text.secondary' }}>
+                {t('share.cancel')}
+              </Button>
+            </Box>
+          ) : (
+            <Button
+              color="error"
+              disabled={busy}
+              onClick={() => setConfirmLeave(true)}
+              sx={{ mr: 'auto' }}
+            >
+              {t('share.leaveList')}
+            </Button>
+          ))}
         {busy && <CircularProgress size={20} sx={{ mr: 1 }} />}
         <Button onClick={onClose}>{t('share.done')}</Button>
       </DialogActions>

@@ -146,6 +146,21 @@ export default function LoginPage() {
             {t("login.submit")}
           </Button>
         </Form>
+
+        <Typography variant="body2" sx={{ mt: 3, textAlign: "center" }}>
+          <Box
+            component={Link}
+            to="/forgot-password"
+            sx={{
+              color: "text.secondary",
+              textDecoration: "none",
+              fontWeight: 500,
+              "&:hover": { color: "primary.main", textDecoration: "underline" },
+            }}
+          >
+            {t("login.forgotPassword")}
+          </Box>
+        </Typography>
       </Box>
     </Container>
   );
