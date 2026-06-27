@@ -116,7 +116,7 @@ export default function ProfilePage() {
 
   return (
     <ThemeProvider theme={theme}>
-      <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', fontFamily: "'DM Sans',sans-serif" }}>
+      <Box data-theme={mode} sx={{ minHeight: '100vh', bgcolor: 'background.default', fontFamily: "'DM Sans',sans-serif" }}>
         <Container maxWidth="sm" sx={{ pt: { xs: 6, sm: 10 }, pb: 8 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3, gap: 2 }}>
             <Button

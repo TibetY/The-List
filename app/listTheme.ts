@@ -216,6 +216,64 @@ export const heroTokens = {
 };
 
 /**
+ * The semantic-token names the brand exposes as CSS custom properties, mapped to
+ * the fields on ListTokens. This is the single mapping that produces tokens.css
+ * (via brandCssVars) so the CSS layer is GENERATED from the same source as the
+ * MUI theme — they can never drift apart.
+ */
+const CSS_VAR_MAP: [cssVar: string, token: keyof ListTokens][] = [
+  ['--bg', 'pageBg'],
+  ['--surface', 'panelBg'],
+  ['--raised', 'cardBg'],
+  ['--footer', 'footerBg'],
+  ['--ink', 'ink'],
+  ['--muted', 'muted'],
+  ['--faint', 'faint'],
+  ['--border', 'border'],
+  ['--border-soft', 'borderSoft'],
+  ['--border-strong', 'borderStrong'],
+  ['--field', 'field'],
+  ['--field-border', 'fieldBorder'],
+  ['--search-bg', 'searchBg'],
+  ['--accent', 'accent'],
+  ['--accent-hover', 'accentHover'],
+  ['--accent-text', 'accentText'],
+  ['--ember', 'ember'],
+  ['--secondary', 'secondary'],
+  ['--success', 'success'],
+  ['--error', 'error'],
+  ['--rating', 'rating'],
+  ['--cost', 'cost'],
+  ['--not-rated', 'notRated'],
+  ['--been-bg', 'beenBg'],
+  ['--been-fg', 'beenFg'],
+  ['--want-bg', 'wantBg'],
+  ['--want-fg', 'wantFg'],
+  ['--ring', 'ring'],
+  ['--snack-bg', 'snackBg'],
+  ['--snack-fg', 'snackFg'],
+  ['--shadow-1', 'shadow1'],
+  ['--shadow-2', 'shadow2'],
+  ['--shadow-3', 'shadow3'],
+];
+
+/**
+ * Generate the brand's CSS custom properties for both modes, scoped to
+ * [data-theme]. Inject once (see root.tsx); any element carrying
+ * data-theme="light|dark" then exposes --accent, --surface, … to Tailwind /
+ * Emotion / plain CSS. Derived from listTokens, so it tracks the MUI theme.
+ */
+export function brandCssVars(): string {
+  const block = (mode: ListMode) =>
+    CSS_VAR_MAP.map(([cssVar, token]) => `${cssVar}:${listTokens[mode][token]}`).join(';');
+  const statics = '--radius:12px;--radius-pill:999px;--space:4px';
+  return (
+    `:root,[data-theme="light"]{${block('light')};${statics}}` +
+    `[data-theme="dark"]{${block('dark')}}`
+  );
+}
+
+/**
  * Build an MUI theme for a brand mode. Used for the dashboard subtree (dialogs,
  * buttons, inputs, snackbars) and, via theme.ts, the public pages. Buttons are
  * soft rectangles (radius 12); pills are reserved for selection controls, which

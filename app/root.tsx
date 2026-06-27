@@ -30,6 +30,7 @@ import { getServerSupabaseEnv, type PublicEnv } from "~/supabaseConfig";
 import i18nextServer from "~/i18next.server";
 import { resources, fallbackLng } from "~/i18n";
 import Navbar from "./components/Navbar";
+import { brandCssVars } from "~/listTheme";
 import tailwindHref from "~/tailwind.css?url";
 
 export const handle = { i18n: "common" };
@@ -78,10 +79,14 @@ export default function App() {
   useChangeLanguage(locale);
 
   return (
-    <html lang={locale} dir={i18n.dir(locale)}>
+    <html lang={locale} dir={i18n.dir(locale)} data-theme="dark">
       <head>
         <Meta />
         <Links />
+        {/* Brand design tokens as CSS custom properties (generated from the same
+            source as the MUI theme). Public pages inherit the dark set; the
+            dashboard/profile override with data-theme on their own root. */}
+        <style dangerouslySetInnerHTML={{ __html: brandCssVars() }} />
       </head>
       <body>
         <a href="#main-content" className="skip-to-main">

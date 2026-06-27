@@ -883,6 +883,7 @@ export default function Dashboard() {
   return (
     <ThemeProvider theme={muiTheme}>
       <Box
+        data-theme={mode}
         sx={{
           minHeight: '100dvh',
           display: 'flex',

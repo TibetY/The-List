@@ -34,9 +34,14 @@
     "viewer": "Lecteur"
   },
   "landing": {
+    "eyebrow": "Un carnet de restaurants partagé",
     "titleLine1": "Chaque bon repas,",
     "titleLine2": "mérite qu'on s'en souvienne.",
-    "subtitle": "Découvrez. Goûtez. Souvenez-vous. Suivez chaque repas, notez chaque bouchée et n'oubliez plus jamais un bon restaurant.",
+    "subtitle": "Un petit carnet de restaurants et de bars — les endroits que vous avez adorés, et ceux encore sur la liste d'envies. Gardé avec vos personnes préférées.",
+    "ctaPrimary": "Commencez votre liste — gratuit",
+    "ctaSecondary": "Voir comment ça marche",
+    "socialProof": "Utilisé par des groupes dans plus de 40 villes",
+    "howItWorksTitle": "Comment ça marche",
     "getStarted": "Commencer",
     "signIn": "Se connecter",
     "curateTitle": "Composez votre liste",

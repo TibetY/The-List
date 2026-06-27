@@ -34,9 +34,14 @@
     "viewer": "Viewer"
   },
   "landing": {
+    "eyebrow": "A shared restaurant journal",
     "titleLine1": "Every good meal,",
     "titleLine2": "worth remembering.",
-    "subtitle": "Discover. Taste. Remember. Track every meal, rate every bite, and never forget a great restaurant again.",
+    "subtitle": "One little black book of restaurants & bars — the spots you loved, and the ones still on the wishlist. Kept with your favourite people.",
+    "ctaPrimary": "Start your list — free",
+    "ctaSecondary": "See how it works",
+    "socialProof": "Shared by groups in 40+ cities",
+    "howItWorksTitle": "How it works",
     "getStarted": "Get Started",
     "signIn": "Sign In",
     "curateTitle": "Curate Your List",
