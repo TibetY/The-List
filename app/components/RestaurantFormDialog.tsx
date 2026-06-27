@@ -480,7 +480,7 @@ export default function RestaurantFormDialog({
           <Close />
         </IconButton>
       </DialogTitle>
-      <DialogContent dividers sx={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+      <DialogContent dividers sx={{ borderColor: 'divider' }}>
         <Grid container spacing={2.5} sx={{ mt: 0 }}>
           {/* Restaurant Name */}
           <Grid item xs={12}>
@@ -802,7 +802,8 @@ export default function RestaurantFormDialog({
 
             <Box
               sx={{
-                border: '1px solid rgba(255,255,255,0.08)',
+                border: '1px solid',
+                borderColor: 'divider',
                 borderRadius: '12px',
                 p: 2,
               }}
@@ -1056,12 +1057,12 @@ export default function RestaurantFormDialog({
                 sx={{
                   py: 2,
                   borderStyle: 'dashed',
-                  borderColor: dragActive ? 'primary.main' : 'rgba(255,255,255,0.15)',
-                  backgroundColor: dragActive ? 'rgba(232, 115, 74, 0.08)' : undefined,
+                  borderColor: dragActive ? 'primary.main' : 'divider',
+                  backgroundColor: dragActive ? 'action.hover' : undefined,
                   color: 'text.secondary',
                   '&:hover': {
                     borderColor: 'primary.main',
-                    backgroundColor: 'rgba(232, 115, 74, 0.04)',
+                    backgroundColor: 'action.hover',
                   },
                 }}
               >
@@ -1095,7 +1096,8 @@ export default function RestaurantFormDialog({
                   textAlign: 'center',
                   borderRadius: '16px',
                   overflow: 'hidden',
-                  border: '1px solid rgba(255,255,255,0.08)',
+                  border: '1px solid',
+                borderColor: 'divider',
                 }}
               >
                 <img

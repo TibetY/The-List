@@ -82,12 +82,12 @@ export default function EmailDialog({ open, onClose, onSend }: EmailDialogProps)
             sx={{
               p: 1,
               borderRadius: '12px',
-              backgroundColor: 'rgba(232, 115, 74, 0.1)',
+              backgroundColor: 'action.hover',
               display: 'flex',
             }}
             aria-hidden="true"
           >
-            <Email sx={{ color: '#E8734A', fontSize: 20 }} />
+            <Email sx={{ color: 'primary.main', fontSize: 20 }} />
           </Box>
           {t('email.title')}
         </Box>

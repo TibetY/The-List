@@ -44,11 +44,7 @@ export const links: LinksFunction = () => [
   },
   {
     rel: "stylesheet",
-    href: "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap",
-  },
-  {
-    rel: "stylesheet",
-    href: "https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap",
+    href: "https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Instrument+Serif:ital@0;1&display=swap",
   },
 ];
 
@@ -60,7 +56,7 @@ export const meta: MetaFunction = ({ data }) => {
     { title: m.title },
     { name: "description", content: m.description },
     { name: "viewport", content: "width=device-width,initial-scale=1" },
-    { name: "theme-color", content: "#0a0a0f" },
+    { name: "theme-color", content: "#0E150D" },
   ];
 };
 
