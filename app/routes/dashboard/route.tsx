@@ -37,6 +37,10 @@ import {
   EventSeat,
   Favorite,
   FavoriteBorder,
+  Close,
+  Search,
+  ArrowUpward,
+  ArrowDownward,
 } from '@mui/icons-material';
 import { createSupabaseServerClient } from '~/supabase.server';
 import { getRestaurants } from '~/services/restaurants.server';
@@ -307,6 +311,10 @@ export default function Dashboard() {
   const [dietFilter, setDietFilter] = useState<string[]>([]);
   const [menuFilter, setMenuFilter] = useState<string[]>([]);
   const [sort, setSort] = useState<SortMode>('recent');
+  // Flip whatever the chosen sort's natural order is (e.g. Name Z→A, oldest
+  // first, lowest rated first). Kept separate from `sort` so the dropdown still
+  // names the primary key.
+  const [sortReversed, setSortReversed] = useState(false);
   const [filterMenu, setFilterMenu] = useState<{
     kind: 'cuisine' | 'cost' | 'rating' | 'place' | 'diet' | 'menu' | 'sort';
     anchor: HTMLElement;
@@ -332,11 +340,30 @@ export default function Dashboard() {
     open: boolean;
     message: string;
     severity: 'success' | 'error' | 'warning';
+    // Optional inline action (Undo / Retry) shown on the right of the snackbar.
+    action?: { label: string; onClick: () => void };
   }>({ open: false, message: '', severity: 'success' });
 
   useEffect(() => {
     setRestaurants(initialRestaurants);
   }, [initialRestaurants]);
+
+  // Surface the result of redeeming a shareable invite link (the /join route
+  // redirects here with ?join=ok or ?join=invalid), then strip the param so a
+  // refresh doesn't show the toast again.
+  useEffect(() => {
+    const join = searchParams.get('join');
+    if (!join) return;
+    if (join === 'ok') {
+      setSnackbar({ open: true, message: tr('dashboard.joinedList'), severity: 'success' });
+    } else if (join === 'invalid') {
+      setSnackbar({ open: true, message: tr('dashboard.joinInvalid'), severity: 'error' });
+    }
+    const params = new URLSearchParams(searchParams);
+    params.delete('join');
+    setSearchParams(params, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const t = listTokens[mode];
   const muiTheme = useMemo(() => makeListTheme(mode), [mode]);
@@ -412,33 +439,35 @@ export default function Dashboard() {
   // counts still read from `filtered`).
   const sorted = useMemo(() => {
     const arr = [...filtered];
+    const dir = sortReversed ? -1 : 1;
     switch (sort) {
       case 'rating':
-        arr.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+        arr.sort((a, b) => dir * ((b.rating ?? 0) - (a.rating ?? 0)));
         break;
       case 'name':
-        arr.sort((a, b) => a.name.localeCompare(b.name));
+        arr.sort((a, b) => dir * a.name.localeCompare(b.name));
         break;
       case 'price':
-        arr.sort((a, b) => (a.priceRange?.length ?? 0) - (b.priceRange?.length ?? 0));
+        arr.sort((a, b) => dir * ((a.priceRange?.length ?? 0) - (b.priceRange?.length ?? 0)));
         break;
       case 'visits':
-        arr.sort((a, b) => (b.visitCount ?? 0) - (a.visitCount ?? 0));
+        arr.sort((a, b) => dir * ((b.visitCount ?? 0) - (a.visitCount ?? 0)));
         break;
       case 'favorite':
         arr.sort(
           (a, b) =>
-            Number(b.favorite ?? false) - Number(a.favorite ?? false) ||
-            a.name.localeCompare(b.name)
+            dir *
+            (Number(b.favorite ?? false) - Number(a.favorite ?? false) ||
+              a.name.localeCompare(b.name))
         );
         break;
       case 'recent':
       default:
-        arr.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
+        arr.sort((a, b) => dir * (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
         break;
     }
     return arr;
-  }, [filtered, sort]);
+  }, [filtered, sort, sortReversed]);
 
   const hasActiveFilters =
     filter !== 'all' ||
@@ -449,7 +478,8 @@ export default function Dashboard() {
     placeFilter.length > 0 ||
     dietFilter.length > 0 ||
     menuFilter.length > 0 ||
-    sort !== 'recent';
+    sort !== 'recent' ||
+    sortReversed;
 
   const clearFilters = () => {
     setFilter('all');
@@ -461,6 +491,7 @@ export default function Dashboard() {
     setDietFilter([]);
     setMenuFilter([]);
     setSort('recent');
+    setSortReversed(false);
   };
 
   const total = decorated.length;
@@ -621,22 +652,52 @@ export default function Dashboard() {
     }
   };
 
+  // Re-create a just-deleted place from a kept snapshot (Undo). Re-creating
+  // assigns a new id/timestamp, which is fine for a restore.
+  const handleRestoreRestaurant = async (snapshot: Restaurant) => {
+    if (!activeList) return;
+    const { id, listId, createdAt, updatedAt, addedBy, ...payload } = snapshot;
+    void id; void listId; void createdAt; void updatedAt; void addedBy;
+    try {
+      await createRestaurant(payload, activeList.id, userId);
+      revalidator.revalidate();
+      setSnackbar({ open: true, message: tr('dashboard.snackRestored'), severity: 'success' });
+    } catch (error) {
+      console.error('Error restoring restaurant:', error);
+      setSnackbar({ open: true, message: tr('dashboard.snackSaveFailed'), severity: 'error' });
+    }
+  };
+
   const handleConfirmDelete = async () => {
     if (!restaurantToDelete) return;
+    // Snapshot the full row before deleting so Undo can restore it.
+    const snapshot = restaurants.find((r) => r.id === restaurantToDelete.id);
     try {
       await deleteRestaurant(restaurantToDelete.id);
-      setSnackbar({ open: true, message: tr('dashboard.snackDeleted'), severity: 'success' });
+      setSnackbar({
+        open: true,
+        message: tr('dashboard.snackDeleted'),
+        severity: 'success',
+        action: snapshot
+          ? { label: tr('dashboard.undo'), onClick: () => handleRestoreRestaurant(snapshot) }
+          : undefined,
+      });
       revalidator.revalidate();
       setDeleteOpen(false);
       setRestaurantToDelete(null);
     } catch (error) {
       console.error('Error deleting restaurant:', error);
-      setSnackbar({ open: true, message: tr('dashboard.snackDeleteFailed'), severity: 'error' });
+      setSnackbar({
+        open: true,
+        message: tr('dashboard.snackDeleteFailed'),
+        severity: 'error',
+        action: { label: tr('dashboard.retry'), onClick: () => handleConfirmDelete() },
+      });
     }
   };
 
   const handleSendEmail = async (email: string) => {
-    sendRestaurantListViaMailto(restaurants, email, {
+    const outcome = await sendRestaurantListViaMailto(restaurants, email, {
       subject: tr('email.subject'),
       heading: tr('email.heading'),
       cuisine: tr('email.labelCuisine'),
@@ -645,10 +706,21 @@ export default function Dashboard() {
       website: tr('email.labelWebsite'),
       notes: tr('email.labelNotes'),
       social: tr('email.labelSocial'),
+      address: tr('email.labelAddress'),
+      phone: tr('email.labelPhone'),
+      status: tr('email.labelStatus'),
+      reservation: tr('email.labelReservation'),
+      visits: tr('email.labelVisits'),
+      statusBeen: tr('email.statusBeen'),
+      statusWant: tr('email.statusWant'),
       total: (count) => tr('email.total', { count }),
       generated: (date) => tr('email.generated', { date }),
     }, i18n.language);
-    setSnackbar({ open: true, message: tr('dashboard.snackEmailOpening'), severity: 'success' });
+    setSnackbar({
+      open: true,
+      message: outcome === 'copied' ? tr('dashboard.snackEmailCopied') : tr('dashboard.snackEmailOpening'),
+      severity: outcome === 'copied' ? 'warning' : 'success',
+    });
   };
 
   const handleSelectList = (listId: string) => {
@@ -708,6 +780,17 @@ export default function Dashboard() {
       console.error('Error deleting list:', error);
       setSnackbar({ open: true, message: tr('dashboard.snackListUpdateFailed'), severity: 'error' });
     }
+  };
+
+  const handleLeaveList = () => {
+    setShareOpen(false);
+    // Drop the ?list param so the loader falls back to the user's default list,
+    // then refresh now that they're no longer a member of the one they left.
+    const params = new URLSearchParams(searchParams);
+    params.delete('list');
+    setSearchParams(params);
+    revalidator.revalidate();
+    setSnackbar({ open: true, message: tr('share.snackLeft'), severity: 'success' });
   };
 
   const handleLogout = () => {
@@ -800,6 +883,7 @@ export default function Dashboard() {
   return (
     <ThemeProvider theme={muiTheme}>
       <Box
+        data-theme={mode}
         sx={{
           minHeight: '100dvh',
           display: 'flex',
@@ -906,6 +990,18 @@ export default function Dashboard() {
                   '::placeholder': { color: t.faint },
                 }}
               />
+              {searchQuery && (
+                <Box
+                  component="button"
+                  type="button"
+                  aria-label={tr('dashboard.searchClear')}
+                  onMouseDown={(e: React.MouseEvent) => e.preventDefault()}
+                  onClick={() => setSearchQuery('')}
+                  sx={{ display: 'flex', border: 'none', background: 'transparent', cursor: 'pointer', color: t.faint, p: 0, flex: 'none' }}
+                >
+                  <Close sx={{ fontSize: 15 }} />
+                </Box>
+              )}
             </Box>
 
             {/* language toggle */}
@@ -1025,23 +1121,74 @@ export default function Dashboard() {
                 {activeList && role !== 'owner' && ` · ${tr(`roles.${role}`)}`}
               </Box>
             </Box>
-            <Box sx={{ display: 'flex', background: t.searchBg, border: `1px solid ${t.border}`, borderRadius: '999px', padding: '4px' }}>
-              <Box component="button" onClick={() => setView('tile')} sx={{ ...segBtnStyle, ...seg('tile') }}>{tr('dashboard.viewTile')}</Box>
-              <Box component="button" onClick={() => setView('list')} sx={{ ...segBtnStyle, ...seg('list') }}>{tr('dashboard.viewList')}</Box>
-              <Box component="button" onClick={() => setView('map')} sx={{ ...segBtnStyle, ...seg('map') }}>{tr('dashboard.viewMap')}</Box>
+            <Box role="group" aria-label={tr('dashboard.viewLabel')} sx={{ display: 'flex', background: t.searchBg, border: `1px solid ${t.border}`, borderRadius: '999px', padding: '4px' }}>
+              <Box component="button" aria-pressed={view === 'tile'} onClick={() => setView('tile')} sx={{ ...segBtnStyle, ...seg('tile') }}>{tr('dashboard.viewTile')}</Box>
+              <Box component="button" aria-pressed={view === 'list'} onClick={() => setView('list')} sx={{ ...segBtnStyle, ...seg('list') }}>{tr('dashboard.viewList')}</Box>
+              <Box component="button" aria-pressed={view === 'map'} onClick={() => setView('map')} sx={{ ...segBtnStyle, ...seg('map') }}>{tr('dashboard.viewMap')}</Box>
             </Box>
+          </Box>
+
+          {/* mobile search — the header search pill is hidden on xs, so give
+              phones a full-width field here instead of no search at all. */}
+          <Box
+            component="label"
+            sx={{
+              display: { xs: 'flex', sm: 'none' },
+              alignItems: 'center',
+              gap: '8px',
+              background: t.searchBg,
+              border: `1px solid ${t.border}`,
+              borderRadius: '999px',
+              padding: '10px 14px',
+              mt: '18px',
+              cursor: 'text',
+            }}
+          >
+            <Search aria-hidden sx={{ fontSize: 16, color: t.faint, flex: 'none' }} />
+            <Box
+              component="input"
+              value={searchQuery}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+              placeholder={tr('dashboard.searchPlaceholder')}
+              aria-label={tr('dashboard.searchLabel')}
+              sx={{
+                border: 'none',
+                outline: 'none',
+                background: 'transparent',
+                color: t.ink,
+                fontFamily: "'DM Sans',sans-serif",
+                fontSize: '14px',
+                width: '100%',
+                '::placeholder': { color: t.faint },
+              }}
+            />
+            {searchQuery && (
+              <Box
+                component="button"
+                type="button"
+                aria-label={tr('dashboard.searchClear')}
+                onMouseDown={(e: React.MouseEvent) => e.preventDefault()}
+                onClick={() => setSearchQuery('')}
+                sx={{ display: 'flex', border: 'none', background: 'transparent', cursor: 'pointer', color: t.faint, p: 0, flex: 'none' }}
+              >
+                <Close sx={{ fontSize: 16 }} />
+              </Box>
+            )}
           </Box>
 
           {/* filters */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: '10px', mt: '22px', flexWrap: 'wrap' }}>
-            <Box component="button" onClick={() => setFilter('all')} sx={{ ...filterBtnStyle, ...pill('all') }}>{tr('dashboard.filterAll')}</Box>
-            <Box component="button" onClick={() => setFilter('been')} sx={{ ...filterBtnStyle, ...pill('been') }}>{tr('dashboard.filterBeen')}</Box>
-            <Box component="button" onClick={() => setFilter('want')} sx={{ ...filterBtnStyle, ...pill('want') }}>{tr('dashboard.filterWant')}</Box>
+            <Box role="group" aria-label={tr('dashboard.filterStatusLabel')} sx={{ display: 'contents' }}>
+              <Box component="button" aria-pressed={filter === 'all'} onClick={() => setFilter('all')} sx={{ ...filterBtnStyle, ...pill('all') }}>{tr('dashboard.filterAll')}</Box>
+              <Box component="button" aria-pressed={filter === 'been'} onClick={() => setFilter('been')} sx={{ ...filterBtnStyle, ...pill('been') }}>{tr('dashboard.filterBeen')}</Box>
+              <Box component="button" aria-pressed={filter === 'want'} onClick={() => setFilter('want')} sx={{ ...filterBtnStyle, ...pill('want') }}>{tr('dashboard.filterWant')}</Box>
+            </Box>
             <Box sx={{ width: '1px', height: 22, background: t.divider, mx: '4px' }} />
             <Box
               component="button"
               type="button"
               aria-haspopup="true"
+              aria-expanded={filterMenu?.kind === 'cuisine'}
               onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'cuisine', anchor: e.currentTarget })}
               sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: cuisineFilter ? t.pBg : 'transparent', color: cuisineFilter ? t.pFg : t.chip }}
             >
@@ -1051,6 +1198,7 @@ export default function Dashboard() {
               component="button"
               type="button"
               aria-haspopup="true"
+              aria-expanded={filterMenu?.kind === 'cost'}
               onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'cost', anchor: e.currentTarget })}
               sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: costFilter ? t.pBg : 'transparent', color: costFilter ? t.pFg : t.chip }}
             >
@@ -1060,6 +1208,7 @@ export default function Dashboard() {
               component="button"
               type="button"
               aria-haspopup="true"
+              aria-expanded={filterMenu?.kind === 'rating'}
               onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'rating', anchor: e.currentTarget })}
               sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: ratingFilter ? t.pBg : 'transparent', color: ratingFilter ? t.pFg : t.chip }}
             >
@@ -1070,6 +1219,7 @@ export default function Dashboard() {
                 component="button"
                 type="button"
                 aria-haspopup="true"
+                aria-expanded={filterMenu?.kind === 'place'}
                 onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'place', anchor: e.currentTarget })}
                 sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: placeFilter.length ? t.pBg : 'transparent', color: placeFilter.length ? t.pFg : t.chip }}
               >
@@ -1085,6 +1235,7 @@ export default function Dashboard() {
                 component="button"
                 type="button"
                 aria-haspopup="true"
+                aria-expanded={filterMenu?.kind === 'diet'}
                 onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'diet', anchor: e.currentTarget })}
                 sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: dietFilter.length ? t.pBg : 'transparent', color: dietFilter.length ? t.pFg : t.chip }}
               >
@@ -1100,6 +1251,7 @@ export default function Dashboard() {
                 component="button"
                 type="button"
                 aria-haspopup="true"
+                aria-expanded={filterMenu?.kind === 'menu'}
                 onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'menu', anchor: e.currentTarget })}
                 sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: menuFilter.length ? t.pBg : 'transparent', color: menuFilter.length ? t.pFg : t.chip }}
               >
@@ -1114,10 +1266,30 @@ export default function Dashboard() {
               component="button"
               type="button"
               aria-haspopup="true"
+              aria-expanded={filterMenu?.kind === 'sort'}
               onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'sort', anchor: e.currentTarget })}
               sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: sort !== 'recent' ? t.pBg : 'transparent', color: sort !== 'recent' ? t.pFg : t.chip }}
             >
               {tr(`dashboard.sort_${sort}`)} ▾
+            </Box>
+            <Box
+              component="button"
+              type="button"
+              onClick={() => setSortReversed((v) => !v)}
+              aria-label={tr('dashboard.sortReverse')}
+              aria-pressed={sortReversed}
+              title={tr('dashboard.sortReverse')}
+              sx={{
+                ...dropChipStyle,
+                display: 'inline-flex',
+                alignItems: 'center',
+                cursor: 'pointer',
+                padding: '7px 10px',
+                background: sortReversed ? t.pBg : 'transparent',
+                color: sortReversed ? t.pFg : t.chip,
+              }}
+            >
+              {sortReversed ? <ArrowUpward sx={{ fontSize: 16 }} /> : <ArrowDownward sx={{ fontSize: 16 }} />}
             </Box>
             {hasActiveFilters && (
               <Box
@@ -1266,11 +1438,7 @@ export default function Dashboard() {
                     {sorted.map((r) => (
                       <Box
                         key={r.id}
-                        role="button"
-                        tabIndex={0}
-                        aria-label={r.name}
                         onClick={() => handleViewRestaurant(r)}
-                        onKeyDown={activateOnKey(() => handleViewRestaurant(r))}
                         sx={{
                           border: `1px solid ${t.border}`,
                           borderRadius: '16px',
@@ -1280,6 +1448,9 @@ export default function Dashboard() {
                           transition: 'transform .15s, box-shadow .15s',
                           '&:hover': { transform: 'translateY(-3px)', boxShadow: '0 12px 28px rgba(0,0,0,.12)' },
                           '&:hover .card-actions, &:focus-within .card-actions': { opacity: 1 },
+                          // Touch devices have no hover, so the edit/delete actions
+                          // would never appear — keep them visible there.
+                          '@media (hover: none)': { '& .card-actions': { opacity: 1 } },
                         }}
                       >
                         <Box sx={{ position: 'relative', height: 158 }}>
@@ -1327,9 +1498,30 @@ export default function Dashboard() {
                         </Box>
                         <Box sx={{ padding: '14px 16px 16px' }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                            <Box component="span" sx={{ fontFamily: serif, fontSize: 20, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</Box>
+                            <Box
+                              component="button"
+                              type="button"
+                              onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleViewRestaurant(r); }}
+                              sx={{
+                                fontFamily: serif,
+                                fontSize: 20,
+                                minWidth: 0,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                border: 'none',
+                                background: 'transparent',
+                                p: 0,
+                                m: 0,
+                                color: 'inherit',
+                                textAlign: 'left',
+                                cursor: 'pointer',
+                                display: 'block',
+                                maxWidth: '100%',
+                              }}
+                            >{r.name}</Box>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 'none' }}>
-                              <Box component="span" sx={{ color: t.cost, fontSize: 14, fontWeight: 600, letterSpacing: '.03em' }}>{r.costStr}</Box>
+                              <Box component="span" sx={{ color: t.cost, fontSize: 14, fontWeight: 600, letterSpacing: '.03em', fontFamily: "'DM Mono',monospace" }}>{r.costStr}</Box>
                               {canEdit ? (
                                 <IconButton
                                   size="small"
@@ -1405,11 +1597,7 @@ export default function Dashboard() {
                     {sorted.map((r) => (
                       <Box
                         key={r.id}
-                        role="button"
-                        tabIndex={0}
-                        aria-label={r.name}
                         onClick={() => handleViewRestaurant(r)}
-                        onKeyDown={activateOnKey(() => handleViewRestaurant(r))}
                         sx={{
                           display: 'flex',
                           alignItems: 'center',
@@ -1420,6 +1608,8 @@ export default function Dashboard() {
                           cursor: 'pointer',
                           '&:hover': { filter: 'brightness(0.98)' },
                           '&:hover .row-actions, &:focus-within .row-actions': { opacity: 1 },
+                          // Touch devices have no hover — keep the row actions visible.
+                          '@media (hover: none)': { '& .row-actions': { opacity: 1 } },
                           '&:last-of-type': { borderBottom: 'none' },
                         }}
                       >
@@ -1435,7 +1625,27 @@ export default function Dashboard() {
                           />
                         </Box>
                         <Box sx={{ flex: 1, minWidth: 0 }}>
-                          <Box sx={{ fontFamily: serif, fontSize: 18 }}>{r.name}</Box>
+                          <Box
+                            component="button"
+                            type="button"
+                            onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleViewRestaurant(r); }}
+                            sx={{
+                              fontFamily: serif,
+                              fontSize: 18,
+                              border: 'none',
+                              background: 'transparent',
+                              p: 0,
+                              m: 0,
+                              color: 'inherit',
+                              textAlign: 'left',
+                              cursor: 'pointer',
+                              display: 'block',
+                              maxWidth: '100%',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >{r.name}</Box>
                           <Box sx={{ color: t.muted, fontSize: 13, mt: '1px' }}>
                             {r.meta}
                             {(r.locations?.length ?? 0) > 1 && (
@@ -1479,7 +1689,7 @@ export default function Dashboard() {
                           tr={tr}
                           listMode
                         />
-                        <Box sx={{ width: 90, color: t.cost, fontSize: 14, fontWeight: 600, display: { xs: 'none', sm: 'block' } }}>{r.costStr}</Box>
+                        <Box sx={{ width: 90, color: t.cost, fontSize: 14, fontWeight: 600, fontFamily: "'DM Mono',monospace", display: { xs: 'none', sm: 'block' } }}>{r.costStr}</Box>
                         <Box sx={{ width: 110, color: t.rating, fontSize: 14, letterSpacing: '1px', display: { xs: 'none', sm: 'block' } }}>{r.ratingStr}</Box>
                         {canEdit ? (
                           <IconButton
@@ -1595,7 +1805,7 @@ export default function Dashboard() {
                           <Box sx={{ fontSize: 14, fontWeight: 500 }}>{r.name}</Box>
                           <Box sx={{ color: t.muted, fontSize: 12 }}>{r.cuisine}</Box>
                         </Box>
-                        <Box component="span" sx={{ color: t.cost, fontSize: 13, fontWeight: 600 }}>{r.costStr}</Box>
+                        <Box component="span" sx={{ color: t.cost, fontSize: 13, fontWeight: 600, fontFamily: "'DM Mono',monospace" }}>{r.costStr}</Box>
                       </Box>
                     ))}
                   </Box>
@@ -1690,6 +1900,7 @@ export default function Dashboard() {
           canManage={canManage}
           onClose={() => setShareOpen(false)}
           onChanged={() => revalidator.revalidate()}
+          onLeave={handleLeaveList}
         />
 
         {/* new list dialog */}
@@ -1744,10 +1955,10 @@ export default function Dashboard() {
           </DialogActions>
         </Dialog>
 
-        {/* snackbar */}
+        {/* snackbar — ink surface, 5s, optional Undo/Retry action */}
         <Snackbar
           open={snackbar.open}
-          autoHideDuration={4000}
+          autoHideDuration={5000}
           onClose={() => setSnackbar({ ...snackbar, open: false })}
           anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
         >
@@ -1755,7 +1966,28 @@ export default function Dashboard() {
             onClose={() => setSnackbar({ ...snackbar, open: false })}
             severity={snackbar.severity}
             variant="filled"
-            sx={{ width: '100%' }}
+            action={
+              snackbar.action ? (
+                <Button
+                  size="small"
+                  onClick={() => {
+                    snackbar.action?.onClick();
+                    setSnackbar((s) => ({ ...s, open: false }));
+                  }}
+                  sx={{ color: t.accent, fontWeight: 700, minHeight: 'auto', py: 0.25 }}
+                >
+                  {snackbar.action.label}
+                </Button>
+              ) : undefined
+            }
+            sx={{
+              width: '100%',
+              background: t.snackBg,
+              color: t.snackFg,
+              borderRadius: '12px',
+              '& .MuiAlert-icon': { color: t.snackFg },
+              '& .MuiAlert-action': { color: t.snackFg, alignItems: 'center', pt: 0 },
+            }}
           >
             {snackbar.message}
           </Alert>

@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { createSupabaseServerClient } from "~/supabase.server";
 import { safeRedirect } from "~/utils/safeRedirect";
 import i18nextServer from "~/i18next.server";
+import GoogleButton from "~/components/GoogleButton";
 import {
   Box,
   Container,
@@ -101,9 +102,9 @@ export default function SignUpPage() {
           maxWidth: 440,
           p: { xs: 3, sm: 5 },
           borderRadius: "24px",
-          background: "rgba(255, 255, 255, 0.03)",
+          background: "rgba(243, 234, 217, 0.05)",
           backdropFilter: "blur(20px)",
-          border: "1px solid rgba(255, 255, 255, 0.08)",
+          border: "1px solid rgba(243, 234, 217, 0.12)",
         }}
         className="animate-fade-in-up"
       >
@@ -141,6 +142,8 @@ export default function SignUpPage() {
             {actionData.message}
           </Alert>
         )}
+
+        <GoogleButton next={next} />
 
         <Form method="post" noValidate>
           <input type="hidden" name="next" value={next} />

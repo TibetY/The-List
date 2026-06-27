@@ -24,7 +24,7 @@ export const loader: LoaderFunction = async ({ request, params }) => {
       _token: token,
     });
     if (error) throw error;
-    return redirect(`/dashboard?list=${listId}`, { headers });
+    return redirect(`/dashboard?list=${listId}&join=ok`, { headers });
   } catch (error) {
     console.error('Error redeeming invite link:', error);
     return redirect('/dashboard?join=invalid', { headers });

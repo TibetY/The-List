@@ -69,9 +69,16 @@ export default function RestaurantDetailDialog({
   const muiTheme = useTheme();
   const fullScreen = useMediaQuery(muiTheme.breakpoints.down('sm'));
   const [activeLoc, setActiveLoc] = useState(0);
-  // Reset to the first location tab whenever a different restaurant is opened.
+  // When a different restaurant is opened, default to the first location that
+  // actually takes bookings so the "Reserve" action is visible without having to
+  // hunt through tabs; fall back to the first location otherwise.
   useEffect(() => {
-    setActiveLoc(0);
+    const locs = restaurant?.locations ?? [];
+    const bookable = locs.findIndex(
+      (l) => l.reservationUrl || l.reservationPlatform === 'walkin'
+    );
+    setActiveLoc(bookable >= 0 ? bookable : 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restaurant?.id]);
   if (!restaurant) return null;
 
@@ -162,7 +169,7 @@ export default function RestaurantDetailDialog({
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 'none' }}>
             {r.priceRange && (
-              <Box component="span" sx={{ color: t.cost, fontSize: 17, fontWeight: 600, letterSpacing: '.03em' }}>
+              <Box component="span" sx={{ color: t.cost, fontSize: 17, fontWeight: 600, letterSpacing: '.03em', fontFamily: "'DM Mono',monospace" }}>
                 {r.priceRange}
               </Box>
             )}

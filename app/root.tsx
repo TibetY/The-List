@@ -30,6 +30,7 @@ import { getServerSupabaseEnv, type PublicEnv } from "~/supabaseConfig";
 import i18nextServer from "~/i18next.server";
 import { resources, fallbackLng } from "~/i18n";
 import Navbar from "./components/Navbar";
+import { brandCssVars } from "~/listTheme";
 import tailwindHref from "~/tailwind.css?url";
 
 export const handle = { i18n: "common" };
@@ -44,11 +45,7 @@ export const links: LinksFunction = () => [
   },
   {
     rel: "stylesheet",
-    href: "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap",
-  },
-  {
-    rel: "stylesheet",
-    href: "https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap",
+    href: "https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Instrument+Serif:ital@0;1&display=swap",
   },
 ];
 
@@ -60,7 +57,7 @@ export const meta: MetaFunction = ({ data }) => {
     { title: m.title },
     { name: "description", content: m.description },
     { name: "viewport", content: "width=device-width,initial-scale=1" },
-    { name: "theme-color", content: "#0a0a0f" },
+    { name: "theme-color", content: "#0E150D" },
   ];
 };
 
@@ -82,10 +79,14 @@ export default function App() {
   useChangeLanguage(locale);
 
   return (
-    <html lang={locale} dir={i18n.dir(locale)}>
+    <html lang={locale} dir={i18n.dir(locale)} data-theme="dark">
       <head>
         <Meta />
         <Links />
+        {/* Brand design tokens as CSS custom properties (generated from the same
+            source as the MUI theme). Public pages inherit the dark set; the
+            dashboard/profile override with data-theme on their own root. */}
+        <style dangerouslySetInnerHTML={{ __html: brandCssVars() }} />
       </head>
       <body>
         <a href="#main-content" className="skip-to-main">

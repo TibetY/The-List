@@ -1,11 +1,12 @@
 import { createTheme, type Theme } from '@mui/material/styles';
 
 /**
- * Design tokens for the "The List" dashboard, ported from the
- * `The List - Dashboard.dc.html` handoff. Two palettes — a warm cream
- * "light" theme (the design default) and a deep green "dark" theme — drive
- * both the inline-styled page chrome and the MUI components in the
- * dashboard subtree.
+ * Single source of truth for "The List" brand — the warm editorial system from
+ * the Brand & Product System handoff. Two modes of ONE brand: a cream
+ * "Daylight" (light) palette and a deep-green "Supper" (dark) palette. These
+ * tokens drive the dashboard chrome, every MUI component in the app subtree,
+ * AND (via theme.ts, which builds on the dark palette + heroTokens) the
+ * marketing and auth pages, so the product reads as one table end to end.
  */
 export type ListMode = 'light' | 'dark';
 
@@ -36,11 +37,19 @@ export interface ListTokens {
   chip: string;
   border: string;
   borderSoft: string;
+  borderStrong: string;
   divider: string;
   pillBorder: string;
+  field: string;
+  fieldBorder: string;
   searchBg: string;
   accent: string;
+  accentHover: string;
   accentText: string;
+  ember: string;
+  secondary: string;
+  success: string;
+  error: string;
   cost: string;
   rating: string;
   notRated: string;
@@ -58,6 +67,12 @@ export interface ListTokens {
   pBg: string;
   pFg: string;
   pIdle: string;
+  ring: string;
+  snackBg: string;
+  snackFg: string;
+  shadow1: string;
+  shadow2: string;
+  shadow3: string;
   mapBg: string;
   mapGrid: string;
   mapWater: string;
@@ -72,40 +87,50 @@ export const listTokens: Record<ListMode, ListTokens> = {
   light: {
     pageBg: '#EFE7D8',
     panelBg: '#FBF7F0',
-    cardBg: '#ffffff',
+    cardBg: '#FFFFFF',
     footerBg: '#F4ECDF',
     ink: '#2B2420',
-    // Darkened from the original soft warm greys to meet WCAG AA (>=4.5:1) on the
-    // cream page/card backgrounds, which the lighter values failed (~2.2-3.1:1).
-    muted: '#615647',
-    faint: '#6F6353',
+    muted: '#6F6353',
+    faint: '#8A7E70',
     chip: '#6F6353',
     border: '#E8DFD1',
     borderSoft: '#EFE7DA',
+    borderStrong: '#E0D5C3',
     divider: '#E8DFD1',
     pillBorder: '#E0D5C3',
+    field: '#FFFFFF',
+    fieldBorder: '#E0D5C3',
     searchBg: '#F1E9DC',
-    // Orange darkened slightly (#C25E3C -> #B5532F) so white button text clears
-    // AA 4.5:1 (the original was ~4.2:1); still the same warm terracotta.
     accent: '#B5532F',
-    accentText: '#ffffff',
+    accentHover: '#9C4427',
+    accentText: '#FFFFFF',
+    ember: 'linear-gradient(135deg,#C2603B,#A8472A)',
+    secondary: '#5E6B47',
+    success: '#3F7A43',
+    error: '#B23B2E',
     cost: '#5E6B47',
     rating: '#B5532F',
-    notRated: '#7E7058',
-    monoGrad: 'linear-gradient(135deg,#EFE5D4,#E4D6C1)',
-    monoInitial: 'rgba(194,94,60,.32)',
+    notRated: '#B7A893',
+    monoGrad: 'linear-gradient(135deg,#E7D6BD,#D9C4A4)',
+    monoInitial: 'rgba(181,83,47,.30)',
     beenBg: '#EBEFDD',
     beenFg: '#4A5639',
     wantBg: '#F6E2D8',
-    wantFg: '#B0492A',
+    wantFg: '#9E4327',
     avatar2: '#5E6B47',
     avatar3: '#E2D4BE',
     segBg: '#2B2420',
     segFg: '#FBF7F0',
-    segIdle: '#615647',
+    segIdle: '#6F6353',
     pBg: '#B5532F',
-    pFg: '#ffffff',
-    pIdle: '#615647',
+    pFg: '#FFFFFF',
+    pIdle: '#6F6353',
+    ring: 'rgba(181,83,47,.22)',
+    snackBg: '#2B2420',
+    snackFg: '#F3EADB',
+    shadow1: '0 1px 3px rgba(43,36,32,.08)',
+    shadow2: '0 8px 24px rgba(43,36,32,.12)',
+    shadow3: '0 24px 60px rgba(43,36,32,.22)',
     mapBg: '#EFE7D8',
     mapGrid: 'rgba(180,165,140,.18)',
     mapWater: 'rgba(120,150,170,.25)',
@@ -122,22 +147,28 @@ export const listTokens: Record<ListMode, ListTokens> = {
     footerBg: '#11190E',
     ink: '#EFE7D6',
     muted: '#92A492',
-    // Lightened from #7E907E to clear AA on the dark card background.
-    faint: '#879987',
+    faint: '#7E907E',
     chip: '#92A492',
     border: 'rgba(239,228,210,.1)',
     borderSoft: 'rgba(239,228,210,.07)',
+    borderStrong: 'rgba(239,228,210,.16)',
     divider: 'rgba(239,228,210,.12)',
     pillBorder: 'rgba(239,228,210,.14)',
+    field: '#15201B',
+    fieldBorder: 'rgba(239,228,210,.16)',
     searchBg: '#1C2A23',
     accent: '#D9913F',
+    accentHover: '#E6A555',
     accentText: '#15201B',
+    ember: 'linear-gradient(135deg,#E0A85C,#C77C34)',
+    secondary: '#9FD3A6',
+    success: '#9FD3A6',
+    error: '#E8857A',
     cost: '#9FD3A6',
     rating: '#D9913F',
-    // Lightened from #6F806F (~3.6:1 on cards) to clear AA.
-    notRated: '#8FA08F',
-    monoGrad: 'linear-gradient(135deg,#26342B,#1A241E)',
-    monoInitial: 'rgba(217,145,63,.3)',
+    notRated: '#6F806F',
+    monoGrad: 'linear-gradient(135deg,#2A3A2F,#1A241E)',
+    monoInitial: 'rgba(217,145,63,.30)',
     beenBg: '#24402F',
     beenFg: '#9FD3A6',
     wantBg: '#3A2A1A',
@@ -150,6 +181,12 @@ export const listTokens: Record<ListMode, ListTokens> = {
     pBg: '#D9913F',
     pFg: '#15201B',
     pIdle: '#8FA08F',
+    ring: 'rgba(217,145,63,.3)',
+    snackBg: '#EDE4D2',
+    snackFg: '#1C2A23',
+    shadow1: '0 1px 3px rgba(0,0,0,.4)',
+    shadow2: '0 8px 24px rgba(0,0,0,.45)',
+    shadow3: '0 24px 60px rgba(0,0,0,.55)',
     mapBg: '#10180F',
     mapGrid: 'rgba(150,170,130,.08)',
     mapWater: 'rgba(90,120,140,.18)',
@@ -162,8 +199,85 @@ export const listTokens: Record<ListMode, ListTokens> = {
 };
 
 /**
- * Build an MUI theme for the dashboard subtree (used for dialogs, buttons,
- * inputs, snackbars) so they match the warm cream / dark green palette.
+ * Warm-dark "hero" treatment for marketing/auth drama — the same Supper palette
+ * lit with terracotta + amber radial glows instead of cold near-black. Used by
+ * the landing hero and the sign-up bridge so the first impression is already
+ * the app's night mode, never a different brand.
+ */
+export const heroTokens = {
+  bg:
+    'radial-gradient(120% 120% at 12% 8%, rgba(181,83,47,.34), transparent 46%),' +
+    ' radial-gradient(110% 110% at 92% 96%, rgba(217,145,63,.22), transparent 52%), #0E150D',
+  ink: '#F3EAD9',
+  muted: '#B9AE9B',
+  glass: 'rgba(243,234,217,.05)',
+  glassBorder: 'rgba(243,234,217,.12)',
+  ember: 'linear-gradient(135deg,#C2603B,#A8472A)',
+};
+
+/**
+ * The semantic-token names the brand exposes as CSS custom properties, mapped to
+ * the fields on ListTokens. This is the single mapping that produces tokens.css
+ * (via brandCssVars) so the CSS layer is GENERATED from the same source as the
+ * MUI theme — they can never drift apart.
+ */
+const CSS_VAR_MAP: [cssVar: string, token: keyof ListTokens][] = [
+  ['--bg', 'pageBg'],
+  ['--surface', 'panelBg'],
+  ['--raised', 'cardBg'],
+  ['--footer', 'footerBg'],
+  ['--ink', 'ink'],
+  ['--muted', 'muted'],
+  ['--faint', 'faint'],
+  ['--border', 'border'],
+  ['--border-soft', 'borderSoft'],
+  ['--border-strong', 'borderStrong'],
+  ['--field', 'field'],
+  ['--field-border', 'fieldBorder'],
+  ['--search-bg', 'searchBg'],
+  ['--accent', 'accent'],
+  ['--accent-hover', 'accentHover'],
+  ['--accent-text', 'accentText'],
+  ['--ember', 'ember'],
+  ['--secondary', 'secondary'],
+  ['--success', 'success'],
+  ['--error', 'error'],
+  ['--rating', 'rating'],
+  ['--cost', 'cost'],
+  ['--not-rated', 'notRated'],
+  ['--been-bg', 'beenBg'],
+  ['--been-fg', 'beenFg'],
+  ['--want-bg', 'wantBg'],
+  ['--want-fg', 'wantFg'],
+  ['--ring', 'ring'],
+  ['--snack-bg', 'snackBg'],
+  ['--snack-fg', 'snackFg'],
+  ['--shadow-1', 'shadow1'],
+  ['--shadow-2', 'shadow2'],
+  ['--shadow-3', 'shadow3'],
+];
+
+/**
+ * Generate the brand's CSS custom properties for both modes, scoped to
+ * [data-theme]. Inject once (see root.tsx); any element carrying
+ * data-theme="light|dark" then exposes --accent, --surface, … to Tailwind /
+ * Emotion / plain CSS. Derived from listTokens, so it tracks the MUI theme.
+ */
+export function brandCssVars(): string {
+  const block = (mode: ListMode) =>
+    CSS_VAR_MAP.map(([cssVar, token]) => `${cssVar}:${listTokens[mode][token]}`).join(';');
+  const statics = '--radius:12px;--radius-pill:999px;--space:4px';
+  return (
+    `:root,[data-theme="light"]{${block('light')};${statics}}` +
+    `[data-theme="dark"]{${block('dark')}}`
+  );
+}
+
+/**
+ * Build an MUI theme for a brand mode. Used for the dashboard subtree (dialogs,
+ * buttons, inputs, snackbars) and, via theme.ts, the public pages. Buttons are
+ * soft rectangles (radius 12); pills are reserved for selection controls, which
+ * are styled inline where they're used.
  */
 export function makeListTheme(mode: ListMode): Theme {
   const t = listTokens[mode];
@@ -179,18 +293,27 @@ export function makeListTheme(mode: ListMode): Theme {
         main: t.accent,
         contrastText: t.accentText,
       },
+      secondary: {
+        main: t.secondary,
+      },
       text: {
         primary: t.ink,
         secondary: t.muted,
+        disabled: t.faint,
       },
       divider: t.border,
-      error: { main: '#C0492B' },
-      success: { main: '#5E6B47' },
+      error: { main: t.error },
+      success: { main: t.success },
     },
     typography: {
       fontFamily: ['DM Sans', 'system-ui', '-apple-system', 'sans-serif'].join(
         ','
       ),
+      // Display type is the serif, quiet (weight 400 only) — never bold the serif.
+      h1: { fontFamily: ['Instrument Serif', 'serif'].join(','), fontWeight: 400 },
+      h2: { fontFamily: ['Instrument Serif', 'serif'].join(','), fontWeight: 400 },
+      h3: { fontFamily: ['Instrument Serif', 'serif'].join(','), fontWeight: 400 },
+      h4: { fontFamily: ['Instrument Serif', 'serif'].join(','), fontWeight: 400 },
       button: {
         textTransform: 'none',
         fontWeight: 600,
@@ -199,34 +322,36 @@ export function makeListTheme(mode: ListMode): Theme {
     shape: {
       borderRadius: 12,
     },
+    spacing: 4,
     components: {
       MuiButton: {
         styleOverrides: {
-          root: {
-            borderRadius: 999,
-            padding: '8px 18px',
-          },
+          root: ({ ownerState }) => ({
+            borderRadius: 12,
+            padding: '9px 18px',
+            // ≥44px tap target for primary actions; small buttons stay compact.
+            ...(ownerState.size !== 'small' ? { minHeight: 44 } : {}),
+          }),
           contained: {
             boxShadow: 'none',
             backgroundColor: t.accent,
             color: t.accentText,
             '&:hover': {
-              boxShadow: `0 4px 14px ${
-                mode === 'light'
-                  ? 'rgba(194,94,60,.3)'
-                  : 'rgba(217,145,63,.3)'
-              }`,
-              backgroundColor: t.accent,
-              filter: 'brightness(1.05)',
+              boxShadow: 'none',
+              backgroundColor: t.accentHover,
             },
           },
           outlined: {
-            borderColor: t.pillBorder,
+            borderColor: t.borderStrong,
             color: t.ink,
             '&:hover': {
               borderColor: t.accent,
               backgroundColor: 'transparent',
             },
+          },
+          text: {
+            color: t.accent,
+            '&:hover': { backgroundColor: 'transparent' },
           },
         },
       },
@@ -236,7 +361,17 @@ export function makeListTheme(mode: ListMode): Theme {
             backgroundColor: t.panelBg,
             backgroundImage: 'none',
             border: `1px solid ${t.border}`,
-            borderRadius: 18,
+            borderRadius: 16,
+            boxShadow: t.shadow3,
+          },
+        },
+      },
+      MuiMenu: {
+        styleOverrides: {
+          paper: {
+            borderRadius: 14,
+            border: `1px solid ${t.border}`,
+            boxShadow: t.shadow2,
           },
         },
       },
@@ -245,9 +380,9 @@ export function makeListTheme(mode: ListMode): Theme {
           root: {
             '& .MuiOutlinedInput-root': {
               borderRadius: 12,
-              backgroundColor: t.searchBg,
-              '& fieldset': { borderColor: t.border },
-              '&:hover fieldset': { borderColor: t.pillBorder },
+              backgroundColor: t.field,
+              '& fieldset': { borderColor: t.fieldBorder },
+              '&:hover fieldset': { borderColor: t.borderStrong },
               '&.Mui-focused fieldset': { borderColor: t.accent },
             },
             '& .MuiInputLabel-root.Mui-focused': { color: t.accent },

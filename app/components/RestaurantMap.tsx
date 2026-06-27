@@ -1,7 +1,15 @@
 import { useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import { useTranslation } from 'react-i18next';
 import type { Restaurant, RestaurantLocation } from '~/types/restaurant';
+
+function reservationLabel(platform: string): string {
+  if (platform === 'resy') return 'Resy';
+  if (platform === 'opentable') return 'OpenTable';
+  if (platform === 'walkin') return '';
+  return platform;
+}
 
 /** A single plottable pin: a restaurant paired with one of its located branches. */
 interface LocatedPin {
@@ -51,6 +59,7 @@ export default function RestaurantMap({
   accent,
   onSelect,
 }: RestaurantMapProps) {
+  const { t } = useTranslation();
   // One pin per located location (a restaurant can have several branches).
   const points = useMemo(() => {
     const pins: LocatedPin[] = [];
@@ -98,20 +107,22 @@ export default function RestaurantMap({
               {r.cuisineType ? (
                 <>
                   <br />
-                  {r.cuisineType}
+                  {t(`cuisines.${r.cuisineType}`, r.cuisineType)}
                 </>
               ) : null}
               {location.reservationUrl ? (
                 <>
                   <br />
                   <a href={location.reservationUrl} target="_blank" rel="noopener noreferrer">
-                    Reserve on {location.reservationPlatform === 'resy' ? 'Resy' : location.reservationPlatform === 'opentable' ? 'OpenTable' : location.reservationPlatform}
+                    {t('dashboard.reserveOn', {
+                      platform: reservationLabel(location.reservationPlatform || ''),
+                    })}
                   </a>
                 </>
               ) : location.reservationPlatform === 'walkin' ? (
                 <>
                   <br />
-                  Walk-ins welcome
+                  {t('dashboard.walkinBadge')}
                 </>
               ) : null}
             </Popup>

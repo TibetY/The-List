@@ -85,6 +85,16 @@ function platformChoiceFor(loc: RestaurantLocation | undefined): string {
   return isCustomPlatform(p) ? 'custom' : p || '';
 }
 
+/** Optional URL field: blank is fine, otherwise it must be a real http(s) URL. */
+function isValidOptionalUrl(value: string | undefined): boolean {
+  return !value?.trim() || /^https?:\/\/.+/i.test(value.trim());
+}
+
+/** Optional email field: blank is fine, otherwise it must look like an email. */
+function isValidOptionalEmail(value: string | undefined): boolean {
+  return !value?.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
 const EMPTY_BRAND: Partial<Restaurant> = {
   name: '',
   url: '',
@@ -381,6 +391,19 @@ export default function RestaurantFormDialog({
     if (!formData.name?.trim()) {
       return;
     }
+    // Block obviously-malformed URLs/emails so we don't persist junk. The website
+    // field shows its own error; for a bad location field, jump to that tab so
+    // the inline error is visible.
+    if (!isValidOptionalUrl(formData.url)) {
+      return;
+    }
+    const badLocation = locations.findIndex(
+      (l) => !isValidOptionalUrl(l.reservationUrl) || !isValidOptionalEmail(l.email)
+    );
+    if (badLocation >= 0) {
+      if (badLocation !== activeLocation) switchLocation(badLocation);
+      return;
+    }
 
     setLoading(true);
     try {
@@ -402,12 +425,18 @@ export default function RestaurantFormDialog({
 
   const dialogTitle = restaurant ? t('form.editTitle') : t('form.addTitle');
   const loc = locations[activeLocation] ?? {};
-  // Shared feedback for the reservation-link scrape (spinner + "couldn't read").
-  const resHelperText = resFetching
-    ? t('form.fetchingInfo')
-    : resScrapeStatus === 'empty'
-      ? t('form.reservationScrapeNoInfo')
-      : undefined;
+  const resInvalid = !isValidOptionalUrl(loc.reservationUrl);
+  const emailInvalid = !isValidOptionalEmail(loc.email);
+  const websiteInvalid = !isValidOptionalUrl(formData.url);
+  // A malformed reservation URL is a real error; "couldn't read this link" is
+  // just informational (the user did nothing wrong), so it isn't styled as one.
+  const resHelperText = resInvalid
+    ? t('form.invalidUrl')
+    : resFetching
+      ? t('form.fetchingInfo')
+      : resScrapeStatus === 'empty'
+        ? t('form.reservationScrapeNoInfo')
+        : undefined;
   const resInputProps = {
     endAdornment: resFetching ? <CircularProgress size={18} /> : undefined,
   };
@@ -451,7 +480,7 @@ export default function RestaurantFormDialog({
           <Close />
         </IconButton>
       </DialogTitle>
-      <DialogContent dividers sx={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+      <DialogContent dividers sx={{ borderColor: 'divider' }}>
         <Grid container spacing={2.5} sx={{ mt: 0 }}>
           {/* Restaurant Name */}
           <Grid item xs={12}>
@@ -717,18 +746,20 @@ export default function RestaurantFormDialog({
               onBlur={handleWebsiteBlur}
               placeholder="https://..."
               type="url"
-              error={scrapeStatus === 'empty'}
+              error={websiteInvalid}
               InputProps={{
                 endAdornment: fetchingInfo ? (
                   <CircularProgress size={18} />
                 ) : undefined,
               }}
               helperText={
-                fetchingInfo
-                  ? t('form.fetchingInfo')
-                  : scrapeStatus === 'empty'
-                    ? t('form.scrapeNoInfo')
-                    : undefined
+                websiteInvalid
+                  ? t('form.invalidUrl')
+                  : fetchingInfo
+                    ? t('form.fetchingInfo')
+                    : scrapeStatus === 'empty'
+                      ? t('form.scrapeNoInfo')
+                      : undefined
               }
             />
           </Grid>
@@ -771,7 +802,8 @@ export default function RestaurantFormDialog({
 
             <Box
               sx={{
-                border: '1px solid rgba(255,255,255,0.08)',
+                border: '1px solid',
+                borderColor: 'divider',
                 borderRadius: '12px',
                 p: 2,
               }}
@@ -822,6 +854,8 @@ export default function RestaurantFormDialog({
                     onChange={(e) => updateActiveLocation({ email: e.target.value })}
                     type="email"
                     placeholder="contact@restaurant.com"
+                    error={emailInvalid}
+                    helperText={emailInvalid ? t('form.invalidEmail') : undefined}
                   />
                 </Grid>
                 <Grid item xs={12} sm={6}>
@@ -866,7 +900,7 @@ export default function RestaurantFormDialog({
                       onBlur={handleReservationBlur}
                       placeholder="https://resy.com/..."
                       type="url"
-                      error={resScrapeStatus === 'empty'}
+                      error={resInvalid}
                       helperText={resHelperText}
                       InputProps={resInputProps}
                     />
@@ -895,7 +929,7 @@ export default function RestaurantFormDialog({
                       onBlur={handleReservationBlur}
                       placeholder="https://..."
                       type="url"
-                      error={resScrapeStatus === 'empty'}
+                      error={resInvalid}
                       helperText={resHelperText}
                       InputProps={resInputProps}
                     />
@@ -1023,12 +1057,12 @@ export default function RestaurantFormDialog({
                 sx={{
                   py: 2,
                   borderStyle: 'dashed',
-                  borderColor: dragActive ? 'primary.main' : 'rgba(255,255,255,0.15)',
-                  backgroundColor: dragActive ? 'rgba(232, 115, 74, 0.08)' : undefined,
+                  borderColor: dragActive ? 'primary.main' : 'divider',
+                  backgroundColor: dragActive ? 'action.hover' : undefined,
                   color: 'text.secondary',
                   '&:hover': {
                     borderColor: 'primary.main',
-                    backgroundColor: 'rgba(232, 115, 74, 0.04)',
+                    backgroundColor: 'action.hover',
                   },
                 }}
               >
@@ -1062,7 +1096,8 @@ export default function RestaurantFormDialog({
                   textAlign: 'center',
                   borderRadius: '16px',
                   overflow: 'hidden',
-                  border: '1px solid rgba(255,255,255,0.08)',
+                  border: '1px solid',
+                borderColor: 'divider',
                 }}
               >
                 <img
