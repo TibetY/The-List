@@ -23,6 +23,11 @@
     "en": "English",
     "fr": "Français"
   },
+  "auth": {
+    "continueWithGoogle": "Continuer avec Google",
+    "or": "ou",
+    "googleFailed": "Impossible de démarrer la connexion Google. Réessayez ou utilisez le courriel."
+  },
   "roles": {
     "owner": "Propriétaire",
     "editor": "Éditeur",
@@ -193,6 +198,9 @@
     "snackSaveFailed": "Échec de l'enregistrement du restaurant. Veuillez réessayer.",
     "snackGeocodeFailed": "Enregistré, mais l'adresse n'a pas pu être localisée — elle n'apparaîtra pas sur la carte. Essayez une adresse plus précise.",
     "snackStatusFailed": "Échec de la mise à jour du statut.",
+    "undo": "Annuler",
+    "retry": "Réessayer",
+    "snackRestored": "Lieu restauré.",
     "snackDeleted": "Restaurant supprimé avec succès !",
     "snackDeleteFailed": "Échec de la suppression du restaurant. Veuillez réessayer.",
     "snackEmailOpening": "Ouverture du client de messagerie...",

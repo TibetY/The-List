@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { createSupabaseServerClient } from "~/supabase.server";
 import { safeRedirect } from "~/utils/safeRedirect";
 import i18nextServer from "~/i18next.server";
+import GoogleButton from "~/components/GoogleButton";
 import {
   Box,
   Container,
@@ -141,6 +142,8 @@ export default function SignUpPage() {
             {actionData.message}
           </Alert>
         )}
+
+        <GoogleButton next={next} />
 
         <Form method="post" noValidate>
           <input type="hidden" name="next" value={next} />

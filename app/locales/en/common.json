@@ -23,6 +23,11 @@
     "en": "English",
     "fr": "Français"
   },
+  "auth": {
+    "continueWithGoogle": "Continue with Google",
+    "or": "or",
+    "googleFailed": "Couldn't start Google sign-in. Please try again, or use email."
+  },
   "roles": {
     "owner": "Owner",
     "editor": "Editor",
@@ -193,6 +198,9 @@
     "snackSaveFailed": "Failed to save restaurant. Please try again.",
     "snackGeocodeFailed": "Saved, but we couldn't locate that address — it won't appear on the map. Try a more specific address.",
     "snackStatusFailed": "Failed to update status.",
+    "undo": "Undo",
+    "retry": "Retry",
+    "snackRestored": "Place restored.",
     "snackDeleted": "Restaurant deleted successfully!",
     "snackDeleteFailed": "Failed to delete restaurant. Please try again.",
     "snackEmailOpening": "Opening email client...",

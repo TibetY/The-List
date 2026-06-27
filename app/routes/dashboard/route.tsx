@@ -340,6 +340,8 @@ export default function Dashboard() {
     open: boolean;
     message: string;
     severity: 'success' | 'error' | 'warning';
+    // Optional inline action (Undo / Retry) shown on the right of the snackbar.
+    action?: { label: string; onClick: () => void };
   }>({ open: false, message: '', severity: 'success' });
 
   useEffect(() => {
@@ -650,17 +652,47 @@ export default function Dashboard() {
     }
   };
 
+  // Re-create a just-deleted place from a kept snapshot (Undo). Re-creating
+  // assigns a new id/timestamp, which is fine for a restore.
+  const handleRestoreRestaurant = async (snapshot: Restaurant) => {
+    if (!activeList) return;
+    const { id, listId, createdAt, updatedAt, addedBy, ...payload } = snapshot;
+    void id; void listId; void createdAt; void updatedAt; void addedBy;
+    try {
+      await createRestaurant(payload, activeList.id, userId);
+      revalidator.revalidate();
+      setSnackbar({ open: true, message: tr('dashboard.snackRestored'), severity: 'success' });
+    } catch (error) {
+      console.error('Error restoring restaurant:', error);
+      setSnackbar({ open: true, message: tr('dashboard.snackSaveFailed'), severity: 'error' });
+    }
+  };
+
   const handleConfirmDelete = async () => {
     if (!restaurantToDelete) return;
+    // Snapshot the full row before deleting so Undo can restore it.
+    const snapshot = restaurants.find((r) => r.id === restaurantToDelete.id);
     try {
       await deleteRestaurant(restaurantToDelete.id);
-      setSnackbar({ open: true, message: tr('dashboard.snackDeleted'), severity: 'success' });
+      setSnackbar({
+        open: true,
+        message: tr('dashboard.snackDeleted'),
+        severity: 'success',
+        action: snapshot
+          ? { label: tr('dashboard.undo'), onClick: () => handleRestoreRestaurant(snapshot) }
+          : undefined,
+      });
       revalidator.revalidate();
       setDeleteOpen(false);
       setRestaurantToDelete(null);
     } catch (error) {
       console.error('Error deleting restaurant:', error);
-      setSnackbar({ open: true, message: tr('dashboard.snackDeleteFailed'), severity: 'error' });
+      setSnackbar({
+        open: true,
+        message: tr('dashboard.snackDeleteFailed'),
+        severity: 'error',
+        action: { label: tr('dashboard.retry'), onClick: () => handleConfirmDelete() },
+      });
     }
   };
 
@@ -1922,10 +1954,10 @@ export default function Dashboard() {
           </DialogActions>
         </Dialog>
 
-        {/* snackbar */}
+        {/* snackbar — ink surface, 5s, optional Undo/Retry action */}
         <Snackbar
           open={snackbar.open}
-          autoHideDuration={4000}
+          autoHideDuration={5000}
           onClose={() => setSnackbar({ ...snackbar, open: false })}
           anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
         >
@@ -1933,7 +1965,28 @@ export default function Dashboard() {
             onClose={() => setSnackbar({ ...snackbar, open: false })}
             severity={snackbar.severity}
             variant="filled"
-            sx={{ width: '100%' }}
+            action={
+              snackbar.action ? (
+                <Button
+                  size="small"
+                  onClick={() => {
+                    snackbar.action?.onClick();
+                    setSnackbar((s) => ({ ...s, open: false }));
+                  }}
+                  sx={{ color: t.accent, fontWeight: 700, minHeight: 'auto', py: 0.25 }}
+                >
+                  {snackbar.action.label}
+                </Button>
+              ) : undefined
+            }
+            sx={{
+              width: '100%',
+              background: t.snackBg,
+              color: t.snackFg,
+              borderRadius: '12px',
+              '& .MuiAlert-icon': { color: t.snackFg },
+              '& .MuiAlert-action': { color: t.snackFg, alignItems: 'center', pt: 0 },
+            }}
           >
             {snackbar.message}
           </Alert>

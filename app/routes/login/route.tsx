@@ -12,6 +12,7 @@ import { Form, useActionData, useLoaderData, Link } from "@remix-run/react";
 import { useTranslation } from "react-i18next";
 import { createSupabaseServerClient } from "~/supabase.server";
 import { safeRedirect } from "~/utils/safeRedirect";
+import GoogleButton from "~/components/GoogleButton";
 
 type ActionData = {
   error?: string;
@@ -110,6 +111,8 @@ export default function LoginPage() {
             {actionData?.error ?? loaderError}
           </Alert>
         )}
+
+        <GoogleButton next={next} />
 
         <Form method="post" noValidate>
           <input type="hidden" name="next" value={next} />
