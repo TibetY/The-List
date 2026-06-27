@@ -169,7 +169,7 @@ export default function RestaurantDetailDialog({
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 'none' }}>
             {r.priceRange && (
-              <Box component="span" sx={{ color: t.cost, fontSize: 17, fontWeight: 600, letterSpacing: '.03em' }}>
+              <Box component="span" sx={{ color: t.cost, fontSize: 17, fontWeight: 600, letterSpacing: '.03em', fontFamily: "'DM Mono',monospace" }}>
                 {r.priceRange}
               </Box>
             )}

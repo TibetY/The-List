@@ -1488,7 +1488,7 @@ export default function Dashboard() {
                               }}
                             >{r.name}</Box>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 'none' }}>
-                              <Box component="span" sx={{ color: t.cost, fontSize: 14, fontWeight: 600, letterSpacing: '.03em' }}>{r.costStr}</Box>
+                              <Box component="span" sx={{ color: t.cost, fontSize: 14, fontWeight: 600, letterSpacing: '.03em', fontFamily: "'DM Mono',monospace" }}>{r.costStr}</Box>
                               {canEdit ? (
                                 <IconButton
                                   size="small"
@@ -1656,7 +1656,7 @@ export default function Dashboard() {
                           tr={tr}
                           listMode
                         />
-                        <Box sx={{ width: 90, color: t.cost, fontSize: 14, fontWeight: 600, display: { xs: 'none', sm: 'block' } }}>{r.costStr}</Box>
+                        <Box sx={{ width: 90, color: t.cost, fontSize: 14, fontWeight: 600, fontFamily: "'DM Mono',monospace", display: { xs: 'none', sm: 'block' } }}>{r.costStr}</Box>
                         <Box sx={{ width: 110, color: t.rating, fontSize: 14, letterSpacing: '1px', display: { xs: 'none', sm: 'block' } }}>{r.ratingStr}</Box>
                         {canEdit ? (
                           <IconButton
@@ -1772,7 +1772,7 @@ export default function Dashboard() {
                           <Box sx={{ fontSize: 14, fontWeight: 500 }}>{r.name}</Box>
                           <Box sx={{ color: t.muted, fontSize: 12 }}>{r.cuisine}</Box>
                         </Box>
-                        <Box component="span" sx={{ color: t.cost, fontSize: 13, fontWeight: 600 }}>{r.costStr}</Box>
+                        <Box component="span" sx={{ color: t.cost, fontSize: 13, fontWeight: 600, fontFamily: "'DM Mono',monospace" }}>{r.costStr}</Box>
                       </Box>
                     ))}
                   </Box>
