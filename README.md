@@ -51,6 +51,17 @@ The app uses [Supabase](https://supabase.com/) for auth, data, and image storage
    signing up, disable email confirmation under **Authentication → Providers →
    Email** in the Supabase dashboard; otherwise they must confirm via email
    first.
+4. **Email link URLs.** Confirmation and password-reset links are built from the
+   public site origin. Set **Authentication → URL Configuration → Site URL** to
+   your deployed URL and add `<site>/auth/confirm` to **Redirect URLs** —
+   otherwise Supabase falls back to its default Site URL (`http://localhost:3000`)
+   and the links point at localhost. Also set the `SITE_URL` env var (see
+   `.env.example`) so the app sends the correct `emailRedirectTo` even when it
+   runs behind a proxy whose request host is internal.
+5. To enable **Continue with Google**, turn on the Google provider under
+   **Authentication → Providers → Google** (client ID/secret) and add
+   `<site>/auth/confirm` to the Redirect URLs. Until it's enabled, the button
+   shows a friendly error and email/password still works.
 
 ## Styling
 

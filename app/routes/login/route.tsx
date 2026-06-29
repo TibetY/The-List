@@ -12,11 +12,25 @@ import { Form, useActionData, useLoaderData, Link } from "@remix-run/react";
 import { useTranslation } from "react-i18next";
 import { createSupabaseServerClient } from "~/supabase.server";
 import { safeRedirect } from "~/utils/safeRedirect";
+import { getSiteUrl } from "~/utils/siteUrl.server";
+import i18nextServer from "~/i18next.server";
 import GoogleButton from "~/components/GoogleButton";
 
 type ActionData = {
   error?: string;
+  // Set when sign-in failed because the email hasn't been confirmed yet, so the
+  // page can offer a "resend confirmation" action (with the email to resend to).
+  unconfirmed?: boolean;
+  email?: string;
+  resent?: boolean;
 };
+
+/** Supabase reports an unconfirmed email via code or message, depending on version. */
+function isEmailNotConfirmed(error: unknown): boolean {
+  const e = error as { code?: string; message?: string } | null;
+  if (!e) return false;
+  return e.code === "email_not_confirmed" || /not confirmed/i.test(e.message ?? "");
+}
 
 type LoaderData = {
   next: string;
@@ -39,15 +53,39 @@ export const loader: LoaderFunction = async ({ request }) => {
 
 export const action: ActionFunction = async ({ request }) => {
   const formData = await request.formData();
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
+  const intent = formData.get("intent");
+  const email = (formData.get("email") as string) ?? "";
   const next = safeRedirect(formData.get("next"));
 
   const { supabase, headers } = createSupabaseServerClient(request);
+  const t = await i18nextServer.getFixedT(request);
+
+  // Re-send the confirmation email for an unconfirmed account.
+  if (intent === "resend") {
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: {
+        emailRedirectTo: `${getSiteUrl(request)}/auth/confirm?next=${encodeURIComponent(next)}`,
+      },
+    });
+    if (error) {
+      console.error("Resend confirmation error:", error.message);
+      return json<ActionData>({ error: t("login.resendFailed"), unconfirmed: true, email });
+    }
+    return json<ActionData>({ resent: true });
+  }
+
+  const password = formData.get("password") as string;
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
     console.error("Login error:", error.message);
+    // Give the unconfirmed-email case its own message + a resend affordance
+    // instead of surfacing Supabase's terse "Email not confirmed".
+    if (isEmailNotConfirmed(error)) {
+      return json<ActionData>({ error: t("login.emailNotConfirmed"), unconfirmed: true, email });
+    }
     return json<ActionData>({ error: error.message });
   }
 
@@ -106,10 +144,33 @@ export default function LoginPage() {
           </Box>
         </Typography>
 
+        {actionData?.resent && (
+          <Alert severity="success" sx={{ mb: 3 }} role="status">
+            {t("login.confirmationResent")}
+          </Alert>
+        )}
+
         {(actionData?.error || loaderError) && (
-          <Alert severity="error" sx={{ mb: 3 }} role="alert">
+          <Alert
+            severity={actionData?.unconfirmed ? "warning" : "error"}
+            sx={{ mb: actionData?.unconfirmed ? 1.5 : 3 }}
+            role="alert"
+          >
             {actionData?.error ?? loaderError}
           </Alert>
+        )}
+
+        {actionData?.unconfirmed && (
+          <Box sx={{ mb: 3 }}>
+            <Form method="post">
+              <input type="hidden" name="intent" value="resend" />
+              <input type="hidden" name="email" value={actionData.email ?? ""} />
+              <input type="hidden" name="next" value={next} />
+              <Button type="submit" variant="text" size="small" sx={{ px: 0, fontWeight: 600 }}>
+                {t("login.resendConfirmation")}
+              </Button>
+            </Form>
+          </Box>
         )}
 
         <GoogleButton next={next} />

@@ -11,6 +11,7 @@ import {
   Alert,
 } from "@mui/material";
 import { createSupabaseServerClient } from "~/supabase.server";
+import { getSiteUrl } from "~/utils/siteUrl.server";
 import i18nextServer from "~/i18next.server";
 
 type ActionData = {
@@ -31,7 +32,7 @@ export const action: ActionFunction = async ({ request }) => {
   const formData = await request.formData();
   const email = ((formData.get("email") as string) || "").trim();
   const { supabase, headers } = createSupabaseServerClient(request);
-  const origin = new URL(request.url).origin;
+  const origin = getSiteUrl(request);
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     // /auth/confirm verifies the recovery token (setting a session) then forwards

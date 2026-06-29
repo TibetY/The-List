@@ -4,6 +4,7 @@ import { Form, useActionData, useLoaderData, Link } from "@remix-run/react";
 import { useTranslation } from "react-i18next";
 import { createSupabaseServerClient } from "~/supabase.server";
 import { safeRedirect } from "~/utils/safeRedirect";
+import { getSiteUrl } from "~/utils/siteUrl.server";
 import i18nextServer from "~/i18next.server";
 import GoogleButton from "~/components/GoogleButton";
 import {
@@ -49,7 +50,7 @@ export const action: ActionFunction = async ({ request }) => {
   }
 
   const { supabase, headers } = createSupabaseServerClient(request);
-  const origin = new URL(request.url).origin;
+  const origin = getSiteUrl(request);
   const { data, error } = await supabase.auth.signUp({
     email,
     password,

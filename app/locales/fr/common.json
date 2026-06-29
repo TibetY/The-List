@@ -59,7 +59,11 @@
     "email": "Adresse courriel",
     "password": "Mot de passe",
     "submit": "Se connecter",
-    "forgotPassword": "Mot de passe oublié ?"
+    "forgotPassword": "Mot de passe oublié ?",
+    "emailNotConfirmed": "Veuillez d'abord confirmer votre courriel — ouvrez le lien de confirmation que nous vous avons envoyé. Vous ne l'avez pas reçu ?",
+    "resendConfirmation": "Renvoyer le courriel de confirmation",
+    "confirmationResent": "Courriel de confirmation envoyé — vérifiez votre boîte de réception (et les indésirables).",
+    "resendFailed": "Impossible de renvoyer le courriel de confirmation. Réessayez dans un instant."
   },
   "forgot": {
     "title": "Réinitialiser votre mot de passe",

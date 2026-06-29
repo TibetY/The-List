@@ -59,7 +59,11 @@
     "email": "Email Address",
     "password": "Password",
     "submit": "Sign In",
-    "forgotPassword": "Forgot password?"
+    "forgotPassword": "Forgot password?",
+    "emailNotConfirmed": "Please confirm your email first — open the confirmation link we sent you. Didn't get it?",
+    "resendConfirmation": "Resend confirmation email",
+    "confirmationResent": "Confirmation email sent — check your inbox (and spam).",
+    "resendFailed": "Couldn't resend the confirmation email. Please try again in a moment."
   },
   "forgot": {
     "title": "Reset your password",
