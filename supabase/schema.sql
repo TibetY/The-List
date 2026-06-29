@@ -493,3 +493,115 @@ begin
     execute 'revoke execute on function public.rls_auto_enable() from anon, authenticated';
   end if;
 end $$;
+
+-- ============================================================
+-- PUBLIC SHARE LINKS — read-only, unauthenticated viewing + "fork to my account"
+-- Distinct from list_invite_links (which add you as a MEMBER of the same list):
+-- a share link grants an anonymous read of a snapshot, and lets a signed-in
+-- visitor copy the list into a brand-new list of their own. Reads/forks go
+-- through SECURITY DEFINER RPCs, so RLS on lists/restaurants stays closed and
+-- the anon role never gets table access.
+-- ============================================================
+
+create table if not exists public.list_share_links (
+  id         uuid primary key default gen_random_uuid(),
+  token      text unique not null default replace(gen_random_uuid()::text, '-', ''),
+  list_id    uuid not null references public.lists(id) on delete cascade,
+  created_by uuid references auth.users(id) on delete set null,
+  expires_at timestamptz,                 -- null = never expires
+  active     boolean not null default true,
+  created_at timestamptz not null default now()
+);
+create index if not exists list_share_links_list_id_idx on public.list_share_links (list_id);
+
+alter table public.list_share_links enable row level security;
+
+-- Only the list owner can see / manage public links. (Public reads happen via
+-- get_shared_list below, which is SECURITY DEFINER and needs no SELECT policy.)
+drop policy if exists "owner reads share links" on public.list_share_links;
+drop policy if exists "owner creates share links" on public.list_share_links;
+drop policy if exists "owner updates share links" on public.list_share_links;
+drop policy if exists "owner deletes share links" on public.list_share_links;
+create policy "owner reads share links" on public.list_share_links
+  for select using (private.list_role(list_id) = 'owner');
+create policy "owner creates share links" on public.list_share_links
+  for insert with check (private.list_role(list_id) = 'owner');
+create policy "owner updates share links" on public.list_share_links
+  for update using (private.list_role(list_id) = 'owner');
+create policy "owner deletes share links" on public.list_share_links
+  for delete using (private.list_role(list_id) = 'owner');
+
+-- Read a shared list by token (anonymous OK). Returns null when the token is
+-- missing, revoked, or expired. Restaurants come back as raw row JSON so the
+-- app's existing rowToRestaurant mapper can consume them unchanged.
+create or replace function public.get_shared_list(_token text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare lnk public.list_share_links; l public.lists; owner_name text;
+begin
+  select * into lnk from public.list_share_links
+    where token = _token and active and (expires_at is null or expires_at > now());
+  if lnk.id is null then return null; end if;
+
+  select * into l from public.lists where id = lnk.list_id;
+  if l.id is null then return null; end if;
+
+  select display_name into owner_name from public.profiles where id = l.owner_id;
+
+  return jsonb_build_object(
+    'list', jsonb_build_object('id', l.id, 'name', l.name, 'description', l.description),
+    'owner', jsonb_build_object('displayName', owner_name),
+    'restaurants', coalesce((
+      select jsonb_agg(to_jsonb(r) order by r.created_at desc)
+      from public.restaurants r where r.list_id = l.id
+    ), '[]'::jsonb)
+  );
+end; $$;
+
+-- Anyone (even anonymous) may read a shared list.
+grant execute on function public.get_shared_list(text) to anon, authenticated;
+
+-- Copy a shared list into a NEW list owned by the caller. Every entry is reset
+-- to a fresh wishlist state: status 'want' and visit_count 0; everything else
+-- (rating, favourite, notes, photos, locations) is carried over.
+create or replace function public.fork_shared_list(_token text)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare lnk public.list_share_links; src public.lists; new_id uuid;
+begin
+  if auth.uid() is null then
+    raise exception 'Must be signed in to save a copy';
+  end if;
+
+  select * into lnk from public.list_share_links
+    where token = _token and active and (expires_at is null or expires_at > now());
+  if lnk.id is null then
+    raise exception 'Invalid or expired share link';
+  end if;
+
+  select * into src from public.lists where id = lnk.list_id;
+  if src.id is null then
+    raise exception 'Shared list no longer exists';
+  end if;
+
+  insert into public.lists (owner_id, name, is_default)
+  values (auth.uid(), src.name || ' (copy)', false)
+  returning id into new_id;   -- on_list_created adds the owner membership
+
+  insert into public.restaurants (
+    list_id, added_by, name, image, url, social_media, rating, price_range,
+    comment, cuisine_type, dietary_tags, place_types, menu_types, michelin_stars,
+    bib_gourmand, favorite, status, visit_count, locations,
+    reservation_platform, reservation_url, email, phone, address, latitude, longitude
+  )
+  select
+    new_id, auth.uid(), name, image, url, social_media, rating, price_range,
+    comment, cuisine_type, dietary_tags, place_types, menu_types, michelin_stars,
+    bib_gourmand, favorite, 'want', 0, locations,
+    reservation_platform, reservation_url, email, phone, address, latitude, longitude
+  from public.restaurants where list_id = src.id;
+
+  return new_id;
+end; $$;
+
+-- Only signed-in users can fork (anon has no auth.uid()).
+revoke execute on function public.fork_shared_list(text) from anon;
+grant  execute on function public.fork_shared_list(text) to authenticated;

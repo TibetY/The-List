@@ -32,11 +32,15 @@ the output of `build/server` + `build/client`.
 The app uses [Supabase](https://supabase.com/) for auth, data, and image storage.
 
 1. Run `supabase/schema.sql` once in the Supabase **SQL Editor**. It creates the
-   `profiles`, `lists`, `list_members`, `list_invites`, and `restaurants` tables
-   (with row-level security and Owner/Editor/Viewer roles), the helper
-   functions/triggers, and the `restaurant-images` + `avatars` storage buckets.
-   If you had data from an earlier version, also run `supabase/migrate_existing.sql`
-   once to backfill profiles, default lists, and list membership.
+   `profiles`, `lists`, `list_members`, `list_invite_links`, `list_share_links`,
+   and `restaurants` tables (with row-level security and Owner/Editor/Viewer
+   roles), the helper functions/triggers (including the `get_shared_list` /
+   `fork_shared_list` RPCs that power public read-only share links), and the
+   `restaurant-images` + `avatars` storage buckets. The script is safe to
+   re-run, so apply it again after pulling changes that touch the schema (e.g.
+   the public-share feature). If you had data from an earlier version, also run
+   `supabase/migrate_existing.sql` once to backfill profiles, default lists, and
+   list membership.
 2. Configure the project URL and anon/public key via environment variables:
    - **Production (Netlify):** add `SUPABASE_URL` and `SUPABASE_ANON_KEY` under
      Site settings → Environment variables.

@@ -3,6 +3,7 @@ import type {
   ListMember,
   Profile,
   RestaurantList,
+  ShareLink,
 } from '~/types/restaurant';
 
 export interface ProfileRow {
@@ -51,6 +52,24 @@ export function rowToInviteLink(row: InviteLinkRow): InviteLink {
     token: row.token,
     listId: row.list_id,
     role: row.role,
+    active: row.active,
+  };
+}
+
+export interface ShareLinkRow {
+  id: string;
+  token: string;
+  list_id: string;
+  expires_at: string | null;
+  active: boolean;
+}
+
+export function rowToShareLink(row: ShareLinkRow): ShareLink {
+  return {
+    id: row.id,
+    token: row.token,
+    listId: row.list_id,
+    expiresAt: row.expires_at ?? undefined,
     active: row.active,
   };
 }
