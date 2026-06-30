@@ -262,6 +262,8 @@
     "rating": "Rating",
     "websiteUrl": "Website URL",
     "fetchingInfo": "Fetching info from website…",
+    "lookingUp": "Finding details from the web…",
+    "lookupNoInfo": "Couldn't find extra details for that name and address — add them below.",
     "scrapeNoInfo": "Couldn't auto-fill details from this site. Add them manually below.",
     "reservationScrapeNoInfo": "Couldn't read details from this reservation link.",
     "invalidUrl": "Enter a full URL starting with http:// or https://",
