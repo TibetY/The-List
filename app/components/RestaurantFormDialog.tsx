@@ -23,6 +23,7 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import {
   CloudUpload,
   Close,
@@ -156,6 +157,10 @@ export default function RestaurantFormDialog({
   const [lookingUp, setLookingUp] = useState(false);
   const [lookupStatus, setLookupStatus] = useState<'idle' | 'ok' | 'empty'>('idle');
   const lookedUpKey = useRef<string>('');
+  // Field keys that autofill just populated — briefly ringed with an accent glow
+  // so the user notices what changed, then cleared on a timer.
+  const [highlighted, setHighlighted] = useState<Set<string>>(new Set());
+  const highlightTimer = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
     if (restaurant) {
@@ -207,8 +212,42 @@ export default function RestaurantFormDialog({
     setLookingUp(false);
     setLookupStatus('idle');
     lookedUpKey.current = '';
+    setHighlighted(new Set());
+    if (highlightTimer.current) clearTimeout(highlightTimer.current);
     setImageFile(undefined);
   }, [restaurant, open]);
+
+  // Clear the glow timer if the dialog unmounts mid-fade.
+  useEffect(() => () => {
+    if (highlightTimer.current) clearTimeout(highlightTimer.current);
+  }, []);
+
+  /** Briefly ring the given field keys with the autofill glow, then fade. */
+  const markFilled = (keys: string[]) => {
+    if (keys.length === 0) return;
+    setHighlighted((prev) => new Set([...prev, ...keys]));
+    if (highlightTimer.current) clearTimeout(highlightTimer.current);
+    highlightTimer.current = setTimeout(() => setHighlighted(new Set()), 2200);
+  };
+
+  /** sx that rings an outlined input with the accent glow while highlighted. */
+  const glowSx = (key: string) => ({
+    '& .MuiOutlinedInput-root': {
+      transition: 'box-shadow .5s ease',
+      boxShadow: highlighted.has(key)
+        ? `0 0 0 3px ${alpha(theme.palette.primary.main, 0.3)}`
+        : '0 0 0 0 rgba(0,0,0,0)',
+    },
+  });
+
+  /** Same glow, on a plain container (image preview, place-types group). */
+  const glowBoxSx = (key: string) => ({
+    borderRadius: '12px',
+    transition: 'box-shadow .5s ease',
+    boxShadow: highlighted.has(key)
+      ? `0 0 0 3px ${alpha(theme.palette.primary.main, 0.3)}`
+      : '0 0 0 0 rgba(0,0,0,0)',
+  });
 
   /** Patch the currently-active location. */
   const updateActiveLocation = (patch: Partial<RestaurantLocation>) => {
@@ -243,12 +282,11 @@ export default function RestaurantFormDialog({
 
   /** Fill blank brand/location fields from a scrape result (never overwrites). */
   const applyScrape = (data: ScrapeData) => {
-    setFormData((prev) => ({
-      ...prev,
-      cuisineType: prev.cuisineType || data.cuisineType || prev.cuisineType,
-    }));
-    if (data.cuisineType && !formData.cuisineType && cuisineTypes.includes(data.cuisineType)) {
-      setCuisineChoice(data.cuisineType);
+    const filled: string[] = [];
+    if (data.cuisineType && !formData.cuisineType) {
+      setFormData((prev) => ({ ...prev, cuisineType: prev.cuisineType || data.cuisineType || '' }));
+      if (cuisineTypes.includes(data.cuisineType)) setCuisineChoice(data.cuisineType);
+      filled.push('cuisine');
     }
 
     // Per-location enrichment targets the active location, filling only blanks.
@@ -266,12 +304,19 @@ export default function RestaurantFormDialog({
       if (patch.reservationPlatform && knownReservationPlatforms.includes(patch.reservationPlatform)) {
         setPlatformChoice(patch.reservationPlatform);
       }
+      if (patch.address) filled.push(`address@${activeLocation}`);
+      if (patch.email) filled.push(`email@${activeLocation}`);
+      if (patch.phone) filled.push(`phone@${activeLocation}`);
+      if (patch.reservationUrl) filled.push(`reservation@${activeLocation}`);
     }
 
     if (data.image && !imagePreview && !imageFile) {
       setImagePreview(data.image);
       setFormData((prev) => ({ ...prev, image: data.image ?? undefined }));
+      filled.push('image');
     }
+
+    markFilled(filled);
   };
 
   /** Scrape a website URL and fill blanks. Takes an explicit URL so it can be
@@ -317,13 +362,17 @@ export default function RestaurantFormDialog({
    *  site was discovered (for the photo + reservation link). */
   const applyLookup = (data: LookupData) => {
     applyScrape(data);
+    const filled: string[] = [];
     if (data.placeTypes && data.placeTypes.length > 0 && !(formData.placeTypes?.length)) {
       setFormData((prev) => ({ ...prev, placeTypes: data.placeTypes ?? [] }));
+      filled.push('placeTypes');
     }
     if (data.website && !formData.url?.trim()) {
       setFormData((prev) => ({ ...prev, url: data.website ?? '' }));
+      filled.push('website');
       runScrape(data.website);
     }
+    markFilled(filled);
   };
 
   const handlePlaceLookup = async () => {
@@ -643,6 +692,7 @@ export default function RestaurantFormDialog({
               label={t('form.cuisineType')}
               value={cuisineChoice}
               onChange={(e) => handleCuisineChange(e.target.value)}
+              sx={glowSx('cuisine')}
             >
               <MenuItem value="">{t('form.none')}</MenuItem>
               {cuisineTypes.map((type) => (
@@ -690,20 +740,22 @@ export default function RestaurantFormDialog({
             <Typography component="label" sx={sectionLabelSx}>
               {t('form.placeTypes')}
             </Typography>
-            <FormGroup row>
-              {placeTypes.map((type) => (
-                <FormControlLabel
-                  key={type}
-                  control={
-                    <Checkbox
-                      checked={formData.placeTypes?.includes(type) ?? false}
-                      onChange={() => toggleArrayValue('placeTypes', type)}
-                    />
-                  }
-                  label={t(`placeTypes.${type}`, type)}
-                />
-              ))}
-            </FormGroup>
+            <Box sx={glowBoxSx('placeTypes')}>
+              <FormGroup row>
+                {placeTypes.map((type) => (
+                  <FormControlLabel
+                    key={type}
+                    control={
+                      <Checkbox
+                        checked={formData.placeTypes?.includes(type) ?? false}
+                        onChange={() => toggleArrayValue('placeTypes', type)}
+                      />
+                    }
+                    label={t(`placeTypes.${type}`, type)}
+                  />
+                ))}
+              </FormGroup>
+            </Box>
           </Grid>
 
           {/* Menu types — multi-select (Fine Dining, Tasting Menu, …) */}
@@ -810,6 +862,7 @@ export default function RestaurantFormDialog({
               placeholder="https://..."
               type="url"
               error={websiteInvalid}
+              sx={glowSx('website')}
               InputProps={{
                 endAdornment: fetchingInfo ? (
                   <CircularProgress size={18} />
@@ -907,6 +960,7 @@ export default function RestaurantFormDialog({
                     onChange={(e) => updateActiveLocation({ address: e.target.value })}
                     onBlur={handlePlaceLookup}
                     helperText={t('form.addressHelp')}
+                    sx={glowSx(`address@${activeLocation}`)}
                     InputProps={{
                       endAdornment: lookingUp ? <CircularProgress size={18} /> : undefined,
                     }}
@@ -931,6 +985,7 @@ export default function RestaurantFormDialog({
                     placeholder="contact@restaurant.com"
                     error={emailInvalid}
                     helperText={emailInvalid ? t('form.invalidEmail') : undefined}
+                    sx={glowSx(`email@${activeLocation}`)}
                   />
                 </Grid>
                 <Grid item xs={12} sm={6}>
@@ -940,6 +995,7 @@ export default function RestaurantFormDialog({
                     value={loc.phone ?? ''}
                     onChange={(e) => updateActiveLocation({ phone: e.target.value })}
                     type="tel"
+                    sx={glowSx(`phone@${activeLocation}`)}
                   />
                 </Grid>
 
@@ -977,6 +1033,7 @@ export default function RestaurantFormDialog({
                       type="url"
                       error={resInvalid}
                       helperText={resHelperText}
+                      sx={glowSx(`reservation@${activeLocation}`)}
                       InputProps={resInputProps}
                     />
                   </Grid>
@@ -1006,6 +1063,7 @@ export default function RestaurantFormDialog({
                       type="url"
                       error={resInvalid}
                       helperText={resHelperText}
+                      sx={glowSx(`reservation@${activeLocation}`)}
                       InputProps={resInputProps}
                     />
                   </Grid>
@@ -1161,6 +1219,7 @@ export default function RestaurantFormDialog({
               value={imageFile ? '' : imagePreview}
               onChange={(e) => handleImageUrlPaste(e.target.value)}
               type="url"
+              sx={glowSx('image')}
             />
           </Grid>
 
@@ -1172,7 +1231,11 @@ export default function RestaurantFormDialog({
                   borderRadius: '16px',
                   overflow: 'hidden',
                   border: '1px solid',
-                borderColor: 'divider',
+                  borderColor: 'divider',
+                  transition: 'box-shadow .5s ease',
+                  boxShadow: highlighted.has('image')
+                    ? `0 0 0 3px ${alpha(theme.palette.primary.main, 0.3)}`
+                    : '0 0 0 0 rgba(0,0,0,0)',
                 }}
               >
                 <img
