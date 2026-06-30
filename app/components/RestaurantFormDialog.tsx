@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -62,6 +62,12 @@ type ScrapeData = {
   address: string | null;
   email: string | null;
   phone: string | null;
+};
+
+/** Shape returned by /api/lookup-place (a superset of ScrapeData). */
+type LookupData = ScrapeData & {
+  website: string | null;
+  placeTypes: string[] | null;
 };
 
 const priceRanges = ['$', '$$', '$$$', '$$$$', '$$$$$'];
@@ -145,6 +151,11 @@ export default function RestaurantFormDialog({
   // Same, for scraping a reservation link directly (per active location).
   const [resFetching, setResFetching] = useState(false);
   const [resScrapeStatus, setResScrapeStatus] = useState<'idle' | 'ok' | 'empty'>('idle');
+  // Looking a place up by name + address (OSM). The ref guards against re-running
+  // for the same name|address (both fields' onBlur can fire).
+  const [lookingUp, setLookingUp] = useState(false);
+  const [lookupStatus, setLookupStatus] = useState<'idle' | 'ok' | 'empty'>('idle');
+  const lookedUpKey = useRef<string>('');
 
   useEffect(() => {
     if (restaurant) {
@@ -193,6 +204,9 @@ export default function RestaurantFormDialog({
     setScrapeStatus('idle');
     setResScrapeStatus('idle');
     setResFetching(false);
+    setLookingUp(false);
+    setLookupStatus('idle');
+    lookedUpKey.current = '';
     setImageFile(undefined);
   }, [restaurant, open]);
 
@@ -260,8 +274,11 @@ export default function RestaurantFormDialog({
     }
   };
 
-  const handleWebsiteBlur = async () => {
-    const url = formData.url?.trim();
+  /** Scrape a website URL and fill blanks. Takes an explicit URL so it can be
+   *  called both from the website field's blur and from the name+address lookup
+   *  chain (where the URL was just discovered and isn't in state yet). */
+  const runScrape = async (rawUrl: string, reservationHint?: string) => {
+    const url = rawUrl.trim();
     if (!url || !/^https?:\/\/.+/i.test(url)) return;
 
     setFetchingInfo(true);
@@ -269,7 +286,7 @@ export default function RestaurantFormDialog({
     try {
       // Pass the active location's reservation link so the server can fill gaps
       // from it even when the site itself doesn't link to it.
-      const activeRes = (locations[activeLocation]?.reservationUrl ?? '').trim();
+      const activeRes = (reservationHint ?? locations[activeLocation]?.reservationUrl ?? '').trim();
       const qs =
         `url=${encodeURIComponent(url)}` +
         (activeRes ? `&reservation=${encodeURIComponent(activeRes)}` : '');
@@ -291,6 +308,51 @@ export default function RestaurantFormDialog({
       setScrapeStatus('empty');
     } finally {
       setFetchingInfo(false);
+    }
+  };
+
+  const handleWebsiteBlur = () => runScrape(formData.url ?? '');
+
+  /** Fill blanks from a name+address lookup, then chain the website scrape if a
+   *  site was discovered (for the photo + reservation link). */
+  const applyLookup = (data: LookupData) => {
+    applyScrape(data);
+    if (data.placeTypes && data.placeTypes.length > 0 && !(formData.placeTypes?.length)) {
+      setFormData((prev) => ({ ...prev, placeTypes: data.placeTypes ?? [] }));
+    }
+    if (data.website && !formData.url?.trim()) {
+      setFormData((prev) => ({ ...prev, url: data.website ?? '' }));
+      runScrape(data.website);
+    }
+  };
+
+  const handlePlaceLookup = async () => {
+    const name = formData.name?.trim();
+    const address = (locations[activeLocation]?.address ?? '').trim();
+    if (!name || !address) return;
+    const key = `${name}|${address}`.toLowerCase();
+    if (lookedUpKey.current === key) return; // already looked this up
+    lookedUpKey.current = key;
+
+    setLookingUp(true);
+    setLookupStatus('idle');
+    try {
+      const lang =
+        typeof document !== 'undefined' ? document.documentElement.lang || 'en' : 'en';
+      const res = await fetch(
+        `/api/lookup-place?name=${encodeURIComponent(name)}&address=${encodeURIComponent(address)}&lang=${encodeURIComponent(lang)}`
+      );
+      const data = (await res.json()) as LookupData;
+      const foundAnything = Boolean(
+        data.website || data.phone || data.email || data.cuisineType ||
+          (data.placeTypes && data.placeTypes.length > 0)
+      );
+      setLookupStatus(foundAnything ? 'ok' : 'empty');
+      applyLookup(data);
+    } catch {
+      setLookupStatus('empty');
+    } finally {
+      setLookingUp(false);
     }
   };
 
@@ -492,6 +554,7 @@ export default function RestaurantFormDialog({
               onChange={(e) =>
                 setFormData({ ...formData, name: e.target.value })
               }
+              onBlur={handlePlaceLookup}
             />
           </Grid>
 
@@ -842,8 +905,20 @@ export default function RestaurantFormDialog({
                     placeholder={t('form.addressPlaceholder')}
                     value={loc.address ?? ''}
                     onChange={(e) => updateActiveLocation({ address: e.target.value })}
+                    onBlur={handlePlaceLookup}
                     helperText={t('form.addressHelp')}
+                    InputProps={{
+                      endAdornment: lookingUp ? <CircularProgress size={18} /> : undefined,
+                    }}
                   />
+                  {(lookingUp || lookupStatus === 'empty') && (
+                    <Typography
+                      variant="caption"
+                      sx={{ display: 'block', mt: 0.5, color: 'text.secondary' }}
+                    >
+                      {lookingUp ? t('form.lookingUp') : t('form.lookupNoInfo')}
+                    </Typography>
+                  )}
                 </Grid>
 
                 <Grid item xs={12} sm={6}>

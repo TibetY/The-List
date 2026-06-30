@@ -262,6 +262,8 @@
     "rating": "Note",
     "websiteUrl": "Site web",
     "fetchingInfo": "Récupération des infos du site…",
+    "lookingUp": "Recherche d'informations en ligne…",
+    "lookupNoInfo": "Aucun détail supplémentaire trouvé pour ce nom et cette adresse — ajoutez-les ci-dessous.",
     "scrapeNoInfo": "Impossible de remplir automatiquement à partir de ce site. Ajoutez les infos manuellement ci-dessous.",
     "reservationScrapeNoInfo": "Impossible de lire les détails depuis ce lien de réservation.",
     "invalidUrl": "Saisissez une URL complète commençant par http:// ou https://",
