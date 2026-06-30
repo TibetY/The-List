@@ -59,7 +59,11 @@
     "email": "Adresse courriel",
     "password": "Mot de passe",
     "submit": "Se connecter",
-    "forgotPassword": "Mot de passe oublié ?"
+    "forgotPassword": "Mot de passe oublié ?",
+    "emailNotConfirmed": "Veuillez d'abord confirmer votre courriel — ouvrez le lien de confirmation que nous vous avons envoyé. Vous ne l'avez pas reçu ?",
+    "resendConfirmation": "Renvoyer le courriel de confirmation",
+    "confirmationResent": "Courriel de confirmation envoyé — vérifiez votre boîte de réception (et les indésirables).",
+    "resendFailed": "Impossible de renvoyer le courriel de confirmation. Réessayez dans un instant."
   },
   "forgot": {
     "title": "Réinitialiser votre mot de passe",
@@ -212,6 +216,7 @@
     "snackEmailCopied": "Cette liste était trop longue pour s'ouvrir dans une application de courriel ; nous l'avons copiée dans votre presse-papiers — collez-la dans un nouveau message.",
     "joinedList": "Vous avez rejoint la liste.",
     "joinInvalid": "Ce lien d'invitation est invalide ou a expiré.",
+    "snackForked": "Enregistré dans vos listes — tout est en « à essayer ».",
     "snackListCreated": "Liste créée !",
     "snackListFailed": "Échec de la création de la liste.",
     "snackListRenamed": "Liste renommée !",
@@ -378,6 +383,16 @@
     "joinsAs": "Rejoint en tant que",
     "createLink": "Créer un lien",
     "inviteRole": "Rôle d'invitation",
+    "publicLink": "Lien public",
+    "publicLinkHint": "Toute personne disposant de ce lien peut voir la liste — sans compte. Elle peut aussi en enregistrer sa propre copie.",
+    "expiresLabel": "Expire",
+    "createPublicLink": "Créer le lien",
+    "neverExpires": "N'expire jamais",
+    "expiresOn": "Expire le {{date}}",
+    "expiry_never": "Jamais",
+    "expiry_1d": "Dans 24 heures",
+    "expiry_7d": "Dans 7 jours",
+    "expiry_30d": "Dans 30 jours",
     "members": "Membres",
     "member": "Membre",
     "you": " (vous)",
@@ -391,6 +406,15 @@
     "done": "Terminé",
     "somethingWrong": "Une erreur s'est produite",
     "couldNotCopy": "Impossible de copier le lien"
+  },
+  "shared": {
+    "byline": "Une liste de {{name}}",
+    "readOnly": "Liste partagée en lecture seule",
+    "saveCopy": "Enregistrer une copie dans mon compte",
+    "createAccountToSave": "Créer un compte pour enregistrer une copie",
+    "signInToSave": "Vous avez déjà un compte ? Connectez-vous",
+    "unavailableTitle": "Ce lien n'est pas disponible",
+    "unavailableBody": "Il a peut-être été désactivé par le propriétaire ou a expiré. Demandez-lui un nouveau lien."
   },
   "email": {
     "title": "Partager votre liste",

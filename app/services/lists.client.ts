@@ -1,6 +1,16 @@
-import type { InviteLink, ListRole, RestaurantList } from '~/types/restaurant';
+import type {
+  InviteLink,
+  ListRole,
+  RestaurantList,
+  ShareLink,
+} from '~/types/restaurant';
 import { getSupabaseBrowserClient } from '~/supabase.client';
-import { rowToInviteLink, type InviteLinkRow } from './listMap';
+import {
+  rowToInviteLink,
+  rowToShareLink,
+  type InviteLinkRow,
+  type ShareLinkRow,
+} from './listMap';
 
 /** Create a new list owned by the current user. Returns its id. */
 export async function createList(
@@ -87,6 +97,44 @@ export async function updateInviteLinkRole(
   const { error } = await supabase
     .from('list_invite_links')
     .update({ role })
+    .eq('id', linkId);
+  if (error) throw error;
+}
+
+/**
+ * Create a public read-only share link for a list (owner only). Any previous
+ * link is deactivated so only the newest one works. `expiresAt` is an ISO
+ * timestamp, or null for a link that never expires.
+ */
+export async function createShareLink(
+  listId: string,
+  expiresAt: string | null,
+  createdBy: string
+): Promise<ShareLink> {
+  const supabase = getSupabaseBrowserClient();
+
+  await supabase
+    .from('list_share_links')
+    .update({ active: false })
+    .eq('list_id', listId)
+    .eq('active', true);
+
+  const { data, error } = await supabase
+    .from('list_share_links')
+    .insert({ list_id: listId, expires_at: expiresAt, created_by: createdBy })
+    .select('id, token, list_id, expires_at, active')
+    .single();
+
+  if (error) throw error;
+  return rowToShareLink(data as ShareLinkRow);
+}
+
+/** Deactivate a list's public share link (owner only). */
+export async function revokeShareLink(linkId: string): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase
+    .from('list_share_links')
+    .update({ active: false })
     .eq('id', linkId);
   if (error) throw error;
 }

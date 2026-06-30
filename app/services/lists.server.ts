@@ -3,12 +3,15 @@ import type {
   InviteLink,
   ListMember,
   RestaurantList,
+  ShareLink,
 } from '~/types/restaurant';
 import {
   rowToInviteLink,
   rowToProfile,
+  rowToShareLink,
   type InviteLinkRow,
   type ProfileRow,
+  type ShareLinkRow,
 } from './listMap';
 
 interface MembershipRow {
@@ -146,4 +149,22 @@ export async function getInviteLink(
 
   if (error) throw error;
   return data ? rowToInviteLink(data as InviteLinkRow) : null;
+}
+
+/** The active public share link for a list, if any (owner-only by RLS). */
+export async function getShareLink(
+  supabase: SupabaseClient,
+  listId: string
+): Promise<ShareLink | null> {
+  const { data, error } = await supabase
+    .from('list_share_links')
+    .select('id, token, list_id, expires_at, active')
+    .eq('list_id', listId)
+    .eq('active', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? rowToShareLink(data as ShareLinkRow) : null;
 }

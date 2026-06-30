@@ -17,13 +17,14 @@ import {
   TextField,
   InputAdornment,
 } from '@mui/material';
-import { Close, Delete, ContentCopy, Link as LinkIcon } from '@mui/icons-material';
+import { Close, Delete, ContentCopy, Link as LinkIcon, Public } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import type {
   InviteLink,
   ListMember,
   ListRole,
   RestaurantList,
+  ShareLink,
 } from '~/types/restaurant';
 import {
   createInviteLink,
@@ -31,6 +32,8 @@ import {
   updateInviteLinkRole,
   updateMemberRole,
   removeMember,
+  createShareLink,
+  revokeShareLink,
 } from '~/services/lists.client';
 
 interface ShareListDialogProps {
@@ -38,11 +41,25 @@ interface ShareListDialogProps {
   list: RestaurantList | null;
   members: ListMember[];
   inviteLink: InviteLink | null;
+  shareLink: ShareLink | null;
   currentUserId: string;
   canManage: boolean;
   onClose: () => void;
   onChanged: () => void;
   onLeave?: () => void;
+}
+
+/** Public-link expiry presets → days from now (0 = never). */
+const EXPIRY_PRESETS: { key: string; days: number }[] = [
+  { key: 'never', days: 0 },
+  { key: '1d', days: 1 },
+  { key: '7d', days: 7 },
+  { key: '30d', days: 30 },
+];
+
+function expiryToIso(days: number): string | null {
+  if (days <= 0) return null;
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
 }
 
 function initials(member: ListMember): string {
@@ -55,6 +72,7 @@ export default function ShareListDialog({
   list,
   members,
   inviteLink,
+  shareLink,
   currentUserId,
   canManage,
   onClose,
@@ -66,6 +84,8 @@ export default function ShareListDialog({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [expiry, setExpiry] = useState('never');
   const [confirmLeave, setConfirmLeave] = useState(false);
 
   // Don't keep a half-finished "leave" confirmation around after the dialog closes.
@@ -83,6 +103,19 @@ export default function ShareListDialog({
       ? `${window.location.origin}/join/${inviteLink.token}`
       : '';
 
+  const shareUrl =
+    shareLink && typeof window !== 'undefined'
+      ? `${window.location.origin}/s/${shareLink.token}`
+      : '';
+
+  const expiryCaption = (() => {
+    if (!shareLink) return '';
+    if (!shareLink.expiresAt) return t('share.neverExpires');
+    return t('share.expiresOn', {
+      date: new Date(shareLink.expiresAt).toLocaleDateString(),
+    });
+  })();
+
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
     setError('');
@@ -93,6 +126,17 @@ export default function ShareListDialog({
       setError(e instanceof Error ? e.message : t('share.somethingWrong'));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleShareCopy = async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 1500);
+    } catch {
+      setError(t('share.couldNotCopy'));
     }
   };
 
@@ -223,6 +267,78 @@ export default function ShareListDialog({
                   }
                 >
                   {t('share.createLink')}
+                </Button>
+              </Box>
+            )}
+          </Box>
+        )}
+
+        {canManage && (
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5, display: 'flex', alignItems: 'center', gap: 0.75 }}>
+              <Public fontSize="small" /> {t('share.publicLink')}
+            </Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>
+              {t('share.publicLinkHint')}
+            </Typography>
+
+            {shareLink ? (
+              <>
+                <TextField
+                  fullWidth
+                  size="small"
+                  value={shareUrl}
+                  InputProps={{
+                    readOnly: true,
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Public fontSize="small" />
+                      </InputAdornment>
+                    ),
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <Button size="small" startIcon={<ContentCopy fontSize="small" />} onClick={handleShareCopy}>
+                          {shareCopied ? t('share.copied') : t('share.copy')}
+                        </Button>
+                      </InputAdornment>
+                    ),
+                  }}
+                  aria-label={t('share.publicLink')}
+                />
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1, flexWrap: 'wrap' }}>
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                    {expiryCaption}
+                  </Typography>
+                  <Button size="small" disabled={busy} onClick={() => run(() => revokeShareLink(shareLink.id))} sx={{ color: 'text.secondary' }}>
+                    {t('share.revoke')}
+                  </Button>
+                </Box>
+              </>
+            ) : (
+              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                  {t('share.expiresLabel')}
+                </Typography>
+                <Select size="small" value={expiry} onChange={(e) => setExpiry(e.target.value)} aria-label={t('share.expiresLabel')}>
+                  {EXPIRY_PRESETS.map((p) => (
+                    <MenuItem key={p.key} value={p.key}>{t(`share.expiry_${p.key}`)}</MenuItem>
+                  ))}
+                </Select>
+                <Button
+                  variant="contained"
+                  startIcon={<Public />}
+                  disabled={busy}
+                  onClick={() =>
+                    run(() =>
+                      createShareLink(
+                        list.id,
+                        expiryToIso(EXPIRY_PRESETS.find((p) => p.key === expiry)?.days ?? 0),
+                        currentUserId
+                      ).then(() => undefined)
+                    )
+                  }
+                >
+                  {t('share.createPublicLink')}
                 </Button>
               </Box>
             )}

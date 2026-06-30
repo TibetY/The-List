@@ -28,8 +28,11 @@ export default function Navbar() {
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  // Hide navbar on dashboard (it has its own app bar)
-  if (location.pathname === "/dashboard") return null;
+  // Hide navbar on the dashboard and the public share view (both have their own
+  // header).
+  if (location.pathname === "/dashboard" || location.pathname.startsWith("/s/")) {
+    return null;
+  }
 
   const navLinks = isLoggedIn
     ? [

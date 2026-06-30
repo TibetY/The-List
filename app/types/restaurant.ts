@@ -163,3 +163,16 @@ export interface InviteLink {
   role: Exclude<ListRole, 'owner'>;
   active: boolean;
 }
+
+/**
+ * A public, read-only share link for a list. Anyone with the token can view a
+ * snapshot without an account (and optionally fork it into their own list).
+ * Unlike an InviteLink, it never grants membership. `expiresAt` null = never.
+ */
+export interface ShareLink {
+  id: string;
+  token: string;
+  listId: string;
+  expiresAt?: string; // ISO timestamp, or undefined for "never expires"
+  active: boolean;
+}

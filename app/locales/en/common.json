@@ -59,7 +59,11 @@
     "email": "Email Address",
     "password": "Password",
     "submit": "Sign In",
-    "forgotPassword": "Forgot password?"
+    "forgotPassword": "Forgot password?",
+    "emailNotConfirmed": "Please confirm your email first — open the confirmation link we sent you. Didn't get it?",
+    "resendConfirmation": "Resend confirmation email",
+    "confirmationResent": "Confirmation email sent — check your inbox (and spam).",
+    "resendFailed": "Couldn't resend the confirmation email. Please try again in a moment."
   },
   "forgot": {
     "title": "Reset your password",
@@ -212,6 +216,7 @@
     "snackEmailCopied": "That list was too long to open in an email app, so we copied it to your clipboard — paste it into a new message.",
     "joinedList": "You've joined the list.",
     "joinInvalid": "That invite link is invalid or has expired.",
+    "snackForked": "Saved to your lists — everything's set to “want to try.”",
     "snackListCreated": "List created!",
     "snackListFailed": "Failed to create list.",
     "snackListRenamed": "List renamed!",
@@ -378,6 +383,16 @@
     "joinsAs": "Joins as",
     "createLink": "Create link",
     "inviteRole": "Invite role",
+    "publicLink": "Public link",
+    "publicLinkHint": "Anyone with this link can view the list — no account needed. They can also save their own copy.",
+    "expiresLabel": "Expires",
+    "createPublicLink": "Create link",
+    "neverExpires": "Never expires",
+    "expiresOn": "Expires {{date}}",
+    "expiry_never": "Never",
+    "expiry_1d": "In 24 hours",
+    "expiry_7d": "In 7 days",
+    "expiry_30d": "In 30 days",
     "members": "Members",
     "member": "Member",
     "you": " (you)",
@@ -391,6 +406,15 @@
     "done": "Done",
     "somethingWrong": "Something went wrong",
     "couldNotCopy": "Could not copy link"
+  },
+  "shared": {
+    "byline": "A list by {{name}}",
+    "readOnly": "Read-only shared list",
+    "saveCopy": "Save a copy to my account",
+    "createAccountToSave": "Create an account to save a copy",
+    "signInToSave": "Already have an account? Sign in",
+    "unavailableTitle": "This link isn’t available",
+    "unavailableBody": "It may have been turned off by the owner or expired. Ask them for a fresh link."
   },
   "email": {
     "title": "Share Your List",

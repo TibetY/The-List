@@ -48,6 +48,7 @@ import {
   getLists,
   getListMembers,
   getInviteLink,
+  getShareLink,
   ensureDefaultList,
 } from '~/services/lists.server';
 import { getProfile } from '~/services/profiles.server';
@@ -57,8 +58,10 @@ import type {
   RestaurantList,
   ListMember,
   InviteLink,
+  ShareLink,
   Profile,
 } from '~/types/restaurant';
+import { decorate, type DecoratedRestaurant } from '~/utils/decorateRestaurant';
 import RestaurantFormDialog from '~/components/RestaurantFormDialog';
 import RestaurantDetailDialog from '~/components/RestaurantDetailDialog';
 import RestaurantThumb from '~/components/RestaurantThumb';
@@ -127,6 +130,7 @@ type LoaderData = {
   restaurants: Restaurant[];
   members: ListMember[];
   inviteLink: InviteLink | null;
+  shareLink: ShareLink | null;
   profile: Profile | null;
   error: string | null;
 };
@@ -160,11 +164,13 @@ export const loader: LoaderFunction = async ({ request }) => {
     let restaurants: Restaurant[] = [];
     let members: ListMember[] = [];
     let inviteLink: InviteLink | null = null;
+    let shareLink: ShareLink | null = null;
     if (activeList) {
       restaurants = await getRestaurants(supabase, activeList.id);
       members = await getListMembers(supabase, activeList.id);
       if (activeList.role === 'owner') {
         inviteLink = await getInviteLink(supabase, activeList.id);
+        shareLink = await getShareLink(supabase, activeList.id);
       }
     }
     const profile = await getProfile(supabase, user.id);
@@ -177,6 +183,7 @@ export const loader: LoaderFunction = async ({ request }) => {
         restaurants,
         members,
         inviteLink,
+        shareLink,
         profile,
         error: null,
       },
@@ -192,6 +199,7 @@ export const loader: LoaderFunction = async ({ request }) => {
         restaurants: [],
         members: [],
         inviteLink: null,
+        shareLink: null,
         profile: null,
         error: describeError(error),
       },
@@ -210,25 +218,10 @@ export const action: ActionFunction = async ({ request }) => {
   return json({ success: true });
 };
 
-/** Display-decorated restaurant used by the dashboard views. */
-type DecoratedRestaurant = Restaurant & {
-  initial: string;
-  costStr: string;
-  rated: boolean;
-  ratingStr: string;
-  meta: string;
-  cuisine: string;
-  isBeen: boolean;
-  isWant: boolean;
-};
-
 type ViewMode = 'tile' | 'list' | 'map';
 type FilterMode = 'all' | 'been' | 'want';
 type SortMode = 'recent' | 'rating' | 'name' | 'price' | 'visits' | 'favorite';
 const SORT_MODES: SortMode[] = ['recent', 'rating', 'name', 'price', 'visits', 'favorite'];
-
-const STAR_FULL = '★★★★★';
-const STAR_EMPTY = '☆☆☆☆☆';
 
 /** Toggle a value's membership in a string[] (for multi-select filters). */
 function toggleValue(arr: string[], value: string): string[] {
@@ -252,26 +245,6 @@ function reservationLabel(platform: string): string {
   return platform;
 }
 
-function decorate(r: Restaurant): DecoratedRestaurant {
-  const rating = Math.round(r.rating ?? 0);
-  const rated = rating > 0;
-  const cuisine = r.cuisineType || r.placeTypes?.[0] || 'Restaurant';
-  const status = r.status ?? 'want';
-  return {
-    ...r,
-    initial: (r.name.replace(/^The /i, '')[0] || '?').toUpperCase(),
-    costStr: r.priceRange || '',
-    rated,
-    ratingStr: rated
-      ? STAR_FULL.slice(0, rating) + STAR_EMPTY.slice(0, 5 - rating)
-      : '',
-    cuisine,
-    meta: cuisine,
-    isBeen: status === 'been',
-    isWant: status === 'want',
-  };
-}
-
 export default function Dashboard() {
   const data = useLoaderData<LoaderData>();
   const {
@@ -281,6 +254,7 @@ export default function Dashboard() {
     restaurants: initialRestaurants,
     members,
     inviteLink,
+    shareLink,
     profile,
     error,
   } = data;
@@ -348,19 +322,23 @@ export default function Dashboard() {
     setRestaurants(initialRestaurants);
   }, [initialRestaurants]);
 
-  // Surface the result of redeeming a shareable invite link (the /join route
-  // redirects here with ?join=ok or ?join=invalid), then strip the param so a
-  // refresh doesn't show the toast again.
+  // Surface the result of redeeming an invite link (?join=ok|invalid) or saving
+  // a copy of a shared list (?forked=1), then strip the param so a refresh
+  // doesn't show the toast again.
   useEffect(() => {
     const join = searchParams.get('join');
-    if (!join) return;
+    const forked = searchParams.get('forked');
+    if (!join && !forked) return;
     if (join === 'ok') {
       setSnackbar({ open: true, message: tr('dashboard.joinedList'), severity: 'success' });
     } else if (join === 'invalid') {
       setSnackbar({ open: true, message: tr('dashboard.joinInvalid'), severity: 'error' });
+    } else if (forked) {
+      setSnackbar({ open: true, message: tr('dashboard.snackForked'), severity: 'success' });
     }
     const params = new URLSearchParams(searchParams);
     params.delete('join');
+    params.delete('forked');
     setSearchParams(params, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
@@ -1896,6 +1874,7 @@ export default function Dashboard() {
           list={activeList}
           members={members}
           inviteLink={inviteLink}
+          shareLink={shareLink}
           currentUserId={userId}
           canManage={canManage}
           onClose={() => setShareOpen(false)}
