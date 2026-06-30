@@ -28,7 +28,6 @@ import {
 } from '@mui/material';
 import {
   Add,
-  Email,
   Logout,
   Edit as EditIcon,
   Delete as DeleteIcon,
@@ -66,7 +65,6 @@ import RestaurantFormDialog from '~/components/RestaurantFormDialog';
 import RestaurantDetailDialog from '~/components/RestaurantDetailDialog';
 import RestaurantThumb from '~/components/RestaurantThumb';
 import DeleteConfirmDialog from '~/components/DeleteConfirmDialog';
-import EmailDialog from '~/components/EmailDialog';
 import ListSwitcher from '~/components/ListSwitcher';
 import ShareListDialog from '~/components/ShareListDialog';
 import LanguageSwitcher from '~/components/LanguageSwitcher';
@@ -96,7 +94,6 @@ const RestaurantMap = lazy<React.ComponentType<RestaurantMapProps>>(() =>
 export const links: LinksFunction = () => [
   { rel: 'stylesheet', href: leafletStylesHref },
 ];
-import { sendRestaurantListViaMailto } from '~/services/email.client';
 import { useTranslation } from 'react-i18next';
 import { listTokens, makeListTheme, getStoredMode, storeMode, type ListMode } from '~/listTheme';
 
@@ -259,7 +256,7 @@ export default function Dashboard() {
     error,
   } = data;
   const revalidator = useRevalidator();
-  const { t: tr, i18n } = useTranslation();
+  const { t: tr } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -297,7 +294,6 @@ export default function Dashboard() {
   const [formOpen, setFormOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [emailOpen, setEmailOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [newListOpen, setNewListOpen] = useState(false);
   const [newListName, setNewListName] = useState('');
@@ -674,33 +670,6 @@ export default function Dashboard() {
     }
   };
 
-  const handleSendEmail = async (email: string) => {
-    const outcome = await sendRestaurantListViaMailto(restaurants, email, {
-      subject: tr('email.subject'),
-      heading: tr('email.heading'),
-      cuisine: tr('email.labelCuisine'),
-      rating: tr('email.labelRating'),
-      price: tr('email.labelPrice'),
-      website: tr('email.labelWebsite'),
-      notes: tr('email.labelNotes'),
-      social: tr('email.labelSocial'),
-      address: tr('email.labelAddress'),
-      phone: tr('email.labelPhone'),
-      status: tr('email.labelStatus'),
-      reservation: tr('email.labelReservation'),
-      visits: tr('email.labelVisits'),
-      statusBeen: tr('email.statusBeen'),
-      statusWant: tr('email.statusWant'),
-      total: (count) => tr('email.total', { count }),
-      generated: (date) => tr('email.generated', { date }),
-    }, i18n.language);
-    setSnackbar({
-      open: true,
-      message: outcome === 'copied' ? tr('dashboard.snackEmailCopied') : tr('dashboard.snackEmailOpening'),
-      severity: outcome === 'copied' ? 'warning' : 'success',
-    });
-  };
-
   const handleSelectList = (listId: string) => {
     const params = new URLSearchParams(searchParams);
     params.set('list', listId);
@@ -1062,10 +1031,6 @@ export default function Dashboard() {
               <MenuItem onClick={() => { setMenuAnchor(null); setShareOpen(true); }}>
                 <ListItemIcon><PersonAddAlt1 fontSize="small" sx={{ color: t.muted }} /></ListItemIcon>
                 <ListItemText>{tr('dashboard.shareMembers')}</ListItemText>
-              </MenuItem>
-              <MenuItem onClick={() => { setMenuAnchor(null); setEmailOpen(true); }} disabled={restaurants.length === 0}>
-                <ListItemIcon><Email fontSize="small" sx={{ color: t.muted }} /></ListItemIcon>
-                <ListItemText>{tr('dashboard.emailList')}</ListItemText>
               </MenuItem>
               <MenuItem onClick={() => { setMenuAnchor(null); handleLogout(); }}>
                 <ListItemIcon><Logout fontSize="small" sx={{ color: t.muted }} /></ListItemIcon>
@@ -1868,7 +1833,6 @@ export default function Dashboard() {
           onClose={() => setDeleteOpen(false)}
           onConfirm={handleConfirmDelete}
         />
-        <EmailDialog open={emailOpen} onClose={() => setEmailOpen(false)} onSend={handleSendEmail} />
         <ShareListDialog
           open={shareOpen}
           list={activeList}
