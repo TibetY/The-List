@@ -192,6 +192,7 @@
     "sort_price": "Price (low to high)",
     "sort_visits": "Most visited",
     "sort_favorite": "Favourites first",
+    "sortLabel": "Sort",
     "sortReverse": "Reverse sort order",
     "missingAddress_one": "{{count}} place has no address yet — add one to show it on the map.",
     "missingAddress_other": "{{count}} places have no address yet — add one to show them on the map.",
@@ -297,6 +298,10 @@
     "cancel": "Cancel",
     "saveChanges": "Save Changes",
     "addRestaurant": "Add Restaurant"
+  },
+  "filters": {
+    "button": "Filters",
+    "done": "Done"
   },
   "search": {
     "placeholder": "Search for a place to autofill…",

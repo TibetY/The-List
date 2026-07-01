@@ -24,7 +24,6 @@ import {
   DialogActions,
   Button,
   TextField,
-  Checkbox,
 } from '@mui/material';
 import {
   Add,
@@ -38,8 +37,6 @@ import {
   FavoriteBorder,
   Close,
   Search,
-  ArrowUpward,
-  ArrowDownward,
   Insights,
 } from '@mui/icons-material';
 import { createSupabaseServerClient } from '~/supabase.server';
@@ -69,6 +66,7 @@ import DeleteConfirmDialog from '~/components/DeleteConfirmDialog';
 import ListSwitcher from '~/components/ListSwitcher';
 import ShareListDialog from '~/components/ShareListDialog';
 import Onboarding from '~/components/Onboarding';
+import FilterSheet from '~/components/FilterSheet';
 import LanguageSwitcher from '~/components/LanguageSwitcher';
 import { uploadRestaurantImage } from '~/services/storage.client';
 import {
@@ -248,11 +246,6 @@ function setOrDelete(params: URLSearchParams, key: string, value: string): void 
   else params.delete(key);
 }
 
-/** Toggle a value's membership in a string[] (for multi-select filters). */
-function toggleValue(arr: string[], value: string): string[] {
-  return arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value];
-}
-
 /** Make a non-button clickable element keyboard-operable (Enter/Space). */
 function activateOnKey(fn: () => void) {
   return (e: React.KeyboardEvent) => {
@@ -387,10 +380,6 @@ export default function Dashboard() {
       setOrDelete(p, 'rev', value ? '1' : '');
     });
 
-  const [filterMenu, setFilterMenu] = useState<{
-    kind: 'cuisine' | 'cost' | 'rating' | 'place' | 'diet' | 'menu' | 'sort';
-    anchor: HTMLElement;
-  } | null>(null);
 
   const [formOpen, setFormOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -878,14 +867,6 @@ export default function Dashboard() {
     borderRadius: '999px',
   } as const;
 
-  const dropChipStyle = {
-    border: `1px solid ${t.pillBorder}`,
-    fontSize: '13px',
-    color: t.chip,
-    padding: '7px 14px',
-    borderRadius: '999px',
-  } as const;
-
   const serif = "'Instrument Serif',serif";
 
   const renderAvatar = (m: ListMember, idx: number) => {
@@ -1223,113 +1204,32 @@ export default function Dashboard() {
               <Box component="button" aria-pressed={filter === 'want'} onClick={() => setFilter('want')} sx={{ ...filterBtnStyle, ...pill('want') }}>{tr('dashboard.filterWant')}</Box>
             </Box>
             <Box sx={{ width: '1px', height: 22, background: t.divider, mx: '4px' }} />
-            <Box
-              component="button"
-              type="button"
-              aria-haspopup="true"
-              aria-expanded={filterMenu?.kind === 'cuisine'}
-              onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'cuisine', anchor: e.currentTarget })}
-              sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: cuisineFilter ? t.pBg : 'transparent', color: cuisineFilter ? t.pFg : t.chip }}
-            >
-              {cuisineFilter ? tr(`cuisines.${cuisineFilter}`, cuisineFilter) : tr('dashboard.cuisine')} ▾
-            </Box>
-            <Box
-              component="button"
-              type="button"
-              aria-haspopup="true"
-              aria-expanded={filterMenu?.kind === 'cost'}
-              onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'cost', anchor: e.currentTarget })}
-              sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: costFilter ? t.pBg : 'transparent', color: costFilter ? t.pFg : t.chip }}
-            >
-              {costFilter || tr('dashboard.cost')} ▾
-            </Box>
-            <Box
-              component="button"
-              type="button"
-              aria-haspopup="true"
-              aria-expanded={filterMenu?.kind === 'rating'}
-              onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'rating', anchor: e.currentTarget })}
-              sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: ratingFilter ? t.pBg : 'transparent', color: ratingFilter ? t.pFg : t.chip }}
-            >
-              {ratingFilter ? tr('dashboard.ratingStars', { count: ratingFilter }) : tr('dashboard.rating')} ▾
-            </Box>
-            {placeOptions.length > 0 && (
-              <Box
-                component="button"
-                type="button"
-                aria-haspopup="true"
-                aria-expanded={filterMenu?.kind === 'place'}
-                onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'place', anchor: e.currentTarget })}
-                sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: placeFilter.length ? t.pBg : 'transparent', color: placeFilter.length ? t.pFg : t.chip }}
-              >
-                {placeFilter.length === 0
-                  ? tr('dashboard.placeType')
-                  : placeFilter.length === 1
-                    ? tr(`placeTypes.${placeFilter[0]}`, placeFilter[0])
-                    : `${tr('dashboard.placeType')} (${placeFilter.length})`}{' '}▾
-              </Box>
-            )}
-            {dietOptions.length > 0 && (
-              <Box
-                component="button"
-                type="button"
-                aria-haspopup="true"
-                aria-expanded={filterMenu?.kind === 'diet'}
-                onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'diet', anchor: e.currentTarget })}
-                sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: dietFilter.length ? t.pBg : 'transparent', color: dietFilter.length ? t.pFg : t.chip }}
-              >
-                {dietFilter.length === 0
-                  ? tr('dashboard.dietary')
-                  : dietFilter.length === 1
-                    ? tr(`dietary.${dietFilter[0]}`, dietFilter[0])
-                    : `${tr('dashboard.dietary')} (${dietFilter.length})`}{' '}▾
-              </Box>
-            )}
-            {menuOptions.length > 0 && (
-              <Box
-                component="button"
-                type="button"
-                aria-haspopup="true"
-                aria-expanded={filterMenu?.kind === 'menu'}
-                onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'menu', anchor: e.currentTarget })}
-                sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: menuFilter.length ? t.pBg : 'transparent', color: menuFilter.length ? t.pFg : t.chip }}
-              >
-                {menuFilter.length === 0
-                  ? tr('dashboard.menuType')
-                  : menuFilter.length === 1
-                    ? tr(`menuTypes.${menuFilter[0]}`, menuFilter[0])
-                    : `${tr('dashboard.menuType')} (${menuFilter.length})`}{' '}▾
-              </Box>
-            )}
-            <Box
-              component="button"
-              type="button"
-              aria-haspopup="true"
-              aria-expanded={filterMenu?.kind === 'sort'}
-              onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'sort', anchor: e.currentTarget })}
-              sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: sort !== 'recent' ? t.pBg : 'transparent', color: sort !== 'recent' ? t.pFg : t.chip }}
-            >
-              {tr(`dashboard.sort_${sort}`)} ▾
-            </Box>
-            <Box
-              component="button"
-              type="button"
-              onClick={() => setSortReversed((v) => !v)}
-              aria-label={tr('dashboard.sortReverse')}
-              aria-pressed={sortReversed}
-              title={tr('dashboard.sortReverse')}
-              sx={{
-                ...dropChipStyle,
-                display: 'inline-flex',
-                alignItems: 'center',
-                cursor: 'pointer',
-                padding: '7px 10px',
-                background: sortReversed ? t.pBg : 'transparent',
-                color: sortReversed ? t.pFg : t.chip,
-              }}
-            >
-              {sortReversed ? <ArrowUpward sx={{ fontSize: 16 }} /> : <ArrowDownward sx={{ fontSize: 16 }} />}
-            </Box>
+            <FilterSheet
+              tokens={t}
+              cuisineOptions={cuisineOptions}
+              costOptions={costOptions}
+              placeOptions={placeOptions}
+              dietOptions={dietOptions}
+              menuOptions={menuOptions}
+              sortModes={SORT_MODES}
+              cuisineFilter={cuisineFilter}
+              setCuisineFilter={setCuisineFilter}
+              costFilter={costFilter}
+              setCostFilter={setCostFilter}
+              ratingFilter={ratingFilter}
+              setRatingFilter={setRatingFilter}
+              placeFilter={placeFilter}
+              setPlaceFilter={setPlaceFilter}
+              dietFilter={dietFilter}
+              setDietFilter={setDietFilter}
+              menuFilter={menuFilter}
+              setMenuFilter={setMenuFilter}
+              sort={sort}
+              setSort={(v) => setSort(v as SortMode)}
+              sortReversed={sortReversed}
+              setSortReversed={setSortReversed}
+              onClear={clearFilters}
+            />
             {hasActiveFilters && (
               <Box
                 component="button"
@@ -1342,84 +1242,6 @@ export default function Dashboard() {
             )}
             <Box sx={{ ml: 'auto', fontSize: 13, color: t.faint }}>{tr('dashboard.showing', { count: filtered.length })}</Box>
           </Box>
-
-          {/* filter dropdown menu */}
-          <Menu
-            anchorEl={filterMenu?.anchor ?? null}
-            open={Boolean(filterMenu)}
-            onClose={() => setFilterMenu(null)}
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-          >
-            {filterMenu?.kind === 'cuisine' && [
-              <MenuItem key="any" selected={!cuisineFilter} onClick={() => { setCuisineFilter(''); setFilterMenu(null); }}>
-                {tr('dashboard.anyCuisine')}
-              </MenuItem>,
-              ...cuisineOptions.map((c) => (
-                <MenuItem key={c} selected={cuisineFilter === c} onClick={() => { setCuisineFilter(c); setFilterMenu(null); }}>
-                  {tr(`cuisines.${c}`, c)}
-                </MenuItem>
-              )),
-            ]}
-            {filterMenu?.kind === 'cost' && [
-              <MenuItem key="any" selected={!costFilter} onClick={() => { setCostFilter(''); setFilterMenu(null); }}>
-                {tr('dashboard.anyCost')}
-              </MenuItem>,
-              ...costOptions.map((c) => (
-                <MenuItem key={c} selected={costFilter === c} onClick={() => { setCostFilter(c); setFilterMenu(null); }}>
-                  {c}
-                </MenuItem>
-              )),
-            ]}
-            {filterMenu?.kind === 'rating' && [
-              <MenuItem key="0" selected={ratingFilter === 0} onClick={() => { setRatingFilter(0); setFilterMenu(null); }}>
-                {tr('dashboard.anyRating')}
-              </MenuItem>,
-              ...[5, 4, 3, 2, 1].map((n) => (
-                <MenuItem key={n} selected={ratingFilter === n} onClick={() => { setRatingFilter(n); setFilterMenu(null); }}>
-                  {tr('dashboard.ratingStars', { count: n })}
-                </MenuItem>
-              )),
-            ]}
-            {filterMenu?.kind === 'place' && [
-              <MenuItem key="any" selected={placeFilter.length === 0} onClick={() => { setPlaceFilter([]); setFilterMenu(null); }}>
-                {tr('dashboard.anyPlaceType')}
-              </MenuItem>,
-              ...placeOptions.map((p) => (
-                <MenuItem key={p} onClick={() => setPlaceFilter((prev) => toggleValue(prev, p))}>
-                  <Checkbox edge="start" size="small" checked={placeFilter.includes(p)} tabIndex={-1} disableRipple sx={{ mr: 1, p: 0.25 }} />
-                  {tr(`placeTypes.${p}`, p)}
-                </MenuItem>
-              )),
-            ]}
-            {filterMenu?.kind === 'diet' && [
-              <MenuItem key="any" selected={dietFilter.length === 0} onClick={() => { setDietFilter([]); setFilterMenu(null); }}>
-                {tr('dashboard.anyDietary')}
-              </MenuItem>,
-              ...dietOptions.map((d) => (
-                <MenuItem key={d} onClick={() => setDietFilter((prev) => toggleValue(prev, d))}>
-                  <Checkbox edge="start" size="small" checked={dietFilter.includes(d)} tabIndex={-1} disableRipple sx={{ mr: 1, p: 0.25 }} />
-                  {tr(`dietary.${d}`, d)}
-                </MenuItem>
-              )),
-            ]}
-            {filterMenu?.kind === 'menu' && [
-              <MenuItem key="any" selected={menuFilter.length === 0} onClick={() => { setMenuFilter([]); setFilterMenu(null); }}>
-                {tr('dashboard.anyMenuType')}
-              </MenuItem>,
-              ...menuOptions.map((m) => (
-                <MenuItem key={m} onClick={() => setMenuFilter((prev) => toggleValue(prev, m))}>
-                  <Checkbox edge="start" size="small" checked={menuFilter.includes(m)} tabIndex={-1} disableRipple sx={{ mr: 1, p: 0.25 }} />
-                  {tr(`menuTypes.${m}`, m)}
-                </MenuItem>
-              )),
-            ]}
-            {filterMenu?.kind === 'sort' &&
-              SORT_MODES.map((m) => (
-                <MenuItem key={m} selected={sort === m} onClick={() => { setSort(m); setFilterMenu(null); }}>
-                  {tr(`dashboard.sort_${m}`)}
-                </MenuItem>
-              ))}
-          </Menu>
 
           {/* empty state */}
           {filtered.length === 0 ? (
