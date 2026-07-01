@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
+import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
 import { LoaderFunction, ActionFunction, LinksFunction, redirect, json } from '@remix-run/node';
 import leafletStylesHref from 'leaflet/dist/leaflet.css?url';
 import {
@@ -298,6 +298,15 @@ export default function Dashboard() {
     storeMode(m);
   };
   const [view, setView] = useState<ViewMode>('tile');
+  // Map ↔ side-list hover sync (map view). The id is a restaurant's sync key
+  // (`id ?? name`, matching RestaurantMap); refs let a pin-hover scroll its row
+  // into view.
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const mapRowRefs = useRef<Map<string, HTMLElement>>(new Map());
+  useEffect(() => {
+    if (!hoveredId) return;
+    mapRowRefs.current.get(hoveredId)?.scrollIntoView({ block: 'nearest' });
+  }, [hoveredId]);
 
   // Filters & sort live in the URL (searchParams) so any view is linkable and
   // the browser's back/forward steps through filter states — this is also the
@@ -1793,6 +1802,8 @@ export default function Dashboard() {
                             restaurants={sorted}
                             accent={t.accent}
                             onSelect={handleViewRestaurant}
+                            hoveredId={hoveredId}
+                            onHoverChange={setHoveredId}
                           />
                         </Suspense>
                       ) : null}
@@ -1804,15 +1815,23 @@ export default function Dashboard() {
                     )}
                   </Box>
                   <Box sx={{ width: { xs: '100%', md: 330 }, flex: 'none', height: 540, overflowY: 'auto', border: `1px solid ${t.border}`, borderRadius: '16px', background: t.cardBg }}>
-                    {sorted.map((r) => (
+                    {sorted.map((r) => {
+                      const syncKey = r.id ?? r.name;
+                      return (
                       <Box
                         key={r.id}
+                        ref={(el: HTMLElement | null) => {
+                          if (el) mapRowRefs.current.set(syncKey, el);
+                          else mapRowRefs.current.delete(syncKey);
+                        }}
                         role="button"
                         tabIndex={0}
                         aria-label={r.name}
                         onClick={() => handleViewRestaurant(r)}
                         onKeyDown={activateOnKey(() => handleViewRestaurant(r))}
-                        sx={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderBottom: `1px solid ${t.borderSoft}`, cursor: 'pointer', '&:hover': { filter: 'brightness(0.98)' } }}
+                        onMouseEnter={() => setHoveredId(syncKey)}
+                        onMouseLeave={() => setHoveredId((cur) => (cur === syncKey ? null : cur))}
+                        sx={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderBottom: `1px solid ${t.borderSoft}`, cursor: 'pointer', background: hoveredId === syncKey ? t.searchBg : 'transparent', transition: 'background .12s', '&:hover': { filter: 'brightness(0.98)' } }}
                       >
                         <Box sx={{ width: 34, height: 34, borderRadius: '9px', flex: 'none' }}>
                           <RestaurantThumb
@@ -1831,7 +1850,8 @@ export default function Dashboard() {
                         </Box>
                         <Box component="span" sx={{ color: t.cost, fontSize: 13, fontWeight: 600, fontFamily: "'DM Mono',monospace" }}>{r.costStr}</Box>
                       </Box>
-                    ))}
+                      );
+                    })}
                   </Box>
                 </Box>
               )}

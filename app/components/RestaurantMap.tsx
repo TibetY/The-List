@@ -1,7 +1,11 @@
-import { useEffect, useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { useEffect, useMemo, useRef } from 'react';
+import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import 'leaflet.markercluster';
+import 'leaflet.markercluster/dist/MarkerCluster.css';
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { Restaurant, RestaurantLocation } from '~/types/restaurant';
 
 function reservationLabel(platform: string): string {
@@ -18,21 +22,59 @@ interface LocatedPin {
   lat: number;
   lng: number;
   key: string;
+  /** Sync identity — the restaurant (not the branch), so hovering a side-list
+   *  row lights up every branch of that place and vice-versa. */
+  restaurantKey: string;
 }
 
 // Default view when nothing is geocoded yet (Ottawa — "Ottawa & beyond").
 const DEFAULT_CENTER: [number, number] = [45.4215, -75.6972];
 
+/** Escape user-supplied text before it goes into a Leaflet popup's innerHTML. */
+function escapeHtml(value: string): string {
+  return value.replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string)
+  );
+}
+
 /** A styled teardrop pin, built as a divIcon so we don't depend on Leaflet's
- *  default marker image assets (which break under bundlers). */
-function pinIcon(accent: string) {
+ *  default marker image assets (which break under bundlers). When `active`, the
+ *  pin is enlarged and ringed with the accent so hover-sync is obvious. */
+function pinIcon(accent: string, active = false) {
+  const size = active ? 26 : 18;
+  const anchor = active ? 22 : 16;
+  const shadow = active
+    ? `box-shadow:0 0 0 4px ${accent}59,0 2px 6px rgba(0,0,0,.4);`
+    : 'box-shadow:0 2px 5px rgba(0,0,0,.35);';
   return L.divIcon({
     className: 'thelist-pin',
-    html: `<span style="display:block;width:18px;height:18px;background:${accent};border:2px solid #fff;border-radius:50% 50% 50% 2px;transform:rotate(45deg);box-shadow:0 2px 5px rgba(0,0,0,.35)"></span>`,
-    iconSize: [18, 18],
-    iconAnchor: [9, 16],
-    popupAnchor: [0, -16],
+    html: `<span style="display:block;width:${size}px;height:${size}px;background:${accent};border:2px solid #fff;border-radius:50% 50% 50% 2px;transform:rotate(45deg);${shadow}"></span>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, anchor],
+    popupAnchor: [0, -anchor],
   });
+}
+
+/** Build a pin's popup HTML (name, cuisine, reservation/walk-in). */
+function popupHtml(pin: LocatedPin, t: TFunction): string {
+  const { restaurant: r, location } = pin;
+  const title = location.label ? `${r.name} (${location.label})` : r.name;
+  let html = `<strong>${escapeHtml(title)}</strong>`;
+  if (r.cuisineType) {
+    html += `<br/>${escapeHtml(t(`cuisines.${r.cuisineType}`, r.cuisineType))}`;
+  }
+  const url = location.reservationUrl;
+  if (url && /^https?:\/\//i.test(url)) {
+    const label = t('dashboard.reserveOn', {
+      platform: reservationLabel(location.reservationPlatform || ''),
+    });
+    html += `<br/><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`;
+  } else if (location.reservationPlatform === 'walkin') {
+    html += `<br/>${escapeHtml(t('dashboard.walkinBadge'))}`;
+  }
+  return html;
 }
 
 /** Pan/zoom the map to fit all pins whenever the set of points changes. */
@@ -48,22 +90,100 @@ function FitBounds({ points }: { points: LocatedPin[] }) {
   return null;
 }
 
+/**
+ * Imperative layer that manages a marker-cluster group. Clustering keeps a dense
+ * list legible; the group is (re)built only when the points, accent, or language
+ * change. Hover emphasis and callbacks are handled without rebuilding: callbacks
+ * live in refs, and the hovered pin is re-iconed in a separate effect.
+ */
+function ClusterLayer({
+  points,
+  accent,
+  hoveredKey,
+  onSelect,
+  onHoverChange,
+}: {
+  points: LocatedPin[];
+  accent: string;
+  hoveredKey: string | null;
+  onSelect: (r: Restaurant) => void;
+  onHoverChange?: (key: string | null) => void;
+}) {
+  const map = useMap();
+  const { t, i18n } = useTranslation();
+  const lang = i18n.language;
+
+  // Keep callbacks / t in refs so marker handlers see the latest without making
+  // them effect dependencies (which would rebuild the whole cluster each render).
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
+  const onHoverRef = useRef(onHoverChange);
+  onHoverRef.current = onHoverChange;
+  const tRef = useRef<TFunction>(t);
+  tRef.current = t;
+
+  // restaurantKey → its markers, so hover emphasis can target every branch.
+  const markersByKey = useRef<Map<string, L.Marker[]>>(new Map());
+
+  useEffect(() => {
+    const group = L.markerClusterGroup({
+      showCoverageOnHover: false,
+      maxClusterRadius: 48,
+    });
+    const byKey = new Map<string, L.Marker[]>();
+    for (const pin of points) {
+      const marker = L.marker([pin.lat, pin.lng], { icon: pinIcon(accent, false) });
+      marker.bindPopup(popupHtml(pin, tRef.current));
+      marker.on('click', () => onSelectRef.current(pin.restaurant));
+      marker.on('mouseover', () => onHoverRef.current?.(pin.restaurantKey));
+      marker.on('mouseout', () => onHoverRef.current?.(null));
+      group.addLayer(marker);
+      const arr = byKey.get(pin.restaurantKey) ?? [];
+      arr.push(marker);
+      byKey.set(pin.restaurantKey, arr);
+    }
+    map.addLayer(group);
+    markersByKey.current = byKey;
+    return () => {
+      map.removeLayer(group);
+      markersByKey.current = new Map();
+    };
+    // `lang` triggers a rebuild so popup text follows the language toggle.
+  }, [map, points, accent, lang]);
+
+  // Emphasize the hovered restaurant's markers (all its branches).
+  useEffect(() => {
+    for (const [key, markers] of markersByKey.current) {
+      const active = key === hoveredKey;
+      for (const marker of markers) marker.setIcon(pinIcon(accent, active));
+    }
+  }, [hoveredKey, accent]);
+
+  return null;
+}
+
 export interface RestaurantMapProps {
   restaurants: Restaurant[];
   accent: string;
   onSelect: (r: Restaurant) => void;
+  /** Sync identity (`id ?? name`) of the currently-hovered restaurant, if any. */
+  hoveredId?: string | null;
+  /** Notified when a pin is hovered (its restaurant key) or un-hovered (null). */
+  onHoverChange?: (key: string | null) => void;
 }
 
 export default function RestaurantMap({
   restaurants,
   accent,
   onSelect,
+  hoveredId = null,
+  onHoverChange,
 }: RestaurantMapProps) {
-  const { t } = useTranslation();
   // One pin per located location (a restaurant can have several branches).
   const points = useMemo(() => {
     const pins: LocatedPin[] = [];
     for (const r of restaurants) {
+      const restaurantKey = r.id ?? r.name;
       (r.locations ?? []).forEach((location, i) => {
         if (typeof location.lat === 'number' && typeof location.lng === 'number') {
           pins.push({
@@ -71,14 +191,14 @@ export default function RestaurantMap({
             location,
             lat: location.lat,
             lng: location.lng,
-            key: `${r.id ?? r.name}-${i}`,
+            key: `${restaurantKey}-${i}`,
+            restaurantKey,
           });
         }
       });
     }
     return pins;
   }, [restaurants]);
-  const icon = useMemo(() => pinIcon(accent), [accent]);
 
   return (
     <MapContainer
@@ -92,43 +212,13 @@ export default function RestaurantMap({
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       <FitBounds points={points} />
-      {points.map((p) => {
-        const { restaurant: r, location } = p;
-        const title = location.label ? `${r.name} (${location.label})` : r.name;
-        return (
-          <Marker
-            key={p.key}
-            position={[p.lat, p.lng]}
-            icon={icon}
-            eventHandlers={{ click: () => onSelect(r) }}
-          >
-            <Popup>
-              <strong>{title}</strong>
-              {r.cuisineType ? (
-                <>
-                  <br />
-                  {t(`cuisines.${r.cuisineType}`, r.cuisineType)}
-                </>
-              ) : null}
-              {location.reservationUrl ? (
-                <>
-                  <br />
-                  <a href={location.reservationUrl} target="_blank" rel="noopener noreferrer">
-                    {t('dashboard.reserveOn', {
-                      platform: reservationLabel(location.reservationPlatform || ''),
-                    })}
-                  </a>
-                </>
-              ) : location.reservationPlatform === 'walkin' ? (
-                <>
-                  <br />
-                  {t('dashboard.walkinBadge')}
-                </>
-              ) : null}
-            </Popup>
-          </Marker>
-        );
-      })}
+      <ClusterLayer
+        points={points}
+        accent={accent}
+        hoveredKey={hoveredId}
+        onSelect={onSelect}
+        onHoverChange={onHoverChange}
+      />
     </MapContainer>
   );
 }
