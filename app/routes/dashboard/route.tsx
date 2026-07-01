@@ -40,6 +40,7 @@ import {
   Search,
   ArrowUpward,
   ArrowDownward,
+  Insights,
 } from '@mui/icons-material';
 import { createSupabaseServerClient } from '~/supabase.server';
 import { getRestaurants } from '~/services/restaurants.server';
@@ -1118,6 +1119,10 @@ export default function Dashboard() {
               <MenuItem onClick={() => { setMenuAnchor(null); navigate('/profile'); }}>
                 <ListItemIcon><Person fontSize="small" sx={{ color: t.muted }} /></ListItemIcon>
                 <ListItemText>{tr('nav.profile')}</ListItemText>
+              </MenuItem>
+              <MenuItem onClick={() => { setMenuAnchor(null); navigate(activeList ? `/stats?list=${activeList.id}` : '/stats'); }}>
+                <ListItemIcon><Insights fontSize="small" sx={{ color: t.muted }} /></ListItemIcon>
+                <ListItemText>{tr('stats.menuItem')}</ListItemText>
               </MenuItem>
               <MenuItem onClick={() => { setMenuAnchor(null); setShareOpen(true); }}>
                 <ListItemIcon><PersonAddAlt1 fontSize="small" sx={{ color: t.muted }} /></ListItemIcon>
