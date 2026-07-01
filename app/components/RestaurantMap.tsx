@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet.markercluster';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
+import { MyLocation } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { Restaurant, RestaurantLocation } from '~/types/restaurant';
@@ -57,11 +58,20 @@ function pinIcon(accent: string, active = false) {
   });
 }
 
-/** Build a pin's popup HTML (name, cuisine, reservation/walk-in). */
+/** Build a pin's popup HTML — a small card peek: photo, name, rating, cuisine,
+ *  reservation/walk-in. */
 function popupHtml(pin: LocatedPin, t: TFunction): string {
   const { restaurant: r, location } = pin;
   const title = location.label ? `${r.name} (${location.label})` : r.name;
-  let html = `<strong>${escapeHtml(title)}</strong>`;
+  let html = '';
+  if (r.image && /^https?:\/\//i.test(r.image)) {
+    html += `<img src="${escapeHtml(r.image)}" alt="" style="width:100%;height:96px;object-fit:cover;border-radius:8px;margin-bottom:6px;display:block" />`;
+  }
+  html += `<strong>${escapeHtml(title)}</strong>`;
+  const rating = Math.round(r.rating ?? 0);
+  if (rating > 0) {
+    html += `<br/><span style="letter-spacing:1px;color:#B5532F">${'★'.repeat(rating)}${'☆'.repeat(5 - rating)}</span>`;
+  }
   if (r.cuisineType) {
     html += `<br/>${escapeHtml(t(`cuisines.${r.cuisineType}`, r.cuisineType))}`;
   }
@@ -162,6 +172,62 @@ function ClusterLayer({
   return null;
 }
 
+/** A small "locate me" button overlaid on the map that recenters on the user. */
+function NearMeControl({ accent }: { accent: string }) {
+  const map = useMap();
+  const { t } = useTranslation();
+  const label = t('map.nearMe');
+  const ref = useRef<HTMLButtonElement>(null);
+  const [locating, setLocating] = useState(false);
+
+  useEffect(() => {
+    // Stop clicks/drags on the button from reaching the map underneath.
+    if (ref.current) L.DomEvent.disableClickPropagation(ref.current);
+  }, []);
+
+  const locate = () => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        map.setView([pos.coords.latitude, pos.coords.longitude], 14);
+        setLocating(false);
+      },
+      () => setLocating(false),
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  };
+
+  return (
+    <button
+      ref={ref}
+      type="button"
+      onClick={locate}
+      title={label}
+      aria-label={label}
+      style={{
+        position: 'absolute',
+        top: 10,
+        right: 10,
+        zIndex: 1000,
+        width: 38,
+        height: 38,
+        borderRadius: 10,
+        border: '1px solid rgba(0,0,0,.12)',
+        background: '#fff',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        boxShadow: '0 2px 6px rgba(0,0,0,.2)',
+        opacity: locating ? 0.6 : 1,
+      }}
+    >
+      <MyLocation style={{ fontSize: 19, color: accent }} />
+    </button>
+  );
+}
+
 export interface RestaurantMapProps {
   restaurants: Restaurant[];
   accent: string;
@@ -219,6 +285,7 @@ export default function RestaurantMap({
         onSelect={onSelect}
         onHoverChange={onHoverChange}
       />
+      <NearMeControl accent={accent} />
     </MapContainer>
   );
 }

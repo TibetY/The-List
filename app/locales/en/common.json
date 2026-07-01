@@ -497,6 +497,7 @@
     "backHome": "Back home"
   },
   "map": {
-    "cuisineUnknown": "Restaurant"
+    "cuisineUnknown": "Restaurant",
+    "nearMe": "Center on my location"
   }
 }

@@ -497,6 +497,7 @@
     "backHome": "Retour à l'accueil"
   },
   "map": {
-    "cuisineUnknown": "Restaurant"
+    "cuisineUnknown": "Restaurant",
+    "nearMe": "Centrer sur ma position"
   }
 }
