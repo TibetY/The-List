@@ -220,6 +220,32 @@ type FilterMode = 'all' | 'been' | 'want';
 type SortMode = 'recent' | 'rating' | 'name' | 'price' | 'visits' | 'favorite';
 const SORT_MODES: SortMode[] = ['recent', 'rating', 'name', 'price', 'visits', 'favorite'];
 
+// The searchParam keys that encode the current filter/sort view. Kept in one
+// place so `clearFilters` and any future saved-view code stay in sync.
+const FILTER_PARAM_KEYS = [
+  'q',
+  'status',
+  'cuisine',
+  'cost',
+  'rating',
+  'place',
+  'diet',
+  'menu',
+  'sort',
+  'rev',
+] as const;
+
+/** Parse a comma-joined multi-select param into a clean string[] ('' → []). */
+function parseCsv(raw: string | null): string[] {
+  return raw ? raw.split(',').filter(Boolean) : [];
+}
+
+/** Set a searchParam to a value, or remove it entirely when the value is empty. */
+function setOrDelete(params: URLSearchParams, key: string, value: string): void {
+  if (value) params.set(key, value);
+  else params.delete(key);
+}
+
 /** Toggle a value's membership in a string[] (for multi-select filters). */
 function toggleValue(arr: string[], value: string): string[] {
   return arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value];
@@ -272,20 +298,84 @@ export default function Dashboard() {
     storeMode(m);
   };
   const [view, setView] = useState<ViewMode>('tile');
-  const [filter, setFilter] = useState<FilterMode>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  // Dropdown filters (cuisine / cost / minimum rating).
-  const [cuisineFilter, setCuisineFilter] = useState('');
-  const [costFilter, setCostFilter] = useState('');
-  const [ratingFilter, setRatingFilter] = useState(0);
-  const [placeFilter, setPlaceFilter] = useState<string[]>([]);
-  const [dietFilter, setDietFilter] = useState<string[]>([]);
-  const [menuFilter, setMenuFilter] = useState<string[]>([]);
-  const [sort, setSort] = useState<SortMode>('recent');
+
+  // Filters & sort live in the URL (searchParams) so any view is linkable and
+  // the browser's back/forward steps through filter states — this is also the
+  // foundation for saved views. Only non-default values are written, so a clean
+  // list keeps a clean URL. The theme (`mode`), the active `view`, and the
+  // `list`/`join`/`forked` params are managed separately and left untouched here.
+  const filter: FilterMode = ((): FilterMode => {
+    const s = searchParams.get('status');
+    return s === 'been' || s === 'want' ? s : 'all';
+  })();
+  const searchQuery = searchParams.get('q') ?? '';
+  const cuisineFilter = searchParams.get('cuisine') ?? '';
+  const costFilter = searchParams.get('cost') ?? '';
+  const ratingFilter = Math.min(5, Math.max(0, Math.floor(Number(searchParams.get('rating')) || 0)));
+  // Multi-select facets are comma-joined; memoize on the raw string so the array
+  // reference is stable across renders (keeps `filtered`/`sorted` from churning).
+  const placeParam = searchParams.get('place');
+  const dietParam = searchParams.get('diet');
+  const menuParam = searchParams.get('menu');
+  const placeFilter = useMemo(() => parseCsv(placeParam), [placeParam]);
+  const dietFilter = useMemo(() => parseCsv(dietParam), [dietParam]);
+  const menuFilter = useMemo(() => parseCsv(menuParam), [menuParam]);
+  const sort: SortMode = ((): SortMode => {
+    const s = searchParams.get('sort');
+    return SORT_MODES.includes(s as SortMode) ? (s as SortMode) : 'recent';
+  })();
   // Flip whatever the chosen sort's natural order is (e.g. Name Z→A, oldest
   // first, lowest rated first). Kept separate from `sort` so the dropdown still
   // names the primary key.
-  const [sortReversed, setSortReversed] = useState(false);
+  const sortReversed = searchParams.get('rev') === '1';
+
+  // Mutate one or more filter params while preserving everything else (list,
+  // join, forked, …). Discrete changes push a history entry (so back/forward
+  // works); the free-text search replaces so typing doesn't flood history.
+  const updateFilterParams = (
+    mutate: (p: URLSearchParams) => void,
+    opts?: { replace?: boolean }
+  ) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        mutate(next);
+        return next;
+      },
+      { replace: opts?.replace ?? false }
+    );
+  };
+  const setFilter = (v: FilterMode) =>
+    updateFilterParams((p) => setOrDelete(p, 'status', v === 'all' ? '' : v));
+  const setSearchQuery = (v: string) =>
+    updateFilterParams((p) => setOrDelete(p, 'q', v), { replace: true });
+  const setCuisineFilter = (v: string) =>
+    updateFilterParams((p) => setOrDelete(p, 'cuisine', v));
+  const setCostFilter = (v: string) =>
+    updateFilterParams((p) => setOrDelete(p, 'cost', v));
+  const setRatingFilter = (v: number) =>
+    updateFilterParams((p) => setOrDelete(p, 'rating', v ? String(v) : ''));
+  const setSort = (v: SortMode) =>
+    updateFilterParams((p) => setOrDelete(p, 'sort', v === 'recent' ? '' : v));
+  // Array setters accept a value or a functional updater (mirroring useState),
+  // reading prev from the params being mutated so rapid toggles never go stale.
+  const makeCsvSetter =
+    (key: string) => (next: string[] | ((prev: string[]) => string[])) =>
+      updateFilterParams((p) => {
+        const prev = parseCsv(p.get(key));
+        const value = typeof next === 'function' ? next(prev) : next;
+        setOrDelete(p, key, value.join(','));
+      });
+  const setPlaceFilter = makeCsvSetter('place');
+  const setDietFilter = makeCsvSetter('diet');
+  const setMenuFilter = makeCsvSetter('menu');
+  const setSortReversed = (next: boolean | ((prev: boolean) => boolean)) =>
+    updateFilterParams((p) => {
+      const prev = p.get('rev') === '1';
+      const value = typeof next === 'function' ? next(prev) : next;
+      setOrDelete(p, 'rev', value ? '1' : '');
+    });
+
   const [filterMenu, setFilterMenu] = useState<{
     kind: 'cuisine' | 'cost' | 'rating' | 'place' | 'diet' | 'menu' | 'sort';
     anchor: HTMLElement;
@@ -455,18 +545,9 @@ export default function Dashboard() {
     sort !== 'recent' ||
     sortReversed;
 
-  const clearFilters = () => {
-    setFilter('all');
-    setSearchQuery('');
-    setCuisineFilter('');
-    setCostFilter('');
-    setRatingFilter(0);
-    setPlaceFilter([]);
-    setDietFilter([]);
-    setMenuFilter([]);
-    setSort('recent');
-    setSortReversed(false);
-  };
+  // Drop every filter/sort param in a single history entry (leaves list/… intact).
+  const clearFilters = () =>
+    updateFilterParams((p) => FILTER_PARAM_KEYS.forEach((k) => p.delete(k)));
 
   const total = decorated.length;
   const beenCount = decorated.filter((r) => r.isBeen).length;
