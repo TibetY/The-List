@@ -298,6 +298,13 @@
     "saveChanges": "Enregistrer",
     "addRestaurant": "Ajouter le restaurant"
   },
+  "search": {
+    "placeholder": "Rechercher un lieu à remplir automatiquement…",
+    "label": "Rechercher un lieu",
+    "clear": "Effacer la recherche",
+    "noResults": "Aucun résultat — saisissez les détails ci-dessous.",
+    "orManual": "…ou saisissez vous-même les détails ci-dessous."
+  },
   "cuisines": {
     "Italian": "Italienne",
     "Chinese": "Chinoise",

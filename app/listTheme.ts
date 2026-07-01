@@ -68,6 +68,10 @@ export interface ListTokens {
   pFg: string;
   pIdle: string;
   ring: string;
+  // Stronger accent halo for the "just auto-filled" moment (box-shadow-ready).
+  glow: string;
+  // Neutral base for loading skeletons (search results, resolving cards).
+  skeleton: string;
   snackBg: string;
   snackFg: string;
   shadow1: string;
@@ -126,6 +130,8 @@ export const listTokens: Record<ListMode, ListTokens> = {
     pFg: '#FFFFFF',
     pIdle: '#6F6353',
     ring: 'rgba(181,83,47,.22)',
+    glow: 'rgba(181,83,47,.32)',
+    skeleton: 'rgba(120,110,95,.14)',
     snackBg: '#2B2420',
     snackFg: '#F3EADB',
     shadow1: '0 1px 3px rgba(43,36,32,.08)',
@@ -182,6 +188,8 @@ export const listTokens: Record<ListMode, ListTokens> = {
     pFg: '#15201B',
     pIdle: '#8FA08F',
     ring: 'rgba(217,145,63,.3)',
+    glow: 'rgba(217,145,63,.42)',
+    skeleton: 'rgba(239,228,210,.08)',
     snackBg: '#EDE4D2',
     snackFg: '#1C2A23',
     shadow1: '0 1px 3px rgba(0,0,0,.4)',
@@ -250,6 +258,8 @@ const CSS_VAR_MAP: [cssVar: string, token: keyof ListTokens][] = [
   ['--want-bg', 'wantBg'],
   ['--want-fg', 'wantFg'],
   ['--ring', 'ring'],
+  ['--glow', 'glow'],
+  ['--skeleton', 'skeleton'],
   ['--snack-bg', 'snackBg'],
   ['--snack-fg', 'snackFg'],
   ['--shadow-1', 'shadow1'],

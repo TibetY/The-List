@@ -298,6 +298,13 @@
     "saveChanges": "Save Changes",
     "addRestaurant": "Add Restaurant"
   },
+  "search": {
+    "placeholder": "Search for a place to autofill…",
+    "label": "Search for a place",
+    "clear": "Clear search",
+    "noResults": "No matches — just type the details below.",
+    "orManual": "…or fill in the details yourself below."
+  },
   "cuisines": {
     "Italian": "Italian",
     "Chinese": "Chinese",

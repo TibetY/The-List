@@ -40,6 +40,7 @@ import type {
   RestaurantLocation,
   RestaurantStatus,
   SocialMediaLinks,
+  PlaceCandidate,
 } from '~/types/restaurant';
 import {
   cuisineTypes,
@@ -47,12 +48,19 @@ import {
   placeTypes,
   menuTypes,
 } from '~/types/restaurant';
+import type { listTokens } from '~/listTheme';
+import PlaceSearch from '~/components/PlaceSearch';
+
+type Tokens = (typeof listTokens)['light'];
 
 interface RestaurantFormDialogProps {
   open: boolean;
   restaurant: Restaurant | null;
   onClose: () => void;
   onSave: (restaurant: Partial<Restaurant>, imageFile?: File) => Promise<void>;
+  /** Brand tokens + serif for the search accelerator (renders in both moods). */
+  tokens: Tokens;
+  serifFont: string;
 }
 
 /** Shape returned by /api/scrape-website. The lookup endpoint returns a subset,
@@ -140,6 +148,8 @@ export default function RestaurantFormDialog({
   restaurant,
   onClose,
   onSave,
+  tokens,
+  serifFont,
 }: RestaurantFormDialogProps) {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -428,9 +438,41 @@ export default function RestaurantFormDialog({
     markFilled(filled);
   };
 
-  const handlePlaceLookup = async () => {
-    const name = formData.name?.trim();
-    const address = (locations[activeLocation]?.address ?? '').trim();
+  /** Fill blanks from a place chosen in the search accelerator, then enrich. The
+   *  chosen candidate already carries name/address/coords/cuisine/website, so we
+   *  seed those immediately (with the glow) and hand off to the same lookup +
+   *  scrape chain the manual flow uses. */
+  const applyCandidate = (c: PlaceCandidate) => {
+    const filled: string[] = [];
+    setFormData((prev) => ({
+      ...prev,
+      name: c.name || prev.name,
+      cuisineType: prev.cuisineType || c.cuisineType || '',
+      placeTypes: prev.placeTypes?.length ? prev.placeTypes : c.placeTypes ?? prev.placeTypes,
+      url: prev.url?.trim() ? prev.url : c.website ?? '',
+    }));
+    if (c.cuisineType && cuisineTypes.includes(c.cuisineType)) setCuisineChoice(c.cuisineType);
+    updateActiveLocation({
+      address: c.address,
+      lat: c.lat ?? undefined,
+      lng: c.lng ?? undefined,
+    });
+    if (c.cuisineType) filled.push('cuisine');
+    if (c.placeTypes?.length) filled.push('placeTypes');
+    if (c.website) filled.push('website');
+    filled.push(`address@${activeLocation}`);
+    markFilled(filled);
+    // Re-run the OSM extras lookup (dietary/phone/…) for the new name+address, and
+    // scrape the known website for the photo/reservation. Pre-setting url above
+    // means the lookup won't double-scrape; this one call fills the rest.
+    lookedUpKey.current = '';
+    handlePlaceLookup(c.name, c.address);
+    if (c.website) runScrape(c.website);
+  };
+
+  const handlePlaceLookup = async (nameArg?: string, addressArg?: string) => {
+    const name = (nameArg ?? formData.name ?? '').trim();
+    const address = (addressArg ?? locations[activeLocation]?.address ?? '').trim();
     if (!name || !address) return;
     const key = `${name}|${address}`.toLowerCase();
     if (lookedUpKey.current === key) return; // already looked this up
@@ -646,6 +688,26 @@ export default function RestaurantFormDialog({
       </DialogTitle>
       <DialogContent dividers sx={{ borderColor: 'divider' }}>
         <Grid container spacing={2.5} sx={{ mt: 0 }}>
+          {/* Search accelerator — search-first "Add a place". Only when adding a
+              new entry (editing already has the details); manual fields remain
+              below as the fallback. Picking a result seeds + enriches the form. */}
+          {!restaurant && (
+            <Grid item xs={12}>
+              <PlaceSearch
+                tokens={tokens}
+                serifFont={serifFont}
+                onPick={applyCandidate}
+                placeholder={t('search.placeholder')}
+              />
+              <Typography
+                variant="caption"
+                sx={{ display: 'block', mt: 1, color: 'text.secondary' }}
+              >
+                {t('search.orManual')}
+              </Typography>
+            </Grid>
+          )}
+
           {/* Restaurant Name */}
           <Grid item xs={12}>
             <TextField
@@ -656,7 +718,7 @@ export default function RestaurantFormDialog({
               onChange={(e) =>
                 setFormData({ ...formData, name: e.target.value })
               }
-              onBlur={handlePlaceLookup}
+              onBlur={() => handlePlaceLookup()}
             />
           </Grid>
 
@@ -1018,7 +1080,7 @@ export default function RestaurantFormDialog({
                     placeholder={t('form.addressPlaceholder')}
                     value={loc.address ?? ''}
                     onChange={(e) => updateActiveLocation({ address: e.target.value })}
-                    onBlur={handlePlaceLookup}
+                    onBlur={() => handlePlaceLookup()}
                     helperText={t('form.addressHelp')}
                     sx={glowSx(`address@${activeLocation}`)}
                     InputProps={{

@@ -129,6 +129,22 @@ export type RestaurantFormData = Omit<
   'id' | 'listId' | 'createdAt' | 'updatedAt' | 'addedBy' | 'lat' | 'lng'
 >;
 
+/**
+ * A place candidate returned by /api/search-place (search-first "Add a place").
+ * Enough to render a picker row and seed the add form, after which the enrichment
+ * chain (lookup + scrape) fills in the rest. Defined here so both the route and
+ * the client search UI share one contract.
+ */
+export interface PlaceCandidate {
+  name: string;
+  address: string;
+  lat: number | null;
+  lng: number | null;
+  cuisineType: string | null;
+  placeTypes: string[] | null;
+  website: string | null;
+}
+
 export type ListRole = 'owner' | 'editor' | 'viewer';
 
 export interface Profile {

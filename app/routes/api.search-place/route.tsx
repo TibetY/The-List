@@ -1,30 +1,11 @@
 import type { LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
-import { cuisineTypes } from '~/types/restaurant';
+import { cuisineTypes, type PlaceCandidate } from '~/types/restaurant';
+
+export type { PlaceCandidate };
 
 const FETCH_TIMEOUT_MS = 6000;
 const MAX_RESULTS = 6;
-
-/**
- * A single place candidate returned by the search. This is the stable contract
- * the search-first "Add a place" UI builds on: enough to show a picker row
- * (name / address / cuisine) and to seed the add form (lat/lng + website), after
- * which the client runs the existing lookup + scrape enrichment chain.
- */
-export interface PlaceCandidate {
-  /** Best display name (namedetails → head of display_name). */
-  name: string;
-  /** Compact human address (display_name minus the leading name). */
-  address: string;
-  lat: number | null;
-  lng: number | null;
-  /** One of our cuisineTypes when OSM's cuisine tag maps cleanly, else null. */
-  cuisineType: string | null;
-  /** One of our placeTypes (Restaurant / Bar / Cafe / Bakery) when known. */
-  placeTypes: string[] | null;
-  /** http(s) website when OSM has one, normalized; else null. */
-  website: string | null;
-}
 
 /**
  * Search for restaurant/bar/cafe candidates by free-text query (name, or name +

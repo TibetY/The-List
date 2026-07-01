@@ -1927,6 +1927,8 @@ export default function Dashboard() {
           restaurant={selectedRestaurant}
           onClose={() => setFormOpen(false)}
           onSave={handleSaveRestaurant}
+          tokens={t}
+          serifFont={serif}
         />
         <DeleteConfirmDialog
           open={deleteOpen}
