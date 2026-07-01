@@ -605,3 +605,36 @@ end; $$;
 -- Only signed-in users can fork (anon has no auth.uid()).
 revoke execute on function public.fork_shared_list(text) from anon;
 grant  execute on function public.fork_shared_list(text) to authenticated;
+
+-- ============================================================
+-- SAVED VIEWS — per-user named filter/sort presets for a list
+-- A view is just a stored querystring of the dashboard's filter params, so it is
+-- linkable and shareable. Personal to the creating user, and scoped to lists they
+-- belong to.
+-- ============================================================
+
+create table if not exists public.list_views (
+  id         uuid primary key default gen_random_uuid(),
+  list_id    uuid not null references public.lists(id) on delete cascade,
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  name       text not null,
+  params     text not null default '',
+  created_at timestamptz not null default now()
+);
+create index if not exists list_views_list_user_idx on public.list_views (list_id, user_id);
+
+alter table public.list_views enable row level security;
+
+-- A user sees/manages only their own views, and only on lists they belong to.
+drop policy if exists "read own views" on public.list_views;
+drop policy if exists "insert own views" on public.list_views;
+drop policy if exists "update own views" on public.list_views;
+drop policy if exists "delete own views" on public.list_views;
+create policy "read own views" on public.list_views
+  for select using (user_id = auth.uid() and private.is_list_member(list_id));
+create policy "insert own views" on public.list_views
+  for insert with check (user_id = auth.uid() and private.is_list_member(list_id));
+create policy "update own views" on public.list_views
+  for update using (user_id = auth.uid()) with check (user_id = auth.uid());
+create policy "delete own views" on public.list_views
+  for delete using (user_id = auth.uid());

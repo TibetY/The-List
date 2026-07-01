@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
+import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
 import { LoaderFunction, ActionFunction, LinksFunction, redirect, json } from '@remix-run/node';
 import leafletStylesHref from 'leaflet/dist/leaflet.css?url';
 import {
@@ -24,7 +24,6 @@ import {
   DialogActions,
   Button,
   TextField,
-  Checkbox,
 } from '@mui/material';
 import {
   Add,
@@ -38,8 +37,7 @@ import {
   FavoriteBorder,
   Close,
   Search,
-  ArrowUpward,
-  ArrowDownward,
+  Insights,
 } from '@mui/icons-material';
 import { createSupabaseServerClient } from '~/supabase.server';
 import { getRestaurants } from '~/services/restaurants.server';
@@ -51,6 +49,7 @@ import {
   ensureDefaultList,
 } from '~/services/lists.server';
 import { getProfile } from '~/services/profiles.server';
+import { getListViews } from '~/services/views.server';
 import type {
   Restaurant,
   RestaurantLocation,
@@ -59,14 +58,23 @@ import type {
   InviteLink,
   ShareLink,
   Profile,
+  ListView,
 } from '~/types/restaurant';
 import { decorate, type DecoratedRestaurant } from '~/utils/decorateRestaurant';
+import {
+  FILTER_PARAM_KEYS,
+  serializeFilterParams,
+  applyViewParams,
+} from '~/utils/filterParams';
 import RestaurantFormDialog from '~/components/RestaurantFormDialog';
 import RestaurantDetailDialog from '~/components/RestaurantDetailDialog';
 import RestaurantThumb from '~/components/RestaurantThumb';
 import DeleteConfirmDialog from '~/components/DeleteConfirmDialog';
 import ListSwitcher from '~/components/ListSwitcher';
 import ShareListDialog from '~/components/ShareListDialog';
+import Onboarding from '~/components/Onboarding';
+import FilterSheet from '~/components/FilterSheet';
+import SavedViewsBar from '~/components/SavedViewsBar';
 import LanguageSwitcher from '~/components/LanguageSwitcher';
 import { uploadRestaurantImage } from '~/services/storage.client';
 import {
@@ -78,6 +86,7 @@ import {
   setRestaurantVisitCount,
 } from '~/services/restaurants.client';
 import { createList, updateList, deleteList } from '~/services/lists.client';
+import { createListView, renameListView, deleteListView } from '~/services/views.client';
 import { geocodeAddress } from '~/services/geocode.client';
 import type { RestaurantMapProps } from '~/components/RestaurantMap';
 
@@ -129,6 +138,7 @@ type LoaderData = {
   inviteLink: InviteLink | null;
   shareLink: ShareLink | null;
   profile: Profile | null;
+  views: ListView[];
   error: string | null;
 };
 
@@ -162,9 +172,11 @@ export const loader: LoaderFunction = async ({ request }) => {
     let members: ListMember[] = [];
     let inviteLink: InviteLink | null = null;
     let shareLink: ShareLink | null = null;
+    let views: ListView[] = [];
     if (activeList) {
       restaurants = await getRestaurants(supabase, activeList.id);
       members = await getListMembers(supabase, activeList.id);
+      views = await getListViews(supabase, activeList.id, user.id);
       if (activeList.role === 'owner') {
         inviteLink = await getInviteLink(supabase, activeList.id);
         shareLink = await getShareLink(supabase, activeList.id);
@@ -182,6 +194,7 @@ export const loader: LoaderFunction = async ({ request }) => {
         inviteLink,
         shareLink,
         profile,
+        views,
         error: null,
       },
       { headers }
@@ -198,6 +211,7 @@ export const loader: LoaderFunction = async ({ request }) => {
         inviteLink: null,
         shareLink: null,
         profile: null,
+        views: [],
         error: describeError(error),
       },
       { headers }
@@ -220,9 +234,15 @@ type FilterMode = 'all' | 'been' | 'want';
 type SortMode = 'recent' | 'rating' | 'name' | 'price' | 'visits' | 'favorite';
 const SORT_MODES: SortMode[] = ['recent', 'rating', 'name', 'price', 'visits', 'favorite'];
 
-/** Toggle a value's membership in a string[] (for multi-select filters). */
-function toggleValue(arr: string[], value: string): string[] {
-  return arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value];
+/** Parse a comma-joined multi-select param into a clean string[] ('' → []). */
+function parseCsv(raw: string | null): string[] {
+  return raw ? raw.split(',').filter(Boolean) : [];
+}
+
+/** Set a searchParam to a value, or remove it entirely when the value is empty. */
+function setOrDelete(params: URLSearchParams, key: string, value: string): void {
+  if (value) params.set(key, value);
+  else params.delete(key);
 }
 
 /** Make a non-button clickable element keyboard-operable (Enter/Space). */
@@ -253,6 +273,7 @@ export default function Dashboard() {
     inviteLink,
     shareLink,
     profile,
+    views,
     error,
   } = data;
   const revalidator = useRevalidator();
@@ -272,24 +293,93 @@ export default function Dashboard() {
     storeMode(m);
   };
   const [view, setView] = useState<ViewMode>('tile');
-  const [filter, setFilter] = useState<FilterMode>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  // Dropdown filters (cuisine / cost / minimum rating).
-  const [cuisineFilter, setCuisineFilter] = useState('');
-  const [costFilter, setCostFilter] = useState('');
-  const [ratingFilter, setRatingFilter] = useState(0);
-  const [placeFilter, setPlaceFilter] = useState<string[]>([]);
-  const [dietFilter, setDietFilter] = useState<string[]>([]);
-  const [menuFilter, setMenuFilter] = useState<string[]>([]);
-  const [sort, setSort] = useState<SortMode>('recent');
+  // Map ↔ side-list hover sync (map view). The id is a restaurant's sync key
+  // (`id ?? name`, matching RestaurantMap); refs let a pin-hover scroll its row
+  // into view.
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const mapRowRefs = useRef<Map<string, HTMLElement>>(new Map());
+  useEffect(() => {
+    if (!hoveredId) return;
+    mapRowRefs.current.get(hoveredId)?.scrollIntoView({ block: 'nearest' });
+  }, [hoveredId]);
+
+  // Filters & sort live in the URL (searchParams) so any view is linkable and
+  // the browser's back/forward steps through filter states — this is also the
+  // foundation for saved views. Only non-default values are written, so a clean
+  // list keeps a clean URL. The theme (`mode`), the active `view`, and the
+  // `list`/`join`/`forked` params are managed separately and left untouched here.
+  const filter: FilterMode = ((): FilterMode => {
+    const s = searchParams.get('status');
+    return s === 'been' || s === 'want' ? s : 'all';
+  })();
+  const searchQuery = searchParams.get('q') ?? '';
+  const cuisineFilter = searchParams.get('cuisine') ?? '';
+  const costFilter = searchParams.get('cost') ?? '';
+  const ratingFilter = Math.min(5, Math.max(0, Math.floor(Number(searchParams.get('rating')) || 0)));
+  // Multi-select facets are comma-joined; memoize on the raw string so the array
+  // reference is stable across renders (keeps `filtered`/`sorted` from churning).
+  const placeParam = searchParams.get('place');
+  const dietParam = searchParams.get('diet');
+  const menuParam = searchParams.get('menu');
+  const placeFilter = useMemo(() => parseCsv(placeParam), [placeParam]);
+  const dietFilter = useMemo(() => parseCsv(dietParam), [dietParam]);
+  const menuFilter = useMemo(() => parseCsv(menuParam), [menuParam]);
+  const sort: SortMode = ((): SortMode => {
+    const s = searchParams.get('sort');
+    return SORT_MODES.includes(s as SortMode) ? (s as SortMode) : 'recent';
+  })();
   // Flip whatever the chosen sort's natural order is (e.g. Name Z→A, oldest
   // first, lowest rated first). Kept separate from `sort` so the dropdown still
   // names the primary key.
-  const [sortReversed, setSortReversed] = useState(false);
-  const [filterMenu, setFilterMenu] = useState<{
-    kind: 'cuisine' | 'cost' | 'rating' | 'place' | 'diet' | 'menu' | 'sort';
-    anchor: HTMLElement;
-  } | null>(null);
+  const sortReversed = searchParams.get('rev') === '1';
+
+  // Mutate one or more filter params while preserving everything else (list,
+  // join, forked, …). Discrete changes push a history entry (so back/forward
+  // works); the free-text search replaces so typing doesn't flood history.
+  const updateFilterParams = (
+    mutate: (p: URLSearchParams) => void,
+    opts?: { replace?: boolean }
+  ) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        mutate(next);
+        return next;
+      },
+      { replace: opts?.replace ?? false }
+    );
+  };
+  const setFilter = (v: FilterMode) =>
+    updateFilterParams((p) => setOrDelete(p, 'status', v === 'all' ? '' : v));
+  const setSearchQuery = (v: string) =>
+    updateFilterParams((p) => setOrDelete(p, 'q', v), { replace: true });
+  const setCuisineFilter = (v: string) =>
+    updateFilterParams((p) => setOrDelete(p, 'cuisine', v));
+  const setCostFilter = (v: string) =>
+    updateFilterParams((p) => setOrDelete(p, 'cost', v));
+  const setRatingFilter = (v: number) =>
+    updateFilterParams((p) => setOrDelete(p, 'rating', v ? String(v) : ''));
+  const setSort = (v: SortMode) =>
+    updateFilterParams((p) => setOrDelete(p, 'sort', v === 'recent' ? '' : v));
+  // Array setters accept a value or a functional updater (mirroring useState),
+  // reading prev from the params being mutated so rapid toggles never go stale.
+  const makeCsvSetter =
+    (key: string) => (next: string[] | ((prev: string[]) => string[])) =>
+      updateFilterParams((p) => {
+        const prev = parseCsv(p.get(key));
+        const value = typeof next === 'function' ? next(prev) : next;
+        setOrDelete(p, key, value.join(','));
+      });
+  const setPlaceFilter = makeCsvSetter('place');
+  const setDietFilter = makeCsvSetter('diet');
+  const setMenuFilter = makeCsvSetter('menu');
+  const setSortReversed = (next: boolean | ((prev: boolean) => boolean)) =>
+    updateFilterParams((p) => {
+      const prev = p.get('rev') === '1';
+      const value = typeof next === 'function' ? next(prev) : next;
+      setOrDelete(p, 'rev', value ? '1' : '');
+    });
+
 
   const [formOpen, setFormOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -299,6 +389,8 @@ export default function Dashboard() {
   const [newListName, setNewListName] = useState('');
   const [renameListTarget, setRenameListTarget] = useState<RestaurantList | null>(null);
   const [renameListName, setRenameListName] = useState('');
+  // Saved-view name dialog (create a new view or rename an existing one).
+  const [viewDialog, setViewDialog] = useState<{ mode: 'create' | 'rename'; id?: string; name: string } | null>(null);
   const [deleteListTarget, setDeleteListTarget] = useState<RestaurantList | null>(null);
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
   const [restaurantToDelete, setRestaurantToDelete] = useState<{
@@ -455,18 +547,15 @@ export default function Dashboard() {
     sort !== 'recent' ||
     sortReversed;
 
-  const clearFilters = () => {
-    setFilter('all');
-    setSearchQuery('');
-    setCuisineFilter('');
-    setCostFilter('');
-    setRatingFilter(0);
-    setPlaceFilter([]);
-    setDietFilter([]);
-    setMenuFilter([]);
-    setSort('recent');
-    setSortReversed(false);
-  };
+  // Drop every filter/sort param in a single history entry (leaves list/… intact).
+  const clearFilters = () =>
+    updateFilterParams((p) => FILTER_PARAM_KEYS.forEach((k) => p.delete(k)));
+
+  // Canonical querystring of the current filters, for the saved-view highlight.
+  const currentViewParams = useMemo(
+    () => serializeFilterParams(searchParams),
+    [searchParams]
+  );
 
   const total = decorated.length;
   const beenCount = decorated.filter((r) => r.isBeen).length;
@@ -740,6 +829,40 @@ export default function Dashboard() {
     setSnackbar({ open: true, message: tr('share.snackLeft'), severity: 'success' });
   };
 
+  // --- saved views ---------------------------------------------------------
+  const handleApplyView = (view: ListView) => {
+    setSearchParams(applyViewParams(searchParams, view.params));
+  };
+
+  const handleConfirmView = async () => {
+    const name = viewDialog?.name.trim();
+    if (!viewDialog || !name || !activeList) return;
+    try {
+      if (viewDialog.mode === 'create') {
+        await createListView(activeList.id, userId, name, serializeFilterParams(searchParams));
+      } else if (viewDialog.id) {
+        await renameListView(viewDialog.id, name);
+      }
+      setViewDialog(null);
+      revalidator.revalidate();
+      setSnackbar({ open: true, message: tr('views.saved'), severity: 'success' });
+    } catch (error) {
+      console.error('Error saving view:', error);
+      setSnackbar({ open: true, message: tr('views.saveFailed'), severity: 'error' });
+    }
+  };
+
+  const handleDeleteView = async (view: ListView) => {
+    try {
+      await deleteListView(view.id);
+      revalidator.revalidate();
+      setSnackbar({ open: true, message: tr('views.deleted'), severity: 'success' });
+    } catch (error) {
+      console.error('Error deleting view:', error);
+      setSnackbar({ open: true, message: tr('views.saveFailed'), severity: 'error' });
+    }
+  };
+
   const handleLogout = () => {
     const form = document.createElement('form');
     form.method = 'POST';
@@ -783,14 +906,6 @@ export default function Dashboard() {
     fontSize: '13px',
     fontWeight: 500,
     padding: '7px 15px',
-    borderRadius: '999px',
-  } as const;
-
-  const dropChipStyle = {
-    border: `1px solid ${t.pillBorder}`,
-    fontSize: '13px',
-    color: t.chip,
-    padding: '7px 14px',
     borderRadius: '999px',
   } as const;
 
@@ -1028,6 +1143,10 @@ export default function Dashboard() {
                 <ListItemIcon><Person fontSize="small" sx={{ color: t.muted }} /></ListItemIcon>
                 <ListItemText>{tr('nav.profile')}</ListItemText>
               </MenuItem>
+              <MenuItem onClick={() => { setMenuAnchor(null); navigate(activeList ? `/stats?list=${activeList.id}` : '/stats'); }}>
+                <ListItemIcon><Insights fontSize="small" sx={{ color: t.muted }} /></ListItemIcon>
+                <ListItemText>{tr('stats.menuItem')}</ListItemText>
+              </MenuItem>
               <MenuItem onClick={() => { setMenuAnchor(null); setShareOpen(true); }}>
                 <ListItemIcon><PersonAddAlt1 fontSize="small" sx={{ color: t.muted }} /></ListItemIcon>
                 <ListItemText>{tr('dashboard.shareMembers')}</ListItemText>
@@ -1119,6 +1238,18 @@ export default function Dashboard() {
             )}
           </Box>
 
+          {/* saved views */}
+          <SavedViewsBar
+            tokens={t}
+            views={views}
+            currentParams={currentViewParams}
+            hasActiveFilters={hasActiveFilters}
+            onApply={handleApplyView}
+            onSave={() => setViewDialog({ mode: 'create', name: '' })}
+            onRename={(view) => setViewDialog({ mode: 'rename', id: view.id, name: view.name })}
+            onDelete={handleDeleteView}
+          />
+
           {/* filters */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: '10px', mt: '22px', flexWrap: 'wrap' }}>
             <Box role="group" aria-label={tr('dashboard.filterStatusLabel')} sx={{ display: 'contents' }}>
@@ -1127,113 +1258,32 @@ export default function Dashboard() {
               <Box component="button" aria-pressed={filter === 'want'} onClick={() => setFilter('want')} sx={{ ...filterBtnStyle, ...pill('want') }}>{tr('dashboard.filterWant')}</Box>
             </Box>
             <Box sx={{ width: '1px', height: 22, background: t.divider, mx: '4px' }} />
-            <Box
-              component="button"
-              type="button"
-              aria-haspopup="true"
-              aria-expanded={filterMenu?.kind === 'cuisine'}
-              onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'cuisine', anchor: e.currentTarget })}
-              sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: cuisineFilter ? t.pBg : 'transparent', color: cuisineFilter ? t.pFg : t.chip }}
-            >
-              {cuisineFilter ? tr(`cuisines.${cuisineFilter}`, cuisineFilter) : tr('dashboard.cuisine')} ▾
-            </Box>
-            <Box
-              component="button"
-              type="button"
-              aria-haspopup="true"
-              aria-expanded={filterMenu?.kind === 'cost'}
-              onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'cost', anchor: e.currentTarget })}
-              sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: costFilter ? t.pBg : 'transparent', color: costFilter ? t.pFg : t.chip }}
-            >
-              {costFilter || tr('dashboard.cost')} ▾
-            </Box>
-            <Box
-              component="button"
-              type="button"
-              aria-haspopup="true"
-              aria-expanded={filterMenu?.kind === 'rating'}
-              onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'rating', anchor: e.currentTarget })}
-              sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: ratingFilter ? t.pBg : 'transparent', color: ratingFilter ? t.pFg : t.chip }}
-            >
-              {ratingFilter ? tr('dashboard.ratingStars', { count: ratingFilter }) : tr('dashboard.rating')} ▾
-            </Box>
-            {placeOptions.length > 0 && (
-              <Box
-                component="button"
-                type="button"
-                aria-haspopup="true"
-                aria-expanded={filterMenu?.kind === 'place'}
-                onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'place', anchor: e.currentTarget })}
-                sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: placeFilter.length ? t.pBg : 'transparent', color: placeFilter.length ? t.pFg : t.chip }}
-              >
-                {placeFilter.length === 0
-                  ? tr('dashboard.placeType')
-                  : placeFilter.length === 1
-                    ? tr(`placeTypes.${placeFilter[0]}`, placeFilter[0])
-                    : `${tr('dashboard.placeType')} (${placeFilter.length})`}{' '}▾
-              </Box>
-            )}
-            {dietOptions.length > 0 && (
-              <Box
-                component="button"
-                type="button"
-                aria-haspopup="true"
-                aria-expanded={filterMenu?.kind === 'diet'}
-                onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'diet', anchor: e.currentTarget })}
-                sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: dietFilter.length ? t.pBg : 'transparent', color: dietFilter.length ? t.pFg : t.chip }}
-              >
-                {dietFilter.length === 0
-                  ? tr('dashboard.dietary')
-                  : dietFilter.length === 1
-                    ? tr(`dietary.${dietFilter[0]}`, dietFilter[0])
-                    : `${tr('dashboard.dietary')} (${dietFilter.length})`}{' '}▾
-              </Box>
-            )}
-            {menuOptions.length > 0 && (
-              <Box
-                component="button"
-                type="button"
-                aria-haspopup="true"
-                aria-expanded={filterMenu?.kind === 'menu'}
-                onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'menu', anchor: e.currentTarget })}
-                sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: menuFilter.length ? t.pBg : 'transparent', color: menuFilter.length ? t.pFg : t.chip }}
-              >
-                {menuFilter.length === 0
-                  ? tr('dashboard.menuType')
-                  : menuFilter.length === 1
-                    ? tr(`menuTypes.${menuFilter[0]}`, menuFilter[0])
-                    : `${tr('dashboard.menuType')} (${menuFilter.length})`}{' '}▾
-              </Box>
-            )}
-            <Box
-              component="button"
-              type="button"
-              aria-haspopup="true"
-              aria-expanded={filterMenu?.kind === 'sort'}
-              onClick={(e: React.MouseEvent<HTMLButtonElement>) => setFilterMenu({ kind: 'sort', anchor: e.currentTarget })}
-              sx={{ ...dropChipStyle, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", background: sort !== 'recent' ? t.pBg : 'transparent', color: sort !== 'recent' ? t.pFg : t.chip }}
-            >
-              {tr(`dashboard.sort_${sort}`)} ▾
-            </Box>
-            <Box
-              component="button"
-              type="button"
-              onClick={() => setSortReversed((v) => !v)}
-              aria-label={tr('dashboard.sortReverse')}
-              aria-pressed={sortReversed}
-              title={tr('dashboard.sortReverse')}
-              sx={{
-                ...dropChipStyle,
-                display: 'inline-flex',
-                alignItems: 'center',
-                cursor: 'pointer',
-                padding: '7px 10px',
-                background: sortReversed ? t.pBg : 'transparent',
-                color: sortReversed ? t.pFg : t.chip,
-              }}
-            >
-              {sortReversed ? <ArrowUpward sx={{ fontSize: 16 }} /> : <ArrowDownward sx={{ fontSize: 16 }} />}
-            </Box>
+            <FilterSheet
+              tokens={t}
+              cuisineOptions={cuisineOptions}
+              costOptions={costOptions}
+              placeOptions={placeOptions}
+              dietOptions={dietOptions}
+              menuOptions={menuOptions}
+              sortModes={SORT_MODES}
+              cuisineFilter={cuisineFilter}
+              setCuisineFilter={setCuisineFilter}
+              costFilter={costFilter}
+              setCostFilter={setCostFilter}
+              ratingFilter={ratingFilter}
+              setRatingFilter={setRatingFilter}
+              placeFilter={placeFilter}
+              setPlaceFilter={setPlaceFilter}
+              dietFilter={dietFilter}
+              setDietFilter={setDietFilter}
+              menuFilter={menuFilter}
+              setMenuFilter={setMenuFilter}
+              sort={sort}
+              setSort={(v) => setSort(v as SortMode)}
+              sortReversed={sortReversed}
+              setSortReversed={setSortReversed}
+              onClear={clearFilters}
+            />
             {hasActiveFilters && (
               <Box
                 component="button"
@@ -1247,86 +1297,20 @@ export default function Dashboard() {
             <Box sx={{ ml: 'auto', fontSize: 13, color: t.faint }}>{tr('dashboard.showing', { count: filtered.length })}</Box>
           </Box>
 
-          {/* filter dropdown menu */}
-          <Menu
-            anchorEl={filterMenu?.anchor ?? null}
-            open={Boolean(filterMenu)}
-            onClose={() => setFilterMenu(null)}
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-          >
-            {filterMenu?.kind === 'cuisine' && [
-              <MenuItem key="any" selected={!cuisineFilter} onClick={() => { setCuisineFilter(''); setFilterMenu(null); }}>
-                {tr('dashboard.anyCuisine')}
-              </MenuItem>,
-              ...cuisineOptions.map((c) => (
-                <MenuItem key={c} selected={cuisineFilter === c} onClick={() => { setCuisineFilter(c); setFilterMenu(null); }}>
-                  {tr(`cuisines.${c}`, c)}
-                </MenuItem>
-              )),
-            ]}
-            {filterMenu?.kind === 'cost' && [
-              <MenuItem key="any" selected={!costFilter} onClick={() => { setCostFilter(''); setFilterMenu(null); }}>
-                {tr('dashboard.anyCost')}
-              </MenuItem>,
-              ...costOptions.map((c) => (
-                <MenuItem key={c} selected={costFilter === c} onClick={() => { setCostFilter(c); setFilterMenu(null); }}>
-                  {c}
-                </MenuItem>
-              )),
-            ]}
-            {filterMenu?.kind === 'rating' && [
-              <MenuItem key="0" selected={ratingFilter === 0} onClick={() => { setRatingFilter(0); setFilterMenu(null); }}>
-                {tr('dashboard.anyRating')}
-              </MenuItem>,
-              ...[5, 4, 3, 2, 1].map((n) => (
-                <MenuItem key={n} selected={ratingFilter === n} onClick={() => { setRatingFilter(n); setFilterMenu(null); }}>
-                  {tr('dashboard.ratingStars', { count: n })}
-                </MenuItem>
-              )),
-            ]}
-            {filterMenu?.kind === 'place' && [
-              <MenuItem key="any" selected={placeFilter.length === 0} onClick={() => { setPlaceFilter([]); setFilterMenu(null); }}>
-                {tr('dashboard.anyPlaceType')}
-              </MenuItem>,
-              ...placeOptions.map((p) => (
-                <MenuItem key={p} onClick={() => setPlaceFilter((prev) => toggleValue(prev, p))}>
-                  <Checkbox edge="start" size="small" checked={placeFilter.includes(p)} tabIndex={-1} disableRipple sx={{ mr: 1, p: 0.25 }} />
-                  {tr(`placeTypes.${p}`, p)}
-                </MenuItem>
-              )),
-            ]}
-            {filterMenu?.kind === 'diet' && [
-              <MenuItem key="any" selected={dietFilter.length === 0} onClick={() => { setDietFilter([]); setFilterMenu(null); }}>
-                {tr('dashboard.anyDietary')}
-              </MenuItem>,
-              ...dietOptions.map((d) => (
-                <MenuItem key={d} onClick={() => setDietFilter((prev) => toggleValue(prev, d))}>
-                  <Checkbox edge="start" size="small" checked={dietFilter.includes(d)} tabIndex={-1} disableRipple sx={{ mr: 1, p: 0.25 }} />
-                  {tr(`dietary.${d}`, d)}
-                </MenuItem>
-              )),
-            ]}
-            {filterMenu?.kind === 'menu' && [
-              <MenuItem key="any" selected={menuFilter.length === 0} onClick={() => { setMenuFilter([]); setFilterMenu(null); }}>
-                {tr('dashboard.anyMenuType')}
-              </MenuItem>,
-              ...menuOptions.map((m) => (
-                <MenuItem key={m} onClick={() => setMenuFilter((prev) => toggleValue(prev, m))}>
-                  <Checkbox edge="start" size="small" checked={menuFilter.includes(m)} tabIndex={-1} disableRipple sx={{ mr: 1, p: 0.25 }} />
-                  {tr(`menuTypes.${m}`, m)}
-                </MenuItem>
-              )),
-            ]}
-            {filterMenu?.kind === 'sort' &&
-              SORT_MODES.map((m) => (
-                <MenuItem key={m} selected={sort === m} onClick={() => { setSort(m); setFilterMenu(null); }}>
-                  {tr(`dashboard.sort_${m}`)}
-                </MenuItem>
-              ))}
-          </Menu>
-
           {/* empty state */}
           {filtered.length === 0 ? (
+            // A brand-new, editable list gets the first-run onboarding; the plain
+            // empty card is kept for filtered-empty and view-only cases.
+            total === 0 && !hasActiveFilters && canEdit && activeList ? (
+              <Onboarding
+                tokens={t}
+                serifFont={serif}
+                listId={activeList.id}
+                userId={userId}
+                onCreated={() => revalidator.revalidate()}
+                onAddManually={handleAddRestaurant}
+              />
+            ) : (
             <Box
               sx={{
                 mt: '24px',
@@ -1372,6 +1356,7 @@ export default function Dashboard() {
                 </Box>
               )}
             </Box>
+            )
           ) : (
             <>
               {/* TILE */}
@@ -1712,6 +1697,8 @@ export default function Dashboard() {
                             restaurants={sorted}
                             accent={t.accent}
                             onSelect={handleViewRestaurant}
+                            hoveredId={hoveredId}
+                            onHoverChange={setHoveredId}
                           />
                         </Suspense>
                       ) : null}
@@ -1723,15 +1710,23 @@ export default function Dashboard() {
                     )}
                   </Box>
                   <Box sx={{ width: { xs: '100%', md: 330 }, flex: 'none', height: 540, overflowY: 'auto', border: `1px solid ${t.border}`, borderRadius: '16px', background: t.cardBg }}>
-                    {sorted.map((r) => (
+                    {sorted.map((r) => {
+                      const syncKey = r.id ?? r.name;
+                      return (
                       <Box
                         key={r.id}
+                        ref={(el: HTMLElement | null) => {
+                          if (el) mapRowRefs.current.set(syncKey, el);
+                          else mapRowRefs.current.delete(syncKey);
+                        }}
                         role="button"
                         tabIndex={0}
                         aria-label={r.name}
                         onClick={() => handleViewRestaurant(r)}
                         onKeyDown={activateOnKey(() => handleViewRestaurant(r))}
-                        sx={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderBottom: `1px solid ${t.borderSoft}`, cursor: 'pointer', '&:hover': { filter: 'brightness(0.98)' } }}
+                        onMouseEnter={() => setHoveredId(syncKey)}
+                        onMouseLeave={() => setHoveredId((cur) => (cur === syncKey ? null : cur))}
+                        sx={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderBottom: `1px solid ${t.borderSoft}`, cursor: 'pointer', background: hoveredId === syncKey ? t.searchBg : 'transparent', transition: 'background .12s', '&:hover': { filter: 'brightness(0.98)' } }}
                       >
                         <Box sx={{ width: 34, height: 34, borderRadius: '9px', flex: 'none' }}>
                           <RestaurantThumb
@@ -1750,7 +1745,8 @@ export default function Dashboard() {
                         </Box>
                         <Box component="span" sx={{ color: t.cost, fontSize: 13, fontWeight: 600, fontFamily: "'DM Mono',monospace" }}>{r.costStr}</Box>
                       </Box>
-                    ))}
+                      );
+                    })}
                   </Box>
                 </Box>
               )}
@@ -1826,6 +1822,8 @@ export default function Dashboard() {
           restaurant={selectedRestaurant}
           onClose={() => setFormOpen(false)}
           onSave={handleSaveRestaurant}
+          tokens={t}
+          serifFont={serif}
         />
         <DeleteConfirmDialog
           open={deleteOpen}
@@ -1895,6 +1893,30 @@ export default function Dashboard() {
           <DialogActions sx={{ px: 3, py: 2 }}>
             <Button onClick={() => setDeleteListTarget(null)} sx={{ color: 'text.secondary' }}>{tr('dashboard.cancel')}</Button>
             <Button onClick={handleConfirmDeleteList} variant="contained" color="error">{tr('lists.delete')}</Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* save / rename view dialog */}
+        <Dialog open={Boolean(viewDialog)} onClose={() => setViewDialog(null)} maxWidth="xs" fullWidth>
+          <DialogTitle sx={{ fontWeight: 700 }}>
+            {viewDialog?.mode === 'rename' ? tr('views.renameTitle') : tr('views.saveTitle')}
+          </DialogTitle>
+          <DialogContent>
+            <TextField
+              fullWidth
+              label={tr('views.nameLabel')}
+              placeholder={tr('views.namePlaceholder')}
+              value={viewDialog?.name ?? ''}
+              onChange={(e) => setViewDialog((v) => (v ? { ...v, name: e.target.value } : v))}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmView(); }}
+              sx={{ mt: 1 }}
+            />
+          </DialogContent>
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button onClick={() => setViewDialog(null)} sx={{ color: 'text.secondary' }}>{tr('dashboard.cancel')}</Button>
+            <Button onClick={handleConfirmView} variant="contained" disabled={!viewDialog?.name.trim()}>
+              {viewDialog?.mode === 'rename' ? tr('lists.rename') : tr('views.save')}
+            </Button>
           </DialogActions>
         </Dialog>
 

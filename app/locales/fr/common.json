@@ -192,6 +192,7 @@
     "sort_price": "Prix (croissant)",
     "sort_visits": "Plus visités",
     "sort_favorite": "Favoris d'abord",
+    "sortLabel": "Trier",
     "sortReverse": "Inverser l'ordre de tri",
     "missingAddress_one": "{{count}} lieu n'a pas encore d'adresse — ajoutez-en une pour l'afficher sur la carte.",
     "missingAddress_other": "{{count}} lieux n'ont pas encore d'adresse — ajoutez-en une pour les afficher sur la carte.",
@@ -297,6 +298,73 @@
     "cancel": "Annuler",
     "saveChanges": "Enregistrer",
     "addRestaurant": "Ajouter le restaurant"
+  },
+  "filters": {
+    "button": "Filtres",
+    "done": "Terminé"
+  },
+  "views": {
+    "save": "Enregistrer la vue",
+    "saveTitle": "Enregistrer cette vue",
+    "renameTitle": "Renommer la vue",
+    "nameLabel": "Nom de la vue",
+    "namePlaceholder": "ex. Souper romantique $$$ italien",
+    "options": "Options pour {{name}}",
+    "rename": "Renommer",
+    "delete": "Supprimer",
+    "saved": "Vue enregistrée.",
+    "deleted": "Vue supprimée.",
+    "saveFailed": "Impossible d'enregistrer la vue. Réessayez."
+  },
+  "search": {
+    "placeholder": "Rechercher un lieu à remplir automatiquement…",
+    "label": "Rechercher un lieu",
+    "clear": "Effacer la recherche",
+    "noResults": "Aucun résultat — saisissez les détails ci-dessous.",
+    "orManual": "…ou saisissez vous-même les détails ci-dessous."
+  },
+  "stats": {
+    "menuItem": "Vos goûts culinaires",
+    "back": "Retour au tableau de bord",
+    "eyebrow": "{{name}} · vos goûts culinaires",
+    "spotsWord": "adresses",
+    "cuisinesWord": "cuisines",
+    "citiesWord": "villes",
+    "visitedWord": "visitées",
+    "heroSub": "{{cuisines}} cuisines · {{cities}} villes · {{visited}} visitées",
+    "been": "Visité",
+    "want": "À essayer",
+    "favorites": "Favoris",
+    "avgRating": "Note moyenne",
+    "michelin": "Étoiles Michelin",
+    "topCuisines": "Cuisines préférées",
+    "cities": "Villes",
+    "priceRange": "Gamme de prix",
+    "mostVisited": "Les plus visités",
+    "onMap": "Sur la carte",
+    "noCities": "Ajoutez des adresses pour cartographier vos villes.",
+    "noVisits": "Aucune visite enregistrée.",
+    "shareTitle": "Partagez vos goûts culinaires",
+    "shareBody": "Une petite carte de votre liste — les cuisines, les villes, les adresses. Publiez-la, ou envoyez-la à l'ami qui demande toujours où manger.",
+    "downloadSquare": "Télécharger (carré)",
+    "downloadStory": "Télécharger (story)",
+    "tagline": "The Foodiedex — chaque bon repas mérite qu'on s'en souvienne.",
+    "emptyTitle": "Rien à compter pour l'instant",
+    "emptyBody": "Ajoutez quelques adresses et vos goûts culinaires prendront forme ici."
+  },
+  "onboarding": {
+    "title": "Dressons votre table.",
+    "subtitle": "Ajoutez quelques lieux que vous aimez — on remplit les photos, la cuisine et les liens de réservation pour vous.",
+    "searchPlaceholder": "Cherchez un restaurant, un bar ou un café…",
+    "resolving": "On dresse la table…",
+    "added": "Ajouté",
+    "addFailed": "Échec — réessayez",
+    "orStarter": "ou commencez par une ville",
+    "packOttawa": "Classiques d'Ottawa",
+    "packToronto": "Incontournables de Toronto",
+    "packMontreal": "Essentiels de Montréal",
+    "addThese": "Ajouter",
+    "manual": "Vous préférez ajouter le vôtre ? Saisissez-le manuellement."
   },
   "cuisines": {
     "Italian": "Italienne",
@@ -429,6 +497,7 @@
     "backHome": "Retour à l'accueil"
   },
   "map": {
-    "cuisineUnknown": "Restaurant"
+    "cuisineUnknown": "Restaurant",
+    "nearMe": "Centrer sur ma position"
   }
 }
