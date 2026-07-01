@@ -56,18 +56,25 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
     });
     if (!res.ok) return json<PlaceCandidate[]>([]);
-    const data = (await res.json()) as NominatimPlace[];
-    if (!Array.isArray(data)) return json<PlaceCandidate[]>([]);
-    // Keep only food/drink venues; a name-only search can otherwise surface
-    // roads, regions, or shops that aren't places you'd add to the list.
-    const candidates = data
-      .filter(isFoodVenue)
-      .map(toCandidate)
-      .filter((c): c is PlaceCandidate => c !== null);
-    return json<PlaceCandidate[]>(candidates);
+    const data = await res.json();
+    return json<PlaceCandidate[]>(parsePlaceCandidates(data));
   } catch {
     return json<PlaceCandidate[]>([]);
   }
+}
+
+/**
+ * Map a raw Nominatim search response into ranked place candidates, keeping only
+ * food/drink venues (a name-only search can otherwise surface roads, regions, or
+ * shops that aren't places you'd add to the list). Exported so the parsing can be
+ * unit-tested against representative payloads without a live network call.
+ */
+export function parsePlaceCandidates(data: unknown): PlaceCandidate[] {
+  if (!Array.isArray(data)) return [];
+  return (data as NominatimPlace[])
+    .filter(isFoodVenue)
+    .map(toCandidate)
+    .filter((c): c is PlaceCandidate => c !== null);
 }
 
 interface NominatimPlace {
