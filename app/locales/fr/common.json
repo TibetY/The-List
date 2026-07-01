@@ -303,6 +303,19 @@
     "button": "Filtres",
     "done": "Terminé"
   },
+  "views": {
+    "save": "Enregistrer la vue",
+    "saveTitle": "Enregistrer cette vue",
+    "renameTitle": "Renommer la vue",
+    "nameLabel": "Nom de la vue",
+    "namePlaceholder": "ex. Souper romantique $$$ italien",
+    "options": "Options pour {{name}}",
+    "rename": "Renommer",
+    "delete": "Supprimer",
+    "saved": "Vue enregistrée.",
+    "deleted": "Vue supprimée.",
+    "saveFailed": "Impossible d'enregistrer la vue. Réessayez."
+  },
   "search": {
     "placeholder": "Rechercher un lieu à remplir automatiquement…",
     "label": "Rechercher un lieu",

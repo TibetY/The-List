@@ -303,6 +303,19 @@
     "button": "Filters",
     "done": "Done"
   },
+  "views": {
+    "save": "Save view",
+    "saveTitle": "Save this view",
+    "renameTitle": "Rename view",
+    "nameLabel": "View name",
+    "namePlaceholder": "e.g. Date-night $$$ Italian",
+    "options": "Options for {{name}}",
+    "rename": "Rename",
+    "delete": "Delete",
+    "saved": "View saved.",
+    "deleted": "View deleted.",
+    "saveFailed": "Couldn't save the view. Please try again."
+  },
   "search": {
     "placeholder": "Search for a place to autofill…",
     "label": "Search for a place",

@@ -145,6 +145,17 @@ export interface PlaceCandidate {
   website: string | null;
 }
 
+/**
+ * A saved filter/sort view for a list — a named, stored querystring of the
+ * dashboard's filter params. Personal to the user who created it.
+ */
+export interface ListView {
+  id: string;
+  listId: string;
+  name: string;
+  params: string;
+}
+
 export type ListRole = 'owner' | 'editor' | 'viewer';
 
 export interface Profile {

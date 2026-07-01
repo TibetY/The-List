@@ -49,6 +49,7 @@ import {
   ensureDefaultList,
 } from '~/services/lists.server';
 import { getProfile } from '~/services/profiles.server';
+import { getListViews } from '~/services/views.server';
 import type {
   Restaurant,
   RestaurantLocation,
@@ -57,8 +58,14 @@ import type {
   InviteLink,
   ShareLink,
   Profile,
+  ListView,
 } from '~/types/restaurant';
 import { decorate, type DecoratedRestaurant } from '~/utils/decorateRestaurant';
+import {
+  FILTER_PARAM_KEYS,
+  serializeFilterParams,
+  applyViewParams,
+} from '~/utils/filterParams';
 import RestaurantFormDialog from '~/components/RestaurantFormDialog';
 import RestaurantDetailDialog from '~/components/RestaurantDetailDialog';
 import RestaurantThumb from '~/components/RestaurantThumb';
@@ -67,6 +74,7 @@ import ListSwitcher from '~/components/ListSwitcher';
 import ShareListDialog from '~/components/ShareListDialog';
 import Onboarding from '~/components/Onboarding';
 import FilterSheet from '~/components/FilterSheet';
+import SavedViewsBar from '~/components/SavedViewsBar';
 import LanguageSwitcher from '~/components/LanguageSwitcher';
 import { uploadRestaurantImage } from '~/services/storage.client';
 import {
@@ -78,6 +86,7 @@ import {
   setRestaurantVisitCount,
 } from '~/services/restaurants.client';
 import { createList, updateList, deleteList } from '~/services/lists.client';
+import { createListView, renameListView, deleteListView } from '~/services/views.client';
 import { geocodeAddress } from '~/services/geocode.client';
 import type { RestaurantMapProps } from '~/components/RestaurantMap';
 
@@ -129,6 +138,7 @@ type LoaderData = {
   inviteLink: InviteLink | null;
   shareLink: ShareLink | null;
   profile: Profile | null;
+  views: ListView[];
   error: string | null;
 };
 
@@ -162,9 +172,11 @@ export const loader: LoaderFunction = async ({ request }) => {
     let members: ListMember[] = [];
     let inviteLink: InviteLink | null = null;
     let shareLink: ShareLink | null = null;
+    let views: ListView[] = [];
     if (activeList) {
       restaurants = await getRestaurants(supabase, activeList.id);
       members = await getListMembers(supabase, activeList.id);
+      views = await getListViews(supabase, activeList.id, user.id);
       if (activeList.role === 'owner') {
         inviteLink = await getInviteLink(supabase, activeList.id);
         shareLink = await getShareLink(supabase, activeList.id);
@@ -182,6 +194,7 @@ export const loader: LoaderFunction = async ({ request }) => {
         inviteLink,
         shareLink,
         profile,
+        views,
         error: null,
       },
       { headers }
@@ -198,6 +211,7 @@ export const loader: LoaderFunction = async ({ request }) => {
         inviteLink: null,
         shareLink: null,
         profile: null,
+        views: [],
         error: describeError(error),
       },
       { headers }
@@ -219,21 +233,6 @@ type ViewMode = 'tile' | 'list' | 'map';
 type FilterMode = 'all' | 'been' | 'want';
 type SortMode = 'recent' | 'rating' | 'name' | 'price' | 'visits' | 'favorite';
 const SORT_MODES: SortMode[] = ['recent', 'rating', 'name', 'price', 'visits', 'favorite'];
-
-// The searchParam keys that encode the current filter/sort view. Kept in one
-// place so `clearFilters` and any future saved-view code stay in sync.
-const FILTER_PARAM_KEYS = [
-  'q',
-  'status',
-  'cuisine',
-  'cost',
-  'rating',
-  'place',
-  'diet',
-  'menu',
-  'sort',
-  'rev',
-] as const;
 
 /** Parse a comma-joined multi-select param into a clean string[] ('' → []). */
 function parseCsv(raw: string | null): string[] {
@@ -274,6 +273,7 @@ export default function Dashboard() {
     inviteLink,
     shareLink,
     profile,
+    views,
     error,
   } = data;
   const revalidator = useRevalidator();
@@ -389,6 +389,8 @@ export default function Dashboard() {
   const [newListName, setNewListName] = useState('');
   const [renameListTarget, setRenameListTarget] = useState<RestaurantList | null>(null);
   const [renameListName, setRenameListName] = useState('');
+  // Saved-view name dialog (create a new view or rename an existing one).
+  const [viewDialog, setViewDialog] = useState<{ mode: 'create' | 'rename'; id?: string; name: string } | null>(null);
   const [deleteListTarget, setDeleteListTarget] = useState<RestaurantList | null>(null);
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
   const [restaurantToDelete, setRestaurantToDelete] = useState<{
@@ -548,6 +550,12 @@ export default function Dashboard() {
   // Drop every filter/sort param in a single history entry (leaves list/… intact).
   const clearFilters = () =>
     updateFilterParams((p) => FILTER_PARAM_KEYS.forEach((k) => p.delete(k)));
+
+  // Canonical querystring of the current filters, for the saved-view highlight.
+  const currentViewParams = useMemo(
+    () => serializeFilterParams(searchParams),
+    [searchParams]
+  );
 
   const total = decorated.length;
   const beenCount = decorated.filter((r) => r.isBeen).length;
@@ -819,6 +827,40 @@ export default function Dashboard() {
     setSearchParams(params);
     revalidator.revalidate();
     setSnackbar({ open: true, message: tr('share.snackLeft'), severity: 'success' });
+  };
+
+  // --- saved views ---------------------------------------------------------
+  const handleApplyView = (view: ListView) => {
+    setSearchParams(applyViewParams(searchParams, view.params));
+  };
+
+  const handleConfirmView = async () => {
+    const name = viewDialog?.name.trim();
+    if (!viewDialog || !name || !activeList) return;
+    try {
+      if (viewDialog.mode === 'create') {
+        await createListView(activeList.id, userId, name, serializeFilterParams(searchParams));
+      } else if (viewDialog.id) {
+        await renameListView(viewDialog.id, name);
+      }
+      setViewDialog(null);
+      revalidator.revalidate();
+      setSnackbar({ open: true, message: tr('views.saved'), severity: 'success' });
+    } catch (error) {
+      console.error('Error saving view:', error);
+      setSnackbar({ open: true, message: tr('views.saveFailed'), severity: 'error' });
+    }
+  };
+
+  const handleDeleteView = async (view: ListView) => {
+    try {
+      await deleteListView(view.id);
+      revalidator.revalidate();
+      setSnackbar({ open: true, message: tr('views.deleted'), severity: 'success' });
+    } catch (error) {
+      console.error('Error deleting view:', error);
+      setSnackbar({ open: true, message: tr('views.saveFailed'), severity: 'error' });
+    }
   };
 
   const handleLogout = () => {
@@ -1195,6 +1237,18 @@ export default function Dashboard() {
               </Box>
             )}
           </Box>
+
+          {/* saved views */}
+          <SavedViewsBar
+            tokens={t}
+            views={views}
+            currentParams={currentViewParams}
+            hasActiveFilters={hasActiveFilters}
+            onApply={handleApplyView}
+            onSave={() => setViewDialog({ mode: 'create', name: '' })}
+            onRename={(view) => setViewDialog({ mode: 'rename', id: view.id, name: view.name })}
+            onDelete={handleDeleteView}
+          />
 
           {/* filters */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: '10px', mt: '22px', flexWrap: 'wrap' }}>
@@ -1839,6 +1893,30 @@ export default function Dashboard() {
           <DialogActions sx={{ px: 3, py: 2 }}>
             <Button onClick={() => setDeleteListTarget(null)} sx={{ color: 'text.secondary' }}>{tr('dashboard.cancel')}</Button>
             <Button onClick={handleConfirmDeleteList} variant="contained" color="error">{tr('lists.delete')}</Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* save / rename view dialog */}
+        <Dialog open={Boolean(viewDialog)} onClose={() => setViewDialog(null)} maxWidth="xs" fullWidth>
+          <DialogTitle sx={{ fontWeight: 700 }}>
+            {viewDialog?.mode === 'rename' ? tr('views.renameTitle') : tr('views.saveTitle')}
+          </DialogTitle>
+          <DialogContent>
+            <TextField
+              fullWidth
+              label={tr('views.nameLabel')}
+              placeholder={tr('views.namePlaceholder')}
+              value={viewDialog?.name ?? ''}
+              onChange={(e) => setViewDialog((v) => (v ? { ...v, name: e.target.value } : v))}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmView(); }}
+              sx={{ mt: 1 }}
+            />
+          </DialogContent>
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button onClick={() => setViewDialog(null)} sx={{ color: 'text.secondary' }}>{tr('dashboard.cancel')}</Button>
+            <Button onClick={handleConfirmView} variant="contained" disabled={!viewDialog?.name.trim()}>
+              {viewDialog?.mode === 'rename' ? tr('lists.rename') : tr('views.save')}
+            </Button>
           </DialogActions>
         </Dialog>
 
