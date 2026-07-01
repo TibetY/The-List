@@ -10,6 +10,7 @@ interface LookupResult {
   email: string | null;
   cuisineType: string | null;
   placeTypes: string[] | null;
+  dietaryTags: string[] | null;
   address: string | null;
   lat: number | null;
   lng: number | null;
@@ -23,6 +24,7 @@ const EMPTY: LookupResult = {
   email: null,
   cuisineType: null,
   placeTypes: null,
+  dietaryTags: null,
   address: null,
   lat: null,
   lng: null,
@@ -88,6 +90,7 @@ function toLookupResult(place: NominatimPlace): LookupResult {
     email: firstNonEmpty(tags.email, tags['contact:email']),
     cuisineType: matchCuisine(tags.cuisine),
     placeTypes: mapPlaceTypes(place),
+    dietaryTags: mapDiet(tags),
     address: null, // never overwrite the address the user typed
     lat: Number.isNaN(lat) ? null : lat,
     lng: Number.isNaN(lng) ? null : lng,
@@ -137,6 +140,25 @@ function matchCuisine(raw: string | undefined): string | null {
     if (direct && direct !== 'Other') return direct;
   }
   return null;
+}
+
+/** Map OSM diet:* extratags to our dietary-tag labels. */
+const DIET_MAP: Record<string, string> = {
+  vegetarian: 'Vegetarian',
+  vegan: 'Vegan',
+  halal: 'Halal',
+  kosher: 'Kosher',
+  gluten_free: 'Gluten-Free',
+};
+
+function mapDiet(tags: Record<string, string>): string[] | null {
+  const out: string[] = [];
+  for (const [osm, label] of Object.entries(DIET_MAP)) {
+    const v = tags[`diet:${osm}`]?.trim().toLowerCase();
+    // OSM diet values: yes / only / limited / no — include anything but "no".
+    if (v && v !== 'no') out.push(label);
+  }
+  return out.length > 0 ? out : null;
 }
 
 /** Map the POI's category/type (jsonv2) to our place-type facet. */

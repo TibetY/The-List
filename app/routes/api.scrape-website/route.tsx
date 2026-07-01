@@ -6,6 +6,13 @@ import { cuisineTypes } from '~/types/restaurant';
 const FETCH_TIMEOUT_MS = 6000;
 const MAX_BODY_BYTES = 1.5 * 1024 * 1024;
 
+type SocialLinks = {
+  facebook: string | null;
+  instagram: string | null;
+  twitter: string | null;
+  tiktok: string | null;
+};
+
 interface ScrapeResult {
   image: string | null;
   cuisineType: string | null;
@@ -14,6 +21,10 @@ interface ScrapeResult {
   address: string | null;
   email: string | null;
   phone: string | null;
+  socialMedia: SocialLinks;
+  priceRange: string | null;
+  michelinStars: number | null;
+  bibGourmand: boolean | null;
 }
 
 const EMPTY_RESULT: ScrapeResult = {
@@ -24,6 +35,10 @@ const EMPTY_RESULT: ScrapeResult = {
   address: null,
   email: null,
   phone: null,
+  socialMedia: { facebook: null, instagram: null, twitter: null, tiktok: null },
+  priceRange: null,
+  michelinStars: null,
+  bibGourmand: null,
 };
 
 /**
@@ -64,9 +79,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 }
 
-/** True while there's still a contact/cuisine/image field worth enriching. */
+/** True while there's still a contact/cuisine/image/price field worth enriching. */
 function isIncomplete(r: ScrapeResult): boolean {
-  return !r.address || !r.phone || !r.cuisineType || !r.image || !r.email;
+  return !r.address || !r.phone || !r.cuisineType || !r.image || !r.email || !r.priceRange;
 }
 
 /** Fill only the null fields of `primary` from `extra` (primary always wins). */
@@ -79,6 +94,15 @@ function mergeMissing(primary: ScrapeResult, extra: ScrapeResult): ScrapeResult 
     address: primary.address ?? extra.address,
     email: primary.email ?? extra.email,
     phone: primary.phone ?? extra.phone,
+    socialMedia: {
+      facebook: primary.socialMedia.facebook ?? extra.socialMedia.facebook,
+      instagram: primary.socialMedia.instagram ?? extra.socialMedia.instagram,
+      twitter: primary.socialMedia.twitter ?? extra.socialMedia.twitter,
+      tiktok: primary.socialMedia.tiktok ?? extra.socialMedia.tiktok,
+    },
+    priceRange: primary.priceRange ?? extra.priceRange,
+    michelinStars: primary.michelinStars ?? extra.michelinStars,
+    bibGourmand: primary.bibGourmand ?? extra.bibGourmand,
   };
 }
 
@@ -149,6 +173,7 @@ function scrapeHtml(html: string, baseUrl: string): ScrapeResult {
   const restaurantEntry = findRestaurantJsonLd($);
   const cuisineType = extractCuisine(restaurantEntry) ?? findCuisineFallback($);
   const reservation = findReservationLink($, baseUrl);
+  const michelin = extractMichelin(restaurantEntry);
 
   return {
     image: image ? resolveUrl(image, baseUrl) : null,
@@ -158,6 +183,10 @@ function scrapeHtml(html: string, baseUrl: string): ScrapeResult {
     address: extractAddress(restaurantEntry),
     email: extractEmail(restaurantEntry) ?? findMailto($),
     phone: extractPhone(restaurantEntry) ?? findTel($),
+    socialMedia: findSocialLinks($, baseUrl),
+    priceRange: extractPriceRange(restaurantEntry),
+    michelinStars: michelin.stars,
+    bibGourmand: michelin.bib,
   };
 }
 
@@ -294,4 +323,80 @@ function resolveUrl(href: string, baseUrl: string): string | null {
   } catch {
     return null;
   }
+}
+
+/** First profile URL per platform from the page's links, skipping share buttons. */
+function findSocialLinks($: CheerioRoot, baseUrl: string): SocialLinks {
+  const out: SocialLinks = { facebook: null, instagram: null, twitter: null, tiktok: null };
+  $('a[href]').each((_, el) => {
+    const href = $(el).attr('href');
+    if (!href) return;
+    const resolved = resolveUrl(href, baseUrl);
+    if (!resolved) return;
+    let u: URL;
+    try {
+      u = new URL(resolved);
+    } catch {
+      return;
+    }
+    const host = u.hostname.toLowerCase().replace(/^www\./, '');
+    const path = u.pathname.toLowerCase();
+    // Share/intent widgets aren't the venue's own profile.
+    if (/\/(sharer|share|intent)(\/|$|\.)/.test(path)) return;
+
+    if (!out.facebook && (host === 'facebook.com' || host.endsWith('.facebook.com') || host === 'fb.com' || host === 'fb.me')) {
+      out.facebook = resolved;
+    } else if (!out.instagram && (host === 'instagram.com' || host.endsWith('.instagram.com'))) {
+      out.instagram = resolved;
+    } else if (!out.twitter && (host === 'twitter.com' || host.endsWith('.twitter.com') || host === 'x.com' || host.endsWith('.x.com'))) {
+      out.twitter = resolved;
+    } else if (!out.tiktok && (host === 'tiktok.com' || host.endsWith('.tiktok.com'))) {
+      out.tiktok = resolved;
+    }
+  });
+  return out;
+}
+
+/** JSON-LD priceRange → our $..$$$$$. Only maps a clean symbol run or a clear
+ *  descriptor; ambiguous numeric ranges ("$10-$30") are left null. */
+function extractPriceRange(entry: JsonLdEntry | null): string | null {
+  const raw = entry?.priceRange;
+  if (typeof raw !== 'string') return null;
+  const v = raw.trim();
+  if (/^[$€£¥]{1,5}$/.test(v)) return '$'.repeat(v.length);
+  const lower = v.toLowerCase();
+  if (/inexpensive|cheap|budget/.test(lower)) return '$';
+  if (/very expensive|luxury/.test(lower)) return '$$$$';
+  if (/expensive|upscale/.test(lower)) return '$$$';
+  if (/moderate/.test(lower)) return '$$';
+  return null;
+}
+
+/** Conservative Michelin/Bib detection from JSON-LD award/credential text only
+ *  (no full-page matching) so we never invent stars from stray "michelin" text. */
+function extractMichelin(entry: JsonLdEntry | null): { stars: number | null; bib: boolean | null } {
+  if (!entry) return { stars: null, bib: null };
+  const parts: string[] = [];
+  const collect = (val: unknown) => {
+    if (typeof val === 'string') parts.push(val);
+    else if (Array.isArray(val)) val.forEach(collect);
+    else if (val && typeof val === 'object') {
+      const name = (val as JsonLdEntry).name;
+      if (typeof name === 'string') parts.push(name);
+    }
+  };
+  collect(entry.award);
+  collect(entry.awards);
+  collect(entry.hasCredential);
+  const text = parts.join(' ; ').toLowerCase();
+  if (!text) return { stars: null, bib: null };
+
+  const bib = /bib gourmand/.test(text) ? true : null;
+  let stars: number | null = null;
+  if (/michelin/.test(text) && /star/.test(text)) {
+    if (/\b(three|3)\b/.test(text)) stars = 3;
+    else if (/\b(two|2)\b/.test(text)) stars = 2;
+    else stars = 1;
+  }
+  return { stars, bib };
 }
