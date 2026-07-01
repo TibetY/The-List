@@ -14,7 +14,7 @@ interface PlaceSearchProps {
   /** Called when a candidate is chosen (click / Enter). */
   onPick: (candidate: PlaceCandidate) => void;
   placeholder?: string;
-  autoFocus?: boolean;
+  focusOnMount?: boolean;
   /** Clear the field after a pick (onboarding adds several in a row). */
   clearOnPick?: boolean;
 }
@@ -38,7 +38,7 @@ export default function PlaceSearch({
   serifFont,
   onPick,
   placeholder,
-  autoFocus,
+  focusOnMount,
   clearOnPick,
 }: PlaceSearchProps) {
   const { t: tr } = useTranslation();
@@ -89,8 +89,8 @@ export default function PlaceSearch({
   // Focus programmatically (rather than the autoFocus attribute) so we keep the
   // convenience without tripping the a11y rule against it.
   useEffect(() => {
-    if (autoFocus) inputRef.current?.focus();
-  }, [autoFocus]);
+    if (focusOnMount) inputRef.current?.focus();
+  }, [focusOnMount]);
 
   const choose = (candidate: PlaceCandidate) => {
     onPick(candidate);

@@ -305,6 +305,20 @@
     "noResults": "No matches — just type the details below.",
     "orManual": "…or fill in the details yourself below."
   },
+  "onboarding": {
+    "title": "Let's set your table.",
+    "subtitle": "Add a few places you love — we'll fill in the photos, cuisine, and booking links for you.",
+    "searchPlaceholder": "Search any restaurant, bar, or café…",
+    "resolving": "Setting the table…",
+    "added": "Added",
+    "addFailed": "Couldn't add — try again",
+    "orStarter": "or start with a city",
+    "packOttawa": "Ottawa classics",
+    "packToronto": "Toronto icons",
+    "packMontreal": "Montréal essentials",
+    "addThese": "Add these",
+    "manual": "Prefer to add your own? Enter it manually."
+  },
   "cuisines": {
     "Italian": "Italian",
     "Chinese": "Chinese",

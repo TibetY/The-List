@@ -305,6 +305,20 @@
     "noResults": "Aucun résultat — saisissez les détails ci-dessous.",
     "orManual": "…ou saisissez vous-même les détails ci-dessous."
   },
+  "onboarding": {
+    "title": "Dressons votre table.",
+    "subtitle": "Ajoutez quelques lieux que vous aimez — on remplit les photos, la cuisine et les liens de réservation pour vous.",
+    "searchPlaceholder": "Cherchez un restaurant, un bar ou un café…",
+    "resolving": "On dresse la table…",
+    "added": "Ajouté",
+    "addFailed": "Échec — réessayez",
+    "orStarter": "ou commencez par une ville",
+    "packOttawa": "Classiques d'Ottawa",
+    "packToronto": "Incontournables de Toronto",
+    "packMontreal": "Essentiels de Montréal",
+    "addThese": "Ajouter",
+    "manual": "Vous préférez ajouter le vôtre ? Saisissez-le manuellement."
+  },
   "cuisines": {
     "Italian": "Italienne",
     "Chinese": "Chinoise",

@@ -67,6 +67,7 @@ import RestaurantThumb from '~/components/RestaurantThumb';
 import DeleteConfirmDialog from '~/components/DeleteConfirmDialog';
 import ListSwitcher from '~/components/ListSwitcher';
 import ShareListDialog from '~/components/ShareListDialog';
+import Onboarding from '~/components/Onboarding';
 import LanguageSwitcher from '~/components/LanguageSwitcher';
 import { uploadRestaurantImage } from '~/services/storage.client';
 import {
@@ -1417,6 +1418,18 @@ export default function Dashboard() {
 
           {/* empty state */}
           {filtered.length === 0 ? (
+            // A brand-new, editable list gets the first-run onboarding; the plain
+            // empty card is kept for filtered-empty and view-only cases.
+            total === 0 && !hasActiveFilters && canEdit && activeList ? (
+              <Onboarding
+                tokens={t}
+                serifFont={serif}
+                listId={activeList.id}
+                userId={userId}
+                onCreated={() => revalidator.revalidate()}
+                onAddManually={handleAddRestaurant}
+              />
+            ) : (
             <Box
               sx={{
                 mt: '24px',
@@ -1462,6 +1475,7 @@ export default function Dashboard() {
                 </Box>
               )}
             </Box>
+            )
           ) : (
             <>
               {/* TILE */}
