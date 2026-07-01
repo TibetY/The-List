@@ -39,6 +39,7 @@ import type {
   Restaurant,
   RestaurantLocation,
   RestaurantStatus,
+  SocialMediaLinks,
 } from '~/types/restaurant';
 import {
   cuisineTypes,
@@ -54,7 +55,8 @@ interface RestaurantFormDialogProps {
   onSave: (restaurant: Partial<Restaurant>, imageFile?: File) => Promise<void>;
 }
 
-/** Shape returned by /api/scrape-website. */
+/** Shape returned by /api/scrape-website. The lookup endpoint returns a subset,
+ *  so autofill-added fields are optional and read defensively. */
 type ScrapeData = {
   image: string | null;
   cuisineType: string | null;
@@ -63,13 +65,25 @@ type ScrapeData = {
   address: string | null;
   email: string | null;
   phone: string | null;
+  socialMedia?: {
+    facebook: string | null;
+    instagram: string | null;
+    twitter: string | null;
+    tiktok: string | null;
+  } | null;
+  priceRange?: string | null;
+  michelinStars?: number | null;
+  bibGourmand?: boolean | null;
 };
 
-/** Shape returned by /api/lookup-place (a superset of ScrapeData). */
+/** Shape returned by /api/lookup-place (overlaps ScrapeData; adds these). */
 type LookupData = ScrapeData & {
   website: string | null;
   placeTypes: string[] | null;
+  dietaryTags?: string[] | null;
 };
+
+const SOCIAL_PLATFORMS = ['facebook', 'instagram', 'twitter', 'tiktok'] as const;
 
 const priceRanges = ['$', '$$', '$$$', '$$$$', '$$$$$'];
 const reservationPlatforms = ['resy', 'opentable', 'walkin', 'custom'] as const;
@@ -161,6 +175,8 @@ export default function RestaurantFormDialog({
   // so the user notices what changed, then cleared on a timer.
   const [highlighted, setHighlighted] = useState<Set<string>>(new Set());
   const highlightTimer = useRef<ReturnType<typeof setTimeout>>();
+  // Price has a default ($$), so only autofill it if the user hasn't chosen one.
+  const priceTouched = useRef(false);
 
   useEffect(() => {
     if (restaurant) {
@@ -214,6 +230,7 @@ export default function RestaurantFormDialog({
     lookedUpKey.current = '';
     setHighlighted(new Set());
     if (highlightTimer.current) clearTimeout(highlightTimer.current);
+    priceTouched.current = false;
     setImageFile(undefined);
   }, [restaurant, open]);
 
@@ -316,6 +333,38 @@ export default function RestaurantFormDialog({
       filled.push('image');
     }
 
+    // Social links — fill each blank platform from the scrape.
+    if (data.socialMedia) {
+      const current: SocialMediaLinks = formData.socialMedia ?? {};
+      const patchSocial: Record<string, string> = {};
+      for (const p of SOCIAL_PLATFORMS) {
+        const found = data.socialMedia[p];
+        if (found && !current[p]) {
+          patchSocial[p] = found;
+          filled.push(`social.${p}`);
+        }
+      }
+      if (Object.keys(patchSocial).length > 0) {
+        setFormData((prev) => ({ ...prev, socialMedia: { ...prev.socialMedia, ...patchSocial } }));
+      }
+    }
+
+    // Price — only when the user hasn't set one (default is "$$").
+    if (data.priceRange && !priceTouched.current && data.priceRange !== formData.priceRange) {
+      setFormData((prev) => ({ ...prev, priceRange: data.priceRange ?? prev.priceRange }));
+      filled.push('price');
+    }
+
+    // Michelin / Bib — only fill from a "none" state (0 stars / not a bib).
+    if (data.michelinStars && !formData.michelinStars) {
+      setFormData((prev) => ({ ...prev, michelinStars: data.michelinStars ?? 0 }));
+      filled.push('michelin');
+    }
+    if (data.bibGourmand && !formData.bibGourmand) {
+      setFormData((prev) => ({ ...prev, bibGourmand: true }));
+      filled.push('michelin');
+    }
+
     markFilled(filled);
   };
 
@@ -366,6 +415,10 @@ export default function RestaurantFormDialog({
     if (data.placeTypes && data.placeTypes.length > 0 && !(formData.placeTypes?.length)) {
       setFormData((prev) => ({ ...prev, placeTypes: data.placeTypes ?? [] }));
       filled.push('placeTypes');
+    }
+    if (data.dietaryTags && data.dietaryTags.length > 0 && !(formData.dietaryTags?.length)) {
+      setFormData((prev) => ({ ...prev, dietaryTags: data.dietaryTags ?? [] }));
+      filled.push('dietary');
     }
     if (data.website && !formData.url?.trim()) {
       setFormData((prev) => ({ ...prev, url: data.website ?? '' }));
@@ -708,9 +761,11 @@ export default function RestaurantFormDialog({
               select
               label={t('form.priceRange')}
               value={formData.priceRange}
-              onChange={(e) =>
-                setFormData({ ...formData, priceRange: e.target.value })
-              }
+              onChange={(e) => {
+                priceTouched.current = true;
+                setFormData({ ...formData, priceRange: e.target.value });
+              }}
+              sx={glowSx('price')}
             >
               {priceRanges.map((range) => (
                 <MenuItem key={range} value={range}>
@@ -784,20 +839,22 @@ export default function RestaurantFormDialog({
             <Typography component="label" sx={sectionLabelSx}>
               {t('form.dietaryTags')}
             </Typography>
-            <FormGroup row>
-              {dietaryTags.map((tag) => (
-                <FormControlLabel
-                  key={tag}
-                  control={
-                    <Checkbox
-                      checked={formData.dietaryTags?.includes(tag) ?? false}
-                      onChange={() => toggleArrayValue('dietaryTags', tag)}
-                    />
-                  }
-                  label={t(`dietary.${tag}`, tag)}
-                />
-              ))}
-            </FormGroup>
+            <Box sx={glowBoxSx('dietary')}>
+              <FormGroup row>
+                {dietaryTags.map((tag) => (
+                  <FormControlLabel
+                    key={tag}
+                    control={
+                      <Checkbox
+                        checked={formData.dietaryTags?.includes(tag) ?? false}
+                        onChange={() => toggleArrayValue('dietaryTags', tag)}
+                      />
+                    }
+                    label={t(`dietary.${tag}`, tag)}
+                  />
+                ))}
+              </FormGroup>
+            </Box>
           </Grid>
 
           {/* Recognition — Michelin stars + Bib Gourmand */}
@@ -810,6 +867,7 @@ export default function RestaurantFormDialog({
               onChange={(e) =>
                 setFormData({ ...formData, michelinStars: Number(e.target.value) })
               }
+              sx={glowSx('michelin')}
             >
               {michelinStarOptions.map((n) => (
                 <MenuItem key={n} value={n}>
@@ -819,17 +877,19 @@ export default function RestaurantFormDialog({
             </TextField>
           </Grid>
           <Grid item xs={12} sm={6} sx={{ display: 'flex', alignItems: 'center' }}>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={formData.bibGourmand ?? false}
-                  onChange={(e) =>
-                    setFormData({ ...formData, bibGourmand: e.target.checked })
-                  }
-                />
-              }
-              label={t('form.bibGourmand')}
-            />
+            <Box sx={{ ...glowBoxSx('michelin'), px: 1 }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={formData.bibGourmand ?? false}
+                    onChange={(e) =>
+                      setFormData({ ...formData, bibGourmand: e.target.checked })
+                    }
+                  />
+                }
+                label={t('form.bibGourmand')}
+              />
+            </Box>
           </Grid>
 
           {/* Rating */}
@@ -1118,6 +1178,7 @@ export default function RestaurantFormDialog({
                 })
               }
               placeholder="https://facebook.com/..."
+              sx={glowSx('social.facebook')}
             />
           </Grid>
           <Grid item xs={12} sm={6}>
@@ -1135,6 +1196,7 @@ export default function RestaurantFormDialog({
                 })
               }
               placeholder="https://instagram.com/..."
+              sx={glowSx('social.instagram')}
             />
           </Grid>
           <Grid item xs={12} sm={6}>
@@ -1152,6 +1214,7 @@ export default function RestaurantFormDialog({
                 })
               }
               placeholder="https://x.com/..."
+              sx={glowSx('social.twitter')}
             />
           </Grid>
           <Grid item xs={12} sm={6}>
@@ -1169,6 +1232,7 @@ export default function RestaurantFormDialog({
                 })
               }
               placeholder="https://tiktok.com/@..."
+              sx={glowSx('social.tiktok')}
             />
           </Grid>
 
