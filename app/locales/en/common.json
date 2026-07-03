@@ -192,6 +192,7 @@
     "sort_price": "Price (low to high)",
     "sort_visits": "Most visited",
     "sort_favorite": "Favourites first",
+    "sortLabel": "Sort",
     "sortReverse": "Reverse sort order",
     "missingAddress_one": "{{count}} place has no address yet — add one to show it on the map.",
     "missingAddress_other": "{{count}} places have no address yet — add one to show them on the map.",
@@ -297,6 +298,73 @@
     "cancel": "Cancel",
     "saveChanges": "Save Changes",
     "addRestaurant": "Add Restaurant"
+  },
+  "filters": {
+    "button": "Filters",
+    "done": "Done"
+  },
+  "views": {
+    "save": "Save view",
+    "saveTitle": "Save this view",
+    "renameTitle": "Rename view",
+    "nameLabel": "View name",
+    "namePlaceholder": "e.g. Date-night $$$ Italian",
+    "options": "Options for {{name}}",
+    "rename": "Rename",
+    "delete": "Delete",
+    "saved": "View saved.",
+    "deleted": "View deleted.",
+    "saveFailed": "Couldn't save the view. Please try again."
+  },
+  "search": {
+    "placeholder": "Search for a place to autofill…",
+    "label": "Search for a place",
+    "clear": "Clear search",
+    "noResults": "No matches — just type the details below.",
+    "orManual": "…or fill in the details yourself below."
+  },
+  "stats": {
+    "menuItem": "Your taste in food",
+    "back": "Back to dashboard",
+    "eyebrow": "{{name}} · your taste in food",
+    "spotsWord": "spots",
+    "cuisinesWord": "cuisines",
+    "citiesWord": "cities",
+    "visitedWord": "visited",
+    "heroSub": "{{cuisines}} cuisines · {{cities}} cities · {{visited}} visited",
+    "been": "Been",
+    "want": "Want to try",
+    "favorites": "Favourites",
+    "avgRating": "Avg rating",
+    "michelin": "Michelin stars",
+    "topCuisines": "Top cuisines",
+    "cities": "Cities",
+    "priceRange": "Price range",
+    "mostVisited": "Most visited",
+    "onMap": "On the map",
+    "noCities": "Add addresses to map your cities.",
+    "noVisits": "No visits logged yet.",
+    "shareTitle": "Share your taste in food",
+    "shareBody": "A little card of your list — the cuisines, the cities, the spots. Post it, or send it to the friend who always asks where to eat.",
+    "downloadSquare": "Download square",
+    "downloadStory": "Download story",
+    "tagline": "The Foodiedex — every good meal, worth remembering.",
+    "emptyTitle": "Nothing to tally yet",
+    "emptyBody": "Add a few places and your taste in food will take shape here."
+  },
+  "onboarding": {
+    "title": "Let's set your table.",
+    "subtitle": "Add a few places you love — we'll fill in the photos, cuisine, and booking links for you.",
+    "searchPlaceholder": "Search any restaurant, bar, or café…",
+    "resolving": "Setting the table…",
+    "added": "Added",
+    "addFailed": "Couldn't add — try again",
+    "orStarter": "or start with a city",
+    "packOttawa": "Ottawa classics",
+    "packToronto": "Toronto icons",
+    "packMontreal": "Montréal essentials",
+    "addThese": "Add these",
+    "manual": "Prefer to add your own? Enter it manually."
   },
   "cuisines": {
     "Italian": "Italian",
@@ -429,6 +497,7 @@
     "backHome": "Back home"
   },
   "map": {
-    "cuisineUnknown": "Restaurant"
+    "cuisineUnknown": "Restaurant",
+    "nearMe": "Center on my location"
   }
 }
