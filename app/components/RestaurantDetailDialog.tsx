@@ -69,6 +69,7 @@ export default function RestaurantDetailDialog({
   const muiTheme = useTheme();
   const fullScreen = useMediaQuery(muiTheme.breakpoints.down('sm'));
   const [activeLoc, setActiveLoc] = useState(0);
+  const [tab, setTab] = useState<'reservations' | 'hours' | 'instagram' | 'guides'>('reservations');
   // When a different restaurant is opened, default to the first location that
   // actually takes bookings so the "Reserve" action is visible without having to
   // hunt through tabs; fall back to the first location otherwise.
@@ -78,6 +79,7 @@ export default function RestaurantDetailDialog({
       (l) => l.reservationUrl || l.reservationPlatform === 'walkin'
     );
     setActiveLoc(bookable >= 0 ? bookable : 0);
+    setTab('reservations');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restaurant?.id]);
   if (!restaurant) return null;
@@ -106,6 +108,25 @@ export default function RestaurantDetailDialog({
     color: t.chip,
     fontSize: 12.5,
   };
+
+  const tabSx = {
+    minHeight: 40,
+    textTransform: 'none' as const,
+    color: t.muted,
+    fontSize: 13.5,
+    '&.Mui-selected': { color: t.ink },
+  };
+
+  const hasLinks = Boolean(
+    r.url || r.socialMedia?.facebook || r.socialMedia?.instagram || r.socialMedia?.twitter
+  );
+
+  /** Quiet empty state for a tab with no data yet (Hours/Guides, or no bookings). */
+  const emptyTab = (label: string) => (
+    <Box sx={{ py: '18px', textAlign: 'center', color: t.faint, fontSize: 13.5, fontStyle: 'italic' }}>
+      {label}
+    </Box>
+  );
 
   return (
     <Dialog
@@ -281,107 +302,127 @@ export default function RestaurantDetailDialog({
           </Box>
         )}
 
-        {/* Locations — address/contact/booking, tabbed when there's more than one */}
-        {locations.length > 0 && (
-          <Box sx={{ mt: '16px' }}>
-            {locations.length > 1 && (
-              <Tabs
-                value={safeIdx}
-                onChange={(_, v: number) => setActiveLoc(v)}
-                variant="scrollable"
-                scrollButtons="auto"
-                sx={{ mb: '10px', minHeight: 36 }}
-              >
-                {locations.map((l, i) => (
-                  <Tab
-                    key={i}
-                    label={l.label?.trim() || tr('form.locationN', { n: i + 1 })}
-                    sx={{
-                      minHeight: 36,
-                      textTransform: 'none',
-                      color: t.muted,
-                      '&.Mui-selected': { color: t.ink },
-                    }}
-                  />
-                ))}
-              </Tabs>
-            )}
+        {/* Enrichment tabs — reservations · hours · instagram · guides */}
+        <Box sx={{ mt: '18px' }}>
+          <Tabs
+            value={tab}
+            onChange={(_, v: 'reservations' | 'hours' | 'instagram' | 'guides') => setTab(v)}
+            variant="scrollable"
+            scrollButtons="auto"
+            aria-label={tr('detail.tabsLabel')}
+            sx={{ borderBottom: `1px solid ${t.border}`, minHeight: 40, '& .MuiTabs-indicator': { backgroundColor: t.accent } }}
+          >
+            <Tab value="reservations" label={tr('detail.tabReservations')} sx={tabSx} />
+            <Tab value="hours" label={tr('detail.tabHours')} sx={tabSx} />
+            <Tab value="instagram" label={tr('detail.tabInstagram')} sx={tabSx} />
+            <Tab value="guides" label={tr('detail.tabGuides')} sx={tabSx} />
+          </Tabs>
 
-            {loc.address && (
-              <Box sx={{ mb: '10px' }}>
-                <Box component="span" sx={sectionLabel}>{tr('form.address')}</Box>
-                <Box sx={{ color: t.ink, fontSize: 14 }}>{loc.address}</Box>
-              </Box>
-            )}
+          <Box sx={{ pt: '14px' }}>
+            {tab === 'reservations' &&
+              (locations.length > 0 &&
+              (loc.address || loc.phone || loc.email || loc.reservationUrl || loc.reservationPlatform === 'walkin') ? (
+                <Box>
+                  {locations.length > 1 && (
+                    <Tabs
+                      value={safeIdx}
+                      onChange={(_, v: number) => setActiveLoc(v)}
+                      variant="scrollable"
+                      scrollButtons="auto"
+                      sx={{ mb: '10px', minHeight: 36 }}
+                    >
+                      {locations.map((l, i) => (
+                        <Tab
+                          key={i}
+                          label={l.label?.trim() || tr('form.locationN', { n: i + 1 })}
+                          sx={{ minHeight: 36, textTransform: 'none', color: t.muted, '&.Mui-selected': { color: t.ink } }}
+                        />
+                      ))}
+                    </Tabs>
+                  )}
+                  {loc.address && (
+                    <Box sx={{ mb: '10px' }}>
+                      <Box component="span" sx={sectionLabel}>{tr('form.address')}</Box>
+                      <Box sx={{ color: t.ink, fontSize: 14 }}>{loc.address}</Box>
+                    </Box>
+                  )}
+                  {(loc.phone || loc.email) && (
+                    <Box sx={{ display: 'flex', gap: '4px' }}>
+                      {loc.phone && (
+                        <IconButton component="a" href={`tel:${loc.phone}`} aria-label={tr('detail.phone')} sx={{ color: t.muted }}>
+                          <PhoneIcon fontSize="small" />
+                        </IconButton>
+                      )}
+                      {loc.email && (
+                        <IconButton component="a" href={`mailto:${loc.email}`} aria-label={tr('detail.email')} sx={{ color: t.muted }}>
+                          <EmailIcon fontSize="small" />
+                        </IconButton>
+                      )}
+                    </Box>
+                  )}
+                  {loc.reservationUrl && (
+                    <Box sx={{ mt: '12px' }}>
+                      <Button
+                        variant="outlined"
+                        component="a"
+                        href={loc.reservationUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        startIcon={<EventSeat fontSize="small" />}
+                      >
+                        {tr('dashboard.reserveOn', { platform: reservationLabel(loc.reservationPlatform || '') })}
+                      </Button>
+                    </Box>
+                  )}
+                  {!loc.reservationUrl && loc.reservationPlatform === 'walkin' && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: '6px', mt: '12px', color: t.muted, fontSize: 14 }}>
+                      <EventSeat fontSize="small" /> {tr('detail.walkinBadge')}
+                    </Box>
+                  )}
+                </Box>
+              ) : (
+                emptyTab(tr('detail.reservationsEmpty'))
+              ))}
 
-            {(loc.phone || loc.email) && (
-              <Box sx={{ display: 'flex', gap: '4px' }}>
-                {loc.phone && (
-                  <IconButton component="a" href={`tel:${loc.phone}`} aria-label={tr('detail.phone')} sx={{ color: t.muted }}>
-                    <PhoneIcon fontSize="small" />
-                  </IconButton>
-                )}
-                {loc.email && (
-                  <IconButton component="a" href={`mailto:${loc.email}`} aria-label={tr('detail.email')} sx={{ color: t.muted }}>
-                    <EmailIcon fontSize="small" />
-                  </IconButton>
-                )}
-              </Box>
-            )}
+            {tab === 'hours' && emptyTab(tr('detail.hoursEmpty'))}
 
-            {loc.reservationUrl && (
-              <Box sx={{ mt: '12px' }}>
-                <Button
-                  variant="outlined"
-                  component="a"
-                  href={loc.reservationUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  startIcon={<EventSeat fontSize="small" />}
-                >
-                  {tr('dashboard.reserveOn', { platform: reservationLabel(loc.reservationPlatform || '') })}
-                </Button>
-              </Box>
-            )}
-            {!loc.reservationUrl && loc.reservationPlatform === 'walkin' && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: '6px', mt: '12px', color: t.muted, fontSize: 14 }}>
-                <EventSeat fontSize="small" /> {tr('detail.walkinBadge')}
-              </Box>
-            )}
+            {tab === 'instagram' &&
+              (hasLinks ? (
+                <Box sx={{ display: 'flex', gap: '4px' }}>
+                  {r.url && (
+                    <IconButton component="a" href={r.url} target="_blank" rel="noopener noreferrer" aria-label={tr('form.websiteUrl')} sx={{ color: t.muted }}>
+                      <Language fontSize="small" />
+                    </IconButton>
+                  )}
+                  {r.socialMedia?.instagram && (
+                    <IconButton component="a" href={r.socialMedia.instagram} target="_blank" rel="noopener noreferrer" aria-label="Instagram" sx={{ color: t.muted }}>
+                      <Instagram fontSize="small" />
+                    </IconButton>
+                  )}
+                  {r.socialMedia?.facebook && (
+                    <IconButton component="a" href={r.socialMedia.facebook} target="_blank" rel="noopener noreferrer" aria-label="Facebook" sx={{ color: t.muted }}>
+                      <Facebook fontSize="small" />
+                    </IconButton>
+                  )}
+                  {r.socialMedia?.twitter && (
+                    <IconButton component="a" href={r.socialMedia.twitter} target="_blank" rel="noopener noreferrer" aria-label="Twitter / X" sx={{ color: t.muted }}>
+                      <Twitter fontSize="small" />
+                    </IconButton>
+                  )}
+                </Box>
+              ) : (
+                emptyTab(tr('detail.socialEmpty'))
+              ))}
+
+            {tab === 'guides' && emptyTab(tr('detail.guidesEmpty'))}
           </Box>
-        )}
+        </Box>
 
         {/* Comment / notes */}
         {r.comment && (
-          <Box sx={{ mt: '16px' }}>
+          <Box sx={{ mt: '18px' }}>
             <Box component="span" sx={sectionLabel}>{tr('form.notes')}</Box>
             <Box sx={{ color: t.ink, fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{r.comment}</Box>
-          </Box>
-        )}
-
-        {/* Links */}
-        {(r.url || r.socialMedia?.facebook || r.socialMedia?.instagram || r.socialMedia?.twitter) && (
-          <Box sx={{ display: 'flex', gap: '4px', mt: '14px' }}>
-            {r.url && (
-              <IconButton component="a" href={r.url} target="_blank" rel="noopener noreferrer" aria-label={tr('form.websiteUrl')} sx={{ color: t.muted }}>
-                <Language fontSize="small" />
-              </IconButton>
-            )}
-            {r.socialMedia?.facebook && (
-              <IconButton component="a" href={r.socialMedia.facebook} target="_blank" rel="noopener noreferrer" aria-label="Facebook" sx={{ color: t.muted }}>
-                <Facebook fontSize="small" />
-              </IconButton>
-            )}
-            {r.socialMedia?.instagram && (
-              <IconButton component="a" href={r.socialMedia.instagram} target="_blank" rel="noopener noreferrer" aria-label="Instagram" sx={{ color: t.muted }}>
-                <Instagram fontSize="small" />
-              </IconButton>
-            )}
-            {r.socialMedia?.twitter && (
-              <IconButton component="a" href={r.socialMedia.twitter} target="_blank" rel="noopener noreferrer" aria-label="Twitter / X" sx={{ color: t.muted }}>
-                <Twitter fontSize="small" />
-              </IconButton>
-            )}
           </Box>
         )}
 

@@ -445,7 +445,16 @@
     "phone": "Phone",
     "visitedTimes_one": "Visited {{count}} time",
     "visitedTimes_other": "Visited {{count}} times",
-    "addVisit": "+1 visit"
+    "addVisit": "+1 visit",
+    "tabsLabel": "Details",
+    "tabReservations": "Reservations",
+    "tabHours": "Hours",
+    "tabInstagram": "Instagram",
+    "tabGuides": "Guides",
+    "reservationsEmpty": "No booking details yet.",
+    "hoursEmpty": "Opening hours aren't available yet.",
+    "socialEmpty": "No links yet.",
+    "guidesEmpty": "Guide write-ups are coming soon."
   },
   "share": {
     "title": "Share “{{name}}”",
