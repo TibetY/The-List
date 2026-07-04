@@ -4,15 +4,16 @@ import { json, redirect } from '@remix-run/node';
 import { useLoaderData, Link, Form } from '@remix-run/react';
 import leafletStylesHref from 'leaflet/dist/leaflet.css?url';
 import { Box, Button, ThemeProvider } from '@mui/material';
-import { Bookmark, EventSeat } from '@mui/icons-material';
+import { Bookmark } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { createSupabaseServerClient } from '~/supabase.server';
 import { getSharedList, forkSharedList, type SharedList } from '~/services/sharedList.server';
 import { decorate } from '~/utils/decorateRestaurant';
-import type { Restaurant, RestaurantLocation } from '~/types/restaurant';
+import type { Restaurant } from '~/types/restaurant';
 import RestaurantThumb from '~/components/RestaurantThumb';
 import RestaurantDetailDialog from '~/components/RestaurantDetailDialog';
 import Stars from '~/components/Stars';
+import PlaceCard, { BookingPill } from '~/components/PlaceCard';
 import LanguageSwitcher from '~/components/LanguageSwitcher';
 import {
   listTokens,
@@ -70,13 +71,6 @@ export const action: ActionFunction = async ({ request, params }) => {
     return redirect(`/s/${encodeURIComponent(token)}`, { headers });
   }
 };
-
-function reservationLabel(platform: string): string {
-  if (platform === 'resy') return 'Resy';
-  if (platform === 'opentable') return 'OpenTable';
-  if (platform === 'walkin') return '';
-  return platform;
-}
 
 const activateOnKey = (fn: () => void) => (e: React.KeyboardEvent) => {
   if (e.key === 'Enter' || e.key === ' ') {
@@ -394,7 +388,9 @@ export default function SharedListPage() {
                       </Box>
                       <Box sx={{ color: t.muted, fontSize: 13, mt: '1px' }}>{r.meta}</Box>
                     </Box>
-                    <PublicReservations locations={r.locations ?? []} multi={(r.locations?.length ?? 0) > 1} tokens={t} tr={tr} listMode />
+                    <Box sx={{ display: { xs: 'none', md: 'flex' }, flex: 'none' }}>
+                      <BookingPill locations={r.locations ?? []} tokens={t} />
+                    </Box>
                     <Box sx={{ width: 90, color: t.cost, fontSize: 14, fontWeight: 600, fontFamily: "'DM Mono',monospace", display: { xs: 'none', sm: 'block' } }}>{r.costStr}</Box>
                     <Box sx={{ width: 110, display: { xs: 'none', sm: 'block' } }}>
                       {r.rated ? <Stars value={r.rating ?? 0} tokens={t} size={14} letterSpacing="1px" /> : null}
@@ -408,38 +404,7 @@ export default function SharedListPage() {
             <Box sx={{ padding: '24px 0 40px' }}>
               <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '20px' }}>
                 {sorted.map((r) => (
-                  <Box key={r.id} onClick={() => openDetail(r)}
-                    sx={{ border: `1px solid ${t.border}`, borderRadius: '18px', overflow: 'hidden', background: t.cardBg, cursor: 'pointer', boxShadow: t.cardShadow, transition: 'transform .15s, box-shadow .15s', '&:hover': { transform: 'translateY(-3px)', boxShadow: t.shadow2 } }}>
-                    <Box sx={{ position: 'relative', height: 158 }}>
-                      <RestaurantThumb image={r.image} alt={r.name} initial={r.initial} serifFont={serif} tokens={t} sx={{ height: '100%' }} />
-                      <Box sx={{ position: 'absolute', top: 12, right: 12 }}>
-                        <StatusLabel been={r.isBeen} tokens={t} tr={tr} />
-                      </Box>
-                      {r.costStr && (
-                        <Box component="span" sx={{ position: 'absolute', bottom: 10, right: 10, background: 'rgba(255,255,255,.9)', color: '#2B2420', fontFamily: "'DM Mono',monospace", fontSize: '11.5px', fontWeight: 600, padding: '3px 8px', borderRadius: '8px' }}>{r.costStr}</Box>
-                      )}
-                    </Box>
-                    <Box sx={{ padding: '14px 16px 16px' }}>
-                      <Box component="button" type="button" onClick={(e: React.MouseEvent) => { e.stopPropagation(); openDetail(r); }}
-                        sx={{ fontFamily: serif, fontSize: 20, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', border: 'none', background: 'transparent', p: 0, m: 0, color: 'inherit', textAlign: 'left', cursor: 'pointer', display: 'block', maxWidth: '100%' }}>
-                        {r.name}
-                      </Box>
-                      <Box sx={{ color: t.muted, fontSize: 13, mt: '4px' }}>{r.meta}</Box>
-                      {r.comment?.trim() && (
-                        <Box sx={{ mt: '10px', fontSize: 13.5, fontStyle: 'italic', color: t.muted, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                          “{r.comment.trim()}”
-                        </Box>
-                      )}
-                      <Box sx={{ mt: '11px', height: 18 }}>
-                        {r.rated ? (
-                          <Stars value={r.rating ?? 0} tokens={t} size={15} />
-                        ) : (
-                          <Box component="span" sx={{ color: t.notRated, fontSize: 13, fontStyle: 'italic' }}>{tr('dashboard.notRated')}</Box>
-                        )}
-                      </Box>
-                      <PublicReservations locations={r.locations ?? []} multi={(r.locations?.length ?? 0) > 1} tokens={t} tr={tr} />
-                    </Box>
-                  </Box>
+                  <PlaceCard key={r.id} r={r} tokens={t} serifFont={serif} onView={openDetail} />
                 ))}
               </Box>
             </Box>
@@ -470,40 +435,3 @@ function StatusLabel({ been, tokens: t, tr }: { been: boolean; tokens: (typeof l
   );
 }
 
-/** Reservation links / walk-in badge per booked location (read-only). */
-function PublicReservations({
-  locations,
-  multi,
-  tokens: t,
-  tr,
-  listMode,
-}: {
-  locations: RestaurantLocation[];
-  multi: boolean;
-  tokens: (typeof listTokens)['light'];
-  tr: (key: string, opts?: Record<string, unknown>) => string;
-  listMode?: boolean;
-}) {
-  const booking = locations.filter((l) => l.reservationUrl || l.reservationPlatform === 'walkin');
-  if (booking.length === 0) return null;
-  return (
-    <Box sx={{ display: listMode ? { xs: 'none', md: 'flex' } : 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '6px', mt: listMode ? 0 : '11px', flex: listMode ? 'none' : undefined }}>
-      {booking.map((l, i) => {
-        const prefix = multi && l.label?.trim() ? `${l.label.trim()}: ` : '';
-        if (l.reservationUrl) {
-          return (
-            <Button key={i} size="small" variant="outlined" component="a" href={l.reservationUrl} target="_blank" rel="noopener noreferrer"
-              onClick={(e: React.MouseEvent) => e.stopPropagation()} startIcon={<EventSeat sx={{ fontSize: 15 }} />}>
-              {prefix}{tr('dashboard.reserveOn', { platform: reservationLabel(l.reservationPlatform || '') })}
-            </Button>
-          );
-        }
-        return (
-          <Box key={i} component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: 12.5, color: t.muted }}>
-            <EventSeat sx={{ fontSize: 15 }} /> {prefix}{tr('dashboard.walkinBadge')}
-          </Box>
-        );
-      })}
-    </Box>
-  );
-}
