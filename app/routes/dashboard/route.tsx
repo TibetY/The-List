@@ -6,6 +6,7 @@ import {
   useRevalidator,
   useSearchParams,
   useNavigate,
+  type ShouldRevalidateFunction,
 } from '@remix-run/react';
 import {
   Box,
@@ -230,6 +231,34 @@ export const action: ActionFunction = async ({ request }) => {
   return json({ success: true });
 };
 
+/**
+ * The filter/sort/search params live in the URL, but the loader never reads them
+ * (filtering is client-side) — so a navigation that only changes those keys must
+ * NOT re-run the loader. Without this, every search keystroke triggered a loader
+ * round-trip and the controlled input reverted to the stale URL value, eating
+ * characters. Manual revalidation (same URL) and real changes (list/join/forked,
+ * form posts) still revalidate normally.
+ */
+export const shouldRevalidate: ShouldRevalidateFunction = ({
+  currentUrl,
+  nextUrl,
+  formMethod,
+  defaultShouldRevalidate,
+}) => {
+  if (formMethod && formMethod !== 'GET') return defaultShouldRevalidate;
+  if (currentUrl.pathname !== nextUrl.pathname) return defaultShouldRevalidate;
+  // Same href = a manual revalidator.revalidate() after a mutation — let it run.
+  if (currentUrl.href === nextUrl.href) return defaultShouldRevalidate;
+  const withoutFilters = (url: URL) => {
+    const p = new URLSearchParams(url.search);
+    FILTER_PARAM_KEYS.forEach((k) => p.delete(k));
+    p.sort();
+    return p.toString();
+  };
+  if (withoutFilters(currentUrl) === withoutFilters(nextUrl)) return false;
+  return defaultShouldRevalidate;
+};
+
 type ViewMode = 'tile' | 'list' | 'map';
 type FilterMode = 'all' | 'been' | 'want';
 type SortMode = 'recent' | 'rating' | 'name' | 'price' | 'visits' | 'favorite';
@@ -313,7 +342,21 @@ export default function Dashboard() {
     const s = searchParams.get('status');
     return s === 'been' || s === 'want' ? s : 'all';
   })();
-  const searchQuery = searchParams.get('q') ?? '';
+  // Search text is LOCAL state so typing is instant (a controlled input bound
+  // straight to the URL reverts to the stale param while the navigation is
+  // pending, eating keystrokes). It syncs both ways with the `q` param below:
+  // local → URL debounced, URL → local when q changes externally (saved view,
+  // clear filters, back/forward).
+  const urlQ = searchParams.get('q') ?? '';
+  const [searchQuery, setSearchQuery] = useState(urlQ);
+  const lastPushedQ = useRef(urlQ);
+  useEffect(() => {
+    // q changed in the URL and it wasn't our own debounced write — adopt it.
+    if (urlQ !== lastPushedQ.current) {
+      lastPushedQ.current = urlQ;
+      setSearchQuery(urlQ);
+    }
+  }, [urlQ]);
   const cuisineFilter = searchParams.get('cuisine') ?? '';
   const costFilter = searchParams.get('cost') ?? '';
   const ratingFilter = Math.min(5, Math.max(0, Math.floor(Number(searchParams.get('rating')) || 0)));
@@ -352,8 +395,6 @@ export default function Dashboard() {
   };
   const setFilter = (v: FilterMode) =>
     updateFilterParams((p) => setOrDelete(p, 'status', v === 'all' ? '' : v));
-  const setSearchQuery = (v: string) =>
-    updateFilterParams((p) => setOrDelete(p, 'q', v), { replace: true });
   const setCuisineFilter = (v: string) =>
     updateFilterParams((p) => setOrDelete(p, 'cuisine', v));
   const setCostFilter = (v: string) =>
@@ -380,6 +421,20 @@ export default function Dashboard() {
       const value = typeof next === 'function' ? next(prev) : next;
       setOrDelete(p, 'rev', value ? '1' : '');
     });
+
+  // Local search → `q` param, debounced. `replace` keeps typing out of history;
+  // filtering itself reads the local state, so results update instantly.
+  useEffect(() => {
+    if (searchQuery === urlQ) return;
+    const timer = setTimeout(() => {
+      lastPushedQ.current = searchQuery;
+      updateFilterParams((p) => setOrDelete(p, 'q', searchQuery), { replace: true });
+    }, 250);
+    return () => clearTimeout(timer);
+    // Re-arming on urlQ/updateFilterParams changes would reset the debounce on
+    // every unrelated render; the adopt-effect above handles external q changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
 
 
   const [formOpen, setFormOpen] = useState(false);
@@ -549,8 +604,13 @@ export default function Dashboard() {
     sortReversed;
 
   // Drop every filter/sort param in a single history entry (leaves list/… intact).
-  const clearFilters = () =>
+  // Also reset the local search text directly — the URL adopt-effect can't see a
+  // value that was typed but not yet debounced into the URL.
+  const clearFilters = () => {
+    setSearchQuery('');
+    lastPushedQ.current = '';
     updateFilterParams((p) => FILTER_PARAM_KEYS.forEach((k) => p.delete(k)));
+  };
 
   // Canonical querystring of the current filters, for the saved-view highlight.
   const currentViewParams = useMemo(
