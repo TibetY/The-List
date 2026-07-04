@@ -12,6 +12,7 @@ import { decorate } from '~/utils/decorateRestaurant';
 import type { Restaurant, RestaurantLocation } from '~/types/restaurant';
 import RestaurantThumb from '~/components/RestaurantThumb';
 import RestaurantDetailDialog from '~/components/RestaurantDetailDialog';
+import Stars from '~/components/Stars';
 import LanguageSwitcher from '~/components/LanguageSwitcher';
 import {
   listTokens,
@@ -395,7 +396,9 @@ export default function SharedListPage() {
                     </Box>
                     <PublicReservations locations={r.locations ?? []} multi={(r.locations?.length ?? 0) > 1} tokens={t} tr={tr} listMode />
                     <Box sx={{ width: 90, color: t.cost, fontSize: 14, fontWeight: 600, fontFamily: "'DM Mono',monospace", display: { xs: 'none', sm: 'block' } }}>{r.costStr}</Box>
-                    <Box sx={{ width: 110, color: t.rating, fontSize: 14, letterSpacing: '1px', display: { xs: 'none', sm: 'block' } }}>{r.ratingStr}</Box>
+                    <Box sx={{ width: 110, display: { xs: 'none', sm: 'block' } }}>
+                      {r.rated ? <Stars value={r.rating ?? 0} tokens={t} size={14} letterSpacing="1px" /> : null}
+                    </Box>
                     <StatusLabel been={r.isBeen} tokens={t} tr={tr} />
                   </Box>
                 ))}
@@ -429,7 +432,7 @@ export default function SharedListPage() {
                       )}
                       <Box sx={{ mt: '11px', height: 18 }}>
                         {r.rated ? (
-                          <Box component="span" sx={{ color: t.rating, fontSize: 15, letterSpacing: '2px' }}>{r.ratingStr}</Box>
+                          <Stars value={r.rating ?? 0} tokens={t} size={15} />
                         ) : (
                           <Box component="span" sx={{ color: t.notRated, fontSize: 13, fontStyle: 'italic' }}>{tr('dashboard.notRated')}</Box>
                         )}

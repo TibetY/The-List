@@ -30,6 +30,7 @@ import { useTranslation } from 'react-i18next';
 import type { Restaurant } from '~/types/restaurant';
 import type { listTokens } from '~/listTheme';
 import RestaurantThumb from '~/components/RestaurantThumb';
+import Stars from '~/components/Stars';
 
 type Tokens = (typeof listTokens)['light'];
 
@@ -212,9 +213,7 @@ export default function RestaurantDetailDialog({
         {/* Rating */}
         <Box sx={{ mt: '8px', minHeight: 20 }}>
           {rating > 0 ? (
-            <Box component="span" sx={{ color: t.rating, fontSize: 17, letterSpacing: '2px' }}>
-              {'★'.repeat(rating)}{'☆'.repeat(5 - rating)}
-            </Box>
+            <Stars value={r.rating ?? 0} tokens={t} size={17} />
           ) : (
             <Box component="span" sx={{ color: t.notRated, fontSize: 13, fontStyle: 'italic' }}>
               {tr('detail.notRated')}

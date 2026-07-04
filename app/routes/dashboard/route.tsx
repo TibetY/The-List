@@ -75,6 +75,7 @@ import ShareListDialog from '~/components/ShareListDialog';
 import Onboarding from '~/components/Onboarding';
 import FilterSheet from '~/components/FilterSheet';
 import SavedViewsBar from '~/components/SavedViewsBar';
+import Stars from '~/components/Stars';
 import LanguageSwitcher from '~/components/LanguageSwitcher';
 import { uploadRestaurantImage } from '~/services/storage.client';
 import {
@@ -1540,7 +1541,7 @@ export default function Dashboard() {
                           )}
                           <Box sx={{ mt: '11px', height: 18 }}>
                             {r.rated ? (
-                              <Box component="span" sx={{ color: t.rating, fontSize: 15, letterSpacing: '2px' }}>{r.ratingStr}</Box>
+                              <Stars value={r.rating ?? 0} tokens={t} size={15} />
                             ) : (
                               <Box component="span" sx={{ color: t.notRated, fontSize: 13, fontStyle: 'italic' }}>{tr('dashboard.notRated')}</Box>
                             )}
@@ -1658,7 +1659,9 @@ export default function Dashboard() {
                           listMode
                         />
                         <Box sx={{ width: 90, color: t.cost, fontSize: 14, fontWeight: 600, fontFamily: "'DM Mono',monospace", display: { xs: 'none', sm: 'block' } }}>{r.costStr}</Box>
-                        <Box sx={{ width: 110, color: t.rating, fontSize: 14, letterSpacing: '1px', display: { xs: 'none', sm: 'block' } }}>{r.ratingStr}</Box>
+                        <Box sx={{ width: 110, display: { xs: 'none', sm: 'block' } }}>
+                          {r.rated ? <Stars value={r.rating ?? 0} tokens={t} size={14} letterSpacing="1px" /> : null}
+                        </Box>
                         {canEdit ? (
                           <IconButton
                             size="small"

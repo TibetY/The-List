@@ -31,6 +31,19 @@ interface LocatedPin {
 // Default view when nothing is geocoded yet (Ottawa — "Ottawa & beyond").
 const DEFAULT_CENTER: [number, number] = [45.4215, -75.6972];
 
+/** Half-star-aware rating for the popup: two ★★★★★ layers, the accent one clipped
+ *  to the rating fraction (leaflet popups are always on a light surface). */
+function starsHtml(value: number): string {
+  const pct = (Math.max(0, Math.min(5, value)) / 5) * 100;
+  const base = 'letter-spacing:1px;line-height:1;white-space:nowrap;font-size:13px';
+  return (
+    `<span style="position:relative;display:inline-block;${base}">` +
+    `<span style="color:rgba(43,36,32,.25)">★★★★★</span>` +
+    `<span style="position:absolute;left:0;top:0;width:${pct}%;overflow:hidden;color:#B5532F">★★★★★</span>` +
+    `</span>`
+  );
+}
+
 /** Escape user-supplied text before it goes into a Leaflet popup's innerHTML. */
 function escapeHtml(value: string): string {
   return value.replace(
@@ -68,9 +81,8 @@ function popupHtml(pin: LocatedPin, t: TFunction): string {
     html += `<img src="${escapeHtml(r.image)}" alt="" style="width:100%;height:96px;object-fit:cover;border-radius:8px;margin-bottom:6px;display:block" />`;
   }
   html += `<strong>${escapeHtml(title)}</strong>`;
-  const rating = Math.round(r.rating ?? 0);
-  if (rating > 0) {
-    html += `<br/><span style="letter-spacing:1px;color:#B5532F">${'★'.repeat(rating)}${'☆'.repeat(5 - rating)}</span>`;
+  if ((r.rating ?? 0) > 0) {
+    html += `<br/>${starsHtml(r.rating ?? 0)}`;
   }
   if (r.cuisineType) {
     html += `<br/>${escapeHtml(t(`cuisines.${r.cuisineType}`, r.cuisineType))}`;
