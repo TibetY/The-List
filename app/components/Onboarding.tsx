@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { PlaceCandidate } from '~/types/restaurant';
 import type { listTokens } from '~/listTheme';
 import PlaceSearch from '~/components/PlaceSearch';
+import NearbyAdds from '~/components/NearbyAdds';
 import RestaurantThumb from '~/components/RestaurantThumb';
 import { buildEnrichedRestaurant, type PlaceSeed } from '~/services/placeEnrich.client';
 import { createRestaurant } from '~/services/restaurants.client';
@@ -32,30 +33,30 @@ interface StarterPack {
 
 const STARTER_PACKS: StarterPack[] = [
   {
-    id: 'ottawa',
-    labelKey: 'onboarding.packOttawa',
+    id: 'paris-wine',
+    labelKey: 'onboarding.packParisWine',
     places: [
-      { name: 'The Whalesbone', address: '430 Bank St, Ottawa, ON' },
-      { name: 'Riviera', address: '62 Sparks St, Ottawa, ON' },
-      { name: 'Play Food & Wine', address: '1 York St, Ottawa, ON' },
+      { name: 'Septime', address: '80 Rue de Charonne, 75011 Paris, France' },
+      { name: 'Clamato', address: '80 Rue de Charonne, 75011 Paris, France' },
+      { name: 'Le Chateaubriand', address: '129 Avenue Parmentier, 75011 Paris, France' },
     ],
   },
   {
-    id: 'toronto',
-    labelKey: 'onboarding.packToronto',
+    id: 'sf-classics',
+    labelKey: 'onboarding.packSfClassics',
     places: [
-      { name: 'Alo', address: '163 Spadina Ave, Toronto, ON' },
-      { name: 'Pai Northern Thai Kitchen', address: '18 Duncan St, Toronto, ON' },
-      { name: 'Canoe', address: '66 Wellington St W, Toronto, ON' },
+      { name: 'Zuni Café', address: '1658 Market St, San Francisco, CA' },
+      { name: 'Tartine Bakery', address: '600 Guerrero St, San Francisco, CA' },
+      { name: 'Swan Oyster Depot', address: '1517 Polk St, San Francisco, CA' },
     ],
   },
   {
-    id: 'montreal',
-    labelKey: 'onboarding.packMontreal',
+    id: 'date-night',
+    labelKey: 'onboarding.packDateNight',
     places: [
-      { name: 'Joe Beef', address: '2491 Notre-Dame St W, Montreal, QC' },
-      { name: "Schwartz's", address: '3895 Saint-Laurent Blvd, Montreal, QC' },
-      { name: 'Au Pied de Cochon', address: '536 Duluth Ave E, Montreal, QC' },
+      { name: 'Le Bernardin', address: '155 West 51st St, New York, NY' },
+      { name: 'Alinea', address: '1723 North Halsted St, Chicago, IL' },
+      { name: 'The French Laundry', address: '6640 Washington St, Yountville, CA' },
     ],
   },
 ];
@@ -140,6 +141,9 @@ export default function Onboarding({
           focusOnMount
           clearOnPick
         />
+        <Box sx={{ mt: 2 }}>
+          <NearbyAdds tokens={t} serifFont={serifFont} onPick={(c: PlaceCandidate) => runSeeds([c])} />
+        </Box>
       </Box>
 
       {/* resolving cards — the "your list is alive" moment */}

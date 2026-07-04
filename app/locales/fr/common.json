@@ -323,6 +323,14 @@
     "noResults": "Aucun résultat — saisissez les détails ci-dessous.",
     "orManual": "…ou saisissez vous-même les détails ci-dessous."
   },
+  "nearby": {
+    "title": "À proximité, tout de suite",
+    "cta": "Ajouter un lieu près de moi",
+    "locating": "Localisation en cours…",
+    "loading": "Recherche de lieux à proximité…",
+    "empty": "Rien à proximité — essayez plutôt une recherche.",
+    "denied": "Localisation désactivée. Activez-la pour ajouter des lieux près de vous."
+  },
   "stats": {
     "menuItem": "Vos goûts culinaires",
     "back": "Retour au tableau de bord",
@@ -353,16 +361,16 @@
     "emptyBody": "Ajoutez quelques adresses et vos goûts culinaires prendront forme ici."
   },
   "onboarding": {
-    "title": "Dressons votre table.",
-    "subtitle": "Ajoutez quelques lieux que vous aimez — on remplit les photos, la cuisine et les liens de réservation pour vous.",
-    "searchPlaceholder": "Cherchez un restaurant, un bar ou un café…",
-    "resolving": "On dresse la table…",
+    "title": "Chaque bon repas mérite qu'on s'en souvienne.",
+    "subtitle": "Commencez votre liste. Ajoutez le dernier endroit qui vous a fait fermer les yeux dès la première bouchée — on s'occupe du reste.",
+    "searchPlaceholder": "Cherchez un restaurant, un café, un bar à vin…",
+    "resolving": "On récupère les photos et les détails…",
     "added": "Ajouté",
     "addFailed": "Échec — réessayez",
-    "orStarter": "ou commencez par une ville",
-    "packOttawa": "Classiques d'Ottawa",
-    "packToronto": "Incontournables de Toronto",
-    "packMontreal": "Essentiels de Montréal",
+    "orStarter": "ou partez d'un pack",
+    "packParisWine": "Paris, vin naturel",
+    "packSfClassics": "SF, les classiques",
+    "packDateNight": "Souper romantique $$$",
     "addThese": "Ajouter",
     "manual": "Vous préférez ajouter le vôtre ? Saisissez-le manuellement."
   },
@@ -437,7 +445,16 @@
     "phone": "Téléphone",
     "visitedTimes_one": "Visité {{count}} fois",
     "visitedTimes_other": "Visité {{count}} fois",
-    "addVisit": "+1 visite"
+    "addVisit": "+1 visite",
+    "tabsLabel": "Détails",
+    "tabReservations": "Réservations",
+    "tabHours": "Horaires",
+    "tabInstagram": "Instagram",
+    "tabGuides": "Guides",
+    "reservationsEmpty": "Aucune information de réservation pour l'instant.",
+    "hoursEmpty": "Les horaires ne sont pas encore disponibles.",
+    "socialEmpty": "Aucun lien pour l'instant.",
+    "guidesEmpty": "Les critiques des guides arrivent bientôt."
   },
   "share": {
     "title": "Partager « {{name}} »",

@@ -55,6 +55,11 @@ export interface ListTokens {
   notRated: string;
   monoGrad: string;
   monoInitial: string;
+  // Diagonal-stripe placeholder for thumbnails without a photo.
+  thumbStripeA: string;
+  thumbStripeB: string;
+  // Warm, deep card shadow (the refined place card).
+  cardShadow: string;
   beenBg: string;
   beenFg: string;
   wantBg: string;
@@ -117,6 +122,9 @@ export const listTokens: Record<ListMode, ListTokens> = {
     notRated: '#B7A893',
     monoGrad: 'linear-gradient(135deg,#E7D6BD,#D9C4A4)',
     monoInitial: 'rgba(181,83,47,.30)',
+    thumbStripeA: '#E9DAC2',
+    thumbStripeB: '#E0CFB2',
+    cardShadow: '0 22px 46px -28px rgba(35,25,16,.4)',
     beenBg: '#EBEFDD',
     beenFg: '#4A5639',
     wantBg: '#F6E2D8',
@@ -175,6 +183,9 @@ export const listTokens: Record<ListMode, ListTokens> = {
     notRated: '#6F806F',
     monoGrad: 'linear-gradient(135deg,#2A3A2F,#1A241E)',
     monoInitial: 'rgba(217,145,63,.30)',
+    thumbStripeA: '#243029',
+    thumbStripeB: '#1D2A23',
+    cardShadow: '0 22px 46px -28px rgba(0,0,0,.6)',
     beenBg: '#24402F',
     beenFg: '#9FD3A6',
     wantBg: '#3A2A1A',
@@ -265,6 +276,9 @@ const CSS_VAR_MAP: [cssVar: string, token: keyof ListTokens][] = [
   ['--shadow-1', 'shadow1'],
   ['--shadow-2', 'shadow2'],
   ['--shadow-3', 'shadow3'],
+  ['--card-shadow', 'cardShadow'],
+  ['--thumb-stripe-a', 'thumbStripeA'],
+  ['--thumb-stripe-b', 'thumbStripeB'],
 ];
 
 /**

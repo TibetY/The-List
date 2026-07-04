@@ -50,6 +50,7 @@ import {
 } from '~/types/restaurant';
 import type { listTokens } from '~/listTheme';
 import PlaceSearch from '~/components/PlaceSearch';
+import NearbyAdds from '~/components/NearbyAdds';
 
 type Tokens = (typeof listTokens)['light'];
 
@@ -699,6 +700,9 @@ export default function RestaurantFormDialog({
                 onPick={applyCandidate}
                 placeholder={t('search.placeholder')}
               />
+              <Box sx={{ mt: 1.5 }}>
+                <NearbyAdds tokens={tokens} serifFont={serifFont} onPick={applyCandidate} />
+              </Box>
               <Typography
                 variant="caption"
                 sx={{ display: 'block', mt: 1, color: 'text.secondary' }}

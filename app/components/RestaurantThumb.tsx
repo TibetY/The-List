@@ -36,7 +36,9 @@ export default function RestaurantThumb({
     <Box
       sx={{
         position: 'relative',
-        background: t.monoGrad,
+        // Editorial diagonal-stripe placeholder (the refined card look); the
+        // serif initial sits over it when there's no photo.
+        background: `repeating-linear-gradient(135deg, ${t.thumbStripeA} 0 9px, ${t.thumbStripeB} 9px 18px)`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

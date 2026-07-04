@@ -1369,12 +1369,13 @@ export default function Dashboard() {
                         onClick={() => handleViewRestaurant(r)}
                         sx={{
                           border: `1px solid ${t.border}`,
-                          borderRadius: '16px',
+                          borderRadius: '18px',
                           overflow: 'hidden',
                           background: t.cardBg,
                           cursor: 'pointer',
+                          boxShadow: t.cardShadow,
                           transition: 'transform .15s, box-shadow .15s',
-                          '&:hover': { transform: 'translateY(-3px)', boxShadow: '0 12px 28px rgba(0,0,0,.12)' },
+                          '&:hover': { transform: 'translateY(-3px)', boxShadow: t.shadow2 },
                           '&:hover .card-actions, &:focus-within .card-actions': { opacity: 1 },
                           // Touch devices have no hover, so the edit/delete actions
                           // would never appear — keep them visible there.
@@ -1400,19 +1401,42 @@ export default function Dashboard() {
                               position: 'absolute',
                               top: 12,
                               right: 12,
+                              // Tinted-outline pill (the refined card): a translucent
+                              // wash of the status colour with a matching border.
                               background: r.isBeen ? t.beenBg : t.wantBg,
                               color: r.isBeen ? t.beenFg : t.wantFg,
+                              border: `1px solid ${r.isBeen ? t.beenFg : t.wantFg}33`,
                               fontSize: '11.5px',
                               fontWeight: 600,
                               fontFamily: 'inherit',
-                              border: 'none',
-                              padding: '5px 11px',
+                              padding: '4px 11px',
                               borderRadius: '999px',
+                              backdropFilter: 'blur(4px)',
                               cursor: canEdit ? 'pointer' : 'default',
                             }}
                           >
                             {r.isBeen ? tr('dashboard.statusBeen') : tr('dashboard.statusWant')}
                           </Box>
+                          {/* price chip overlaid on the photo (DM Mono) */}
+                          {r.costStr && (
+                            <Box
+                              component="span"
+                              sx={{
+                                position: 'absolute',
+                                bottom: 10,
+                                right: 10,
+                                background: 'rgba(255,255,255,.9)',
+                                color: '#2B2420',
+                                fontFamily: "'DM Mono',monospace",
+                                fontSize: '11.5px',
+                                fontWeight: 600,
+                                padding: '3px 8px',
+                                borderRadius: '8px',
+                              }}
+                            >
+                              {r.costStr}
+                            </Box>
+                          )}
                           {canEdit && (
                             <Box className="card-actions" sx={{ position: 'absolute', top: 10, left: 10, display: 'flex', gap: '6px', opacity: 0, transition: 'opacity .15s' }}>
                               <CardAction label={tr('dashboard.editX', { name: r.name })} onClick={() => handleEditRestaurant(r)} tokens={t}>
@@ -1449,7 +1473,6 @@ export default function Dashboard() {
                               }}
                             >{r.name}</Box>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 'none' }}>
-                              <Box component="span" sx={{ color: t.cost, fontSize: 14, fontWeight: 600, letterSpacing: '.03em', fontFamily: "'DM Mono',monospace" }}>{r.costStr}</Box>
                               {canEdit ? (
                                 <IconButton
                                   size="small"
@@ -1478,6 +1501,23 @@ export default function Dashboard() {
                               </Box>
                             )}
                           </Box>
+                          {r.comment?.trim() && (
+                            <Box
+                              sx={{
+                                mt: '10px',
+                                fontSize: 13.5,
+                                fontStyle: 'italic',
+                                color: t.muted,
+                                lineHeight: 1.4,
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden',
+                              }}
+                            >
+                              “{r.comment.trim()}”
+                            </Box>
+                          )}
                           {((r.michelinStars ?? 0) > 0 || r.bibGourmand) && (
                             <Box sx={{ display: 'flex', gap: '6px', mt: '6px', flexWrap: 'wrap' }}>
                               {(r.michelinStars ?? 0) > 0 && (

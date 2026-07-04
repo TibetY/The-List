@@ -406,22 +406,27 @@ export default function SharedListPage() {
               <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '20px' }}>
                 {sorted.map((r) => (
                   <Box key={r.id} onClick={() => openDetail(r)}
-                    sx={{ border: `1px solid ${t.border}`, borderRadius: '16px', overflow: 'hidden', background: t.cardBg, cursor: 'pointer', transition: 'transform .15s, box-shadow .15s', '&:hover': { transform: 'translateY(-3px)', boxShadow: '0 12px 28px rgba(0,0,0,.12)' } }}>
+                    sx={{ border: `1px solid ${t.border}`, borderRadius: '18px', overflow: 'hidden', background: t.cardBg, cursor: 'pointer', boxShadow: t.cardShadow, transition: 'transform .15s, box-shadow .15s', '&:hover': { transform: 'translateY(-3px)', boxShadow: t.shadow2 } }}>
                     <Box sx={{ position: 'relative', height: 158 }}>
                       <RestaurantThumb image={r.image} alt={r.name} initial={r.initial} serifFont={serif} tokens={t} sx={{ height: '100%' }} />
                       <Box sx={{ position: 'absolute', top: 12, right: 12 }}>
                         <StatusLabel been={r.isBeen} tokens={t} tr={tr} />
                       </Box>
+                      {r.costStr && (
+                        <Box component="span" sx={{ position: 'absolute', bottom: 10, right: 10, background: 'rgba(255,255,255,.9)', color: '#2B2420', fontFamily: "'DM Mono',monospace", fontSize: '11.5px', fontWeight: 600, padding: '3px 8px', borderRadius: '8px' }}>{r.costStr}</Box>
+                      )}
                     </Box>
                     <Box sx={{ padding: '14px 16px 16px' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                        <Box component="button" type="button" onClick={(e: React.MouseEvent) => { e.stopPropagation(); openDetail(r); }}
-                          sx={{ fontFamily: serif, fontSize: 20, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', border: 'none', background: 'transparent', p: 0, m: 0, color: 'inherit', textAlign: 'left', cursor: 'pointer', display: 'block', maxWidth: '100%' }}>
-                          {r.name}
-                        </Box>
-                        <Box component="span" sx={{ color: t.cost, fontSize: 14, fontWeight: 600, letterSpacing: '.03em', fontFamily: "'DM Mono',monospace", flex: 'none' }}>{r.costStr}</Box>
+                      <Box component="button" type="button" onClick={(e: React.MouseEvent) => { e.stopPropagation(); openDetail(r); }}
+                        sx={{ fontFamily: serif, fontSize: 20, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', border: 'none', background: 'transparent', p: 0, m: 0, color: 'inherit', textAlign: 'left', cursor: 'pointer', display: 'block', maxWidth: '100%' }}>
+                        {r.name}
                       </Box>
                       <Box sx={{ color: t.muted, fontSize: 13, mt: '4px' }}>{r.meta}</Box>
+                      {r.comment?.trim() && (
+                        <Box sx={{ mt: '10px', fontSize: 13.5, fontStyle: 'italic', color: t.muted, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                          “{r.comment.trim()}”
+                        </Box>
+                      )}
                       <Box sx={{ mt: '11px', height: 18 }}>
                         {r.rated ? (
                           <Box component="span" sx={{ color: t.rating, fontSize: 15, letterSpacing: '2px' }}>{r.ratingStr}</Box>
