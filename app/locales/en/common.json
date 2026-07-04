@@ -323,6 +323,14 @@
     "noResults": "No matches — just type the details below.",
     "orManual": "…or fill in the details yourself below."
   },
+  "nearby": {
+    "title": "Nearby, right now",
+    "cta": "Add a place near me",
+    "locating": "Finding your location…",
+    "loading": "Looking for places nearby…",
+    "empty": "Nothing found nearby — try a search instead.",
+    "denied": "Location off. Turn it on to add places near you."
+  },
   "stats": {
     "menuItem": "Your taste in food",
     "back": "Back to dashboard",

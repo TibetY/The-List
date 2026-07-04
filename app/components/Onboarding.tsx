@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { PlaceCandidate } from '~/types/restaurant';
 import type { listTokens } from '~/listTheme';
 import PlaceSearch from '~/components/PlaceSearch';
+import NearbyAdds from '~/components/NearbyAdds';
 import RestaurantThumb from '~/components/RestaurantThumb';
 import { buildEnrichedRestaurant, type PlaceSeed } from '~/services/placeEnrich.client';
 import { createRestaurant } from '~/services/restaurants.client';
@@ -140,6 +141,9 @@ export default function Onboarding({
           focusOnMount
           clearOnPick
         />
+        <Box sx={{ mt: 2 }}>
+          <NearbyAdds tokens={t} serifFont={serifFont} onPick={(c: PlaceCandidate) => runSeeds([c])} />
+        </Box>
       </Box>
 
       {/* resolving cards — the "your list is alive" moment */}

@@ -143,6 +143,8 @@ export interface PlaceCandidate {
   cuisineType: string | null;
   placeTypes: string[] | null;
   website: string | null;
+  /** Metres from the user, when the candidate came from a "nearby" search. */
+  distanceM?: number | null;
 }
 
 /**
