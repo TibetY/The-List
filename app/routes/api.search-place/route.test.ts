@@ -31,6 +31,18 @@ const roadRow = {
   display_name: 'Bank Street, Ottawa, Canada',
 };
 
+// A convenience store carrying a cuisine tag — the cuisine-tag leniency must
+// not let non-amenity categories through.
+const shopRow = {
+  lat: '45.41',
+  lon: '-75.61',
+  category: 'shop',
+  type: 'convenience',
+  display_name: 'Quickie Mart, 100, Bank Street, Ottawa, Canada',
+  namedetails: { name: 'Quickie Mart' },
+  extratags: { cuisine: 'pizza' },
+};
+
 describe('parsePlaceCandidates', () => {
   it('returns [] for non-array input', () => {
     expect(parsePlaceCandidates(null)).toEqual([]);
@@ -53,7 +65,7 @@ describe('parsePlaceCandidates', () => {
   });
 
   it('keeps food/drink venues and drops non-food results', () => {
-    const out = parsePlaceCandidates([restaurantRow, roadRow, barRow]);
+    const out = parsePlaceCandidates([restaurantRow, roadRow, shopRow, barRow]);
     expect(out.map((c) => c.name)).toEqual(['The Whalesbone', 'Union Local']);
     const bar = out[1];
     expect(bar.placeTypes).toEqual(['Bar']);

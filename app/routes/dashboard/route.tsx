@@ -891,7 +891,13 @@ export default function Dashboard() {
 
   // --- saved views ---------------------------------------------------------
   const handleApplyView = (view: ListView) => {
-    setSearchParams(applyViewParams(searchParams, view.params));
+    const next = applyViewParams(searchParams, view.params);
+    // Adopt the view's q locally too — otherwise text typed within the debounce
+    // window survives the switch and the armed timer re-pushes it onto the view.
+    const q = next.get('q') ?? '';
+    setSearchQuery(q);
+    lastPushedQ.current = q;
+    setSearchParams(next);
   };
 
   const handleConfirmView = async () => {

@@ -146,6 +146,11 @@ function ClusterLayer({
 
   // restaurantKey → its markers, so hover emphasis can target every branch.
   const markersByKey = useRef<Map<string, L.Marker[]>>(new Map());
+  // The rebuild effect must not depend on hoveredKey (that would rebuild the
+  // whole cluster per hover), but it must re-apply the current emphasis after
+  // recreating the markers — so it reads the latest value from a ref.
+  const hoveredKeyRef = useRef(hoveredKey);
+  hoveredKeyRef.current = hoveredKey;
 
   useEffect(() => {
     const group = L.markerClusterGroup({
@@ -154,7 +159,8 @@ function ClusterLayer({
     });
     const byKey = new Map<string, L.Marker[]>();
     for (const pin of points) {
-      const marker = L.marker([pin.lat, pin.lng], { icon: pinIcon(accent, false) });
+      const active = pin.restaurantKey === hoveredKeyRef.current;
+      const marker = L.marker([pin.lat, pin.lng], { icon: pinIcon(accent, active) });
       marker.bindPopup(popupHtml(pin, tRef.current));
       marker.on('click', () => onSelectRef.current(pin.restaurant));
       marker.on('mouseover', () => onHoverRef.current?.(pin.restaurantKey));

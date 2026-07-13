@@ -142,7 +142,7 @@ export default function Onboarding({
           clearOnPick
         />
         <Box sx={{ mt: 2 }}>
-          <NearbyAdds tokens={t} serifFont={serifFont} onPick={(c: PlaceCandidate) => runSeeds([c])} />
+          <NearbyAdds tokens={t} serifFont={serifFont} disabled={busy} onPick={(c: PlaceCandidate) => runSeeds([c])} />
         </Box>
       </Box>
 
