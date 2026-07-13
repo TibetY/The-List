@@ -635,6 +635,7 @@ create policy "read own views" on public.list_views
 create policy "insert own views" on public.list_views
   for insert with check (user_id = auth.uid() and private.is_list_member(list_id));
 create policy "update own views" on public.list_views
-  for update using (user_id = auth.uid()) with check (user_id = auth.uid());
+  for update using (user_id = auth.uid())
+  with check (user_id = auth.uid() and private.is_list_member(list_id));
 create policy "delete own views" on public.list_views
   for delete using (user_id = auth.uid());
