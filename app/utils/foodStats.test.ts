@@ -126,12 +126,23 @@ describe('computeFoodStats', () => {
 describe('cityFromAddress', () => {
   it('extracts the city from a typical street/city/region address', () => {
     expect(cityFromAddress('430 Bank St, Ottawa, ON')).toBe('Ottawa');
+    expect(cityFromAddress('600 Guerrero St, San Francisco, CA')).toBe('San Francisco');
   });
 
   it('skips street, postal, region, and country segments', () => {
     expect(
       cityFromAddress('The Whalesbone, 430 Bank St, Ottawa, ON K2P 1Y8, Canada')
     ).toBe('Ottawa');
+  });
+
+  it('handles postal-prefixed city segments (European formats)', () => {
+    expect(cityFromAddress('80 Rue de Charonne, 75011 Paris, France')).toBe('Paris');
+  });
+
+  it('handles Nominatim display_names with a leading house-number segment', () => {
+    expect(
+      cityFromAddress('1120, High Street, Auburn, Placer County, California, 95603, United States')
+    ).toBe('Auburn');
   });
 
   it('returns null when it cannot reasonably tell', () => {

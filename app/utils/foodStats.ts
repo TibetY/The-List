@@ -166,8 +166,12 @@ const COUNTRY_WORDS = new Set([
 /**
  * Best-effort city from a free-text address. There is no structured city field
  * yet, so we split on commas and pick the segment most likely to be the city:
- * skip the leading street line, then any segment that looks like a street
- * (contains a digit), a region/state abbreviation (two letters), or a country.
+ * skip the leading street line(s), region/state abbreviations, and countries.
+ * A digit-bearing segment is usually postal — but many formats put the postal
+ * code IN the city segment ("75011 Paris"), so strip a leading postal token and
+ * keep a letters-only remainder before giving up on it. Nominatim display_names
+ * also put the house number in its own first segment ("1120, High Street,
+ * Auburn, …"), so a purely numeric first part shifts the street line to index 1.
  * Returns null when we can't reasonably tell — callers just omit it.
  */
 export function cityFromAddress(address?: string): string | null {
@@ -177,11 +181,21 @@ export function cityFromAddress(address?: string): string | null {
     .map((s) => s.trim())
     .filter(Boolean);
   if (parts.length < 2) return null; // a bare street or single token — unsure
-  for (let i = 1; i < parts.length; i++) {
-    const seg = parts[i];
-    if (/\d/.test(seg)) continue; // still street-ish / postal
+  // "1120, High Street, Auburn": house number as its own segment → the street
+  // line is parts[1], so the city scan starts after it.
+  const start = /^\d+[A-Za-z]?$/.test(parts[0]) ? 2 : 1;
+  for (let i = start; i < parts.length; i++) {
+    let seg = parts[i];
     if (/^[A-Za-z]{2}$/.test(seg)) continue; // region/state abbreviation
     if (COUNTRY_WORDS.has(seg.toLowerCase())) continue;
+    if (/\d/.test(seg)) {
+      // Postal-prefixed city ("75011 Paris"): keep the letters after the code.
+      // Postal codes are ≥4 digits — shorter leading numbers are house numbers
+      // ("430 Bank St" in a venue-name-first address) and must stay skipped.
+      const m = seg.match(/^\d{4,}\s+(.+)$/);
+      if (m && !/\d/.test(m[1])) seg = m[1].trim();
+      else continue; // genuinely postal / street-ish
+    }
     return seg;
   }
   return null;
