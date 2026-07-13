@@ -676,12 +676,19 @@ export default function Dashboard() {
           continue;
         }
         const prev = prevLocations[i];
-        const addressChanged = (prev?.address ?? '').trim() !== address;
+        const prevAddress = (prev?.address ?? '').trim();
+        // Only a change to a PREVIOUSLY SAVED address invalidates coordinates.
+        // A new location that already carries coords (seeded from a search /
+        // nearby candidate) keeps its precise POI point instead of being
+        // re-geocoded to a coarser — or failed — result.
+        const addressChanged = prevAddress !== '' && prevAddress !== address;
         const hasCoords = loc.lat != null && loc.lng != null;
-        if (!addressChanged && hasCoords) continue; // keep existing coordinates
+        if (hasCoords && !addressChanged) continue; // keep existing coordinates
         const point = await geocodeAddress(address);
-        locations[i] = { ...loc, lat: point?.lat, lng: point?.lng };
-        if (!point) geocodeFailed = true;
+        // On failure keep whatever coords we already had rather than wiping the
+        // pin — a slightly stale pin beats none.
+        locations[i] = { ...loc, lat: point?.lat ?? loc.lat, lng: point?.lng ?? loc.lng };
+        if (!point && !hasCoords) geocodeFailed = true;
       }
       dataToSave.locations = locations;
 
