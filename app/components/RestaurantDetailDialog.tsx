@@ -318,27 +318,30 @@ export default function RestaurantDetailDialog({
           </Tabs>
 
           <Box sx={{ pt: '14px' }}>
-            {tab === 'reservations' &&
-              (locations.length > 0 &&
-              (loc.address || loc.phone || loc.email || loc.reservationUrl || loc.reservationPlatform === 'walkin') ? (
+            {tab === 'reservations' && (
+              <Box>
+                {/* The location switcher lives OUTSIDE the has-details branch:
+                    selecting a detail-less branch must never remove the tabs
+                    (that trapped the user on the empty branch). */}
+                {locations.length > 1 && (
+                  <Tabs
+                    value={safeIdx}
+                    onChange={(_, v: number) => setActiveLoc(v)}
+                    variant="scrollable"
+                    scrollButtons="auto"
+                    sx={{ mb: '10px', minHeight: 36 }}
+                  >
+                    {locations.map((l, i) => (
+                      <Tab
+                        key={i}
+                        label={l.label?.trim() || tr('form.locationN', { n: i + 1 })}
+                        sx={{ minHeight: 36, textTransform: 'none', color: t.muted, '&.Mui-selected': { color: t.ink } }}
+                      />
+                    ))}
+                  </Tabs>
+                )}
+                {loc.address || loc.phone || loc.email || loc.reservationUrl || loc.reservationPlatform === 'walkin' ? (
                 <Box>
-                  {locations.length > 1 && (
-                    <Tabs
-                      value={safeIdx}
-                      onChange={(_, v: number) => setActiveLoc(v)}
-                      variant="scrollable"
-                      scrollButtons="auto"
-                      sx={{ mb: '10px', minHeight: 36 }}
-                    >
-                      {locations.map((l, i) => (
-                        <Tab
-                          key={i}
-                          label={l.label?.trim() || tr('form.locationN', { n: i + 1 })}
-                          sx={{ minHeight: 36, textTransform: 'none', color: t.muted, '&.Mui-selected': { color: t.ink } }}
-                        />
-                      ))}
-                    </Tabs>
-                  )}
                   {loc.address && (
                     <Box sx={{ mb: '10px' }}>
                       <Box component="span" sx={sectionLabel}>{tr('form.address')}</Box>
@@ -379,9 +382,11 @@ export default function RestaurantDetailDialog({
                     </Box>
                   )}
                 </Box>
-              ) : (
-                emptyTab(tr('detail.reservationsEmpty'))
-              ))}
+                ) : (
+                  emptyTab(tr('detail.reservationsEmpty'))
+                )}
+              </Box>
+            )}
 
             {tab === 'hours' && emptyTab(tr('detail.hoursEmpty'))}
 
