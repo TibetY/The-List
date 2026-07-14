@@ -6,6 +6,7 @@ import {
   useRevalidator,
   useSearchParams,
   useNavigate,
+  type ShouldRevalidateFunction,
 } from '@remix-run/react';
 import {
   Box,
@@ -32,7 +33,6 @@ import {
   Delete as DeleteIcon,
   PersonAddAlt1,
   Person,
-  EventSeat,
   Favorite,
   FavoriteBorder,
   Close,
@@ -52,7 +52,6 @@ import { getProfile } from '~/services/profiles.server';
 import { getListViews } from '~/services/views.server';
 import type {
   Restaurant,
-  RestaurantLocation,
   RestaurantList,
   ListMember,
   InviteLink,
@@ -75,6 +74,8 @@ import ShareListDialog from '~/components/ShareListDialog';
 import Onboarding from '~/components/Onboarding';
 import FilterSheet from '~/components/FilterSheet';
 import SavedViewsBar from '~/components/SavedViewsBar';
+import Stars from '~/components/Stars';
+import PlaceCard, { BookingPill, CardAction } from '~/components/PlaceCard';
 import LanguageSwitcher from '~/components/LanguageSwitcher';
 import { uploadRestaurantImage } from '~/services/storage.client';
 import {
@@ -229,6 +230,34 @@ export const action: ActionFunction = async ({ request }) => {
   return json({ success: true });
 };
 
+/**
+ * The filter/sort/search params live in the URL, but the loader never reads them
+ * (filtering is client-side) — so a navigation that only changes those keys must
+ * NOT re-run the loader. Without this, every search keystroke triggered a loader
+ * round-trip and the controlled input reverted to the stale URL value, eating
+ * characters. Manual revalidation (same URL) and real changes (list/join/forked,
+ * form posts) still revalidate normally.
+ */
+export const shouldRevalidate: ShouldRevalidateFunction = ({
+  currentUrl,
+  nextUrl,
+  formMethod,
+  defaultShouldRevalidate,
+}) => {
+  if (formMethod && formMethod !== 'GET') return defaultShouldRevalidate;
+  if (currentUrl.pathname !== nextUrl.pathname) return defaultShouldRevalidate;
+  // Same href = a manual revalidator.revalidate() after a mutation — let it run.
+  if (currentUrl.href === nextUrl.href) return defaultShouldRevalidate;
+  const withoutFilters = (url: URL) => {
+    const p = new URLSearchParams(url.search);
+    FILTER_PARAM_KEYS.forEach((k) => p.delete(k));
+    p.sort();
+    return p.toString();
+  };
+  if (withoutFilters(currentUrl) === withoutFilters(nextUrl)) return false;
+  return defaultShouldRevalidate;
+};
+
 type ViewMode = 'tile' | 'list' | 'map';
 type FilterMode = 'all' | 'been' | 'want';
 type SortMode = 'recent' | 'rating' | 'name' | 'price' | 'visits' | 'favorite';
@@ -253,13 +282,6 @@ function activateOnKey(fn: () => void) {
       fn();
     }
   };
-}
-
-function reservationLabel(platform: string): string {
-  if (platform === 'resy') return 'Resy';
-  if (platform === 'opentable') return 'OpenTable';
-  if (platform === 'walkin') return '';
-  return platform;
 }
 
 export default function Dashboard() {
@@ -312,7 +334,21 @@ export default function Dashboard() {
     const s = searchParams.get('status');
     return s === 'been' || s === 'want' ? s : 'all';
   })();
-  const searchQuery = searchParams.get('q') ?? '';
+  // Search text is LOCAL state so typing is instant (a controlled input bound
+  // straight to the URL reverts to the stale param while the navigation is
+  // pending, eating keystrokes). It syncs both ways with the `q` param below:
+  // local → URL debounced, URL → local when q changes externally (saved view,
+  // clear filters, back/forward).
+  const urlQ = searchParams.get('q') ?? '';
+  const [searchQuery, setSearchQuery] = useState(urlQ);
+  const lastPushedQ = useRef(urlQ);
+  useEffect(() => {
+    // q changed in the URL and it wasn't our own debounced write — adopt it.
+    if (urlQ !== lastPushedQ.current) {
+      lastPushedQ.current = urlQ;
+      setSearchQuery(urlQ);
+    }
+  }, [urlQ]);
   const cuisineFilter = searchParams.get('cuisine') ?? '';
   const costFilter = searchParams.get('cost') ?? '';
   const ratingFilter = Math.min(5, Math.max(0, Math.floor(Number(searchParams.get('rating')) || 0)));
@@ -351,8 +387,6 @@ export default function Dashboard() {
   };
   const setFilter = (v: FilterMode) =>
     updateFilterParams((p) => setOrDelete(p, 'status', v === 'all' ? '' : v));
-  const setSearchQuery = (v: string) =>
-    updateFilterParams((p) => setOrDelete(p, 'q', v), { replace: true });
   const setCuisineFilter = (v: string) =>
     updateFilterParams((p) => setOrDelete(p, 'cuisine', v));
   const setCostFilter = (v: string) =>
@@ -379,6 +413,20 @@ export default function Dashboard() {
       const value = typeof next === 'function' ? next(prev) : next;
       setOrDelete(p, 'rev', value ? '1' : '');
     });
+
+  // Local search → `q` param, debounced. `replace` keeps typing out of history;
+  // filtering itself reads the local state, so results update instantly.
+  useEffect(() => {
+    if (searchQuery === urlQ) return;
+    const timer = setTimeout(() => {
+      lastPushedQ.current = searchQuery;
+      updateFilterParams((p) => setOrDelete(p, 'q', searchQuery), { replace: true });
+    }, 250);
+    return () => clearTimeout(timer);
+    // Re-arming on urlQ/updateFilterParams changes would reset the debounce on
+    // every unrelated render; the adopt-effect above handles external q changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
 
 
   const [formOpen, setFormOpen] = useState(false);
@@ -548,8 +596,13 @@ export default function Dashboard() {
     sortReversed;
 
   // Drop every filter/sort param in a single history entry (leaves list/… intact).
-  const clearFilters = () =>
+  // Also reset the local search text directly — the URL adopt-effect can't see a
+  // value that was typed but not yet debounced into the URL.
+  const clearFilters = () => {
+    setSearchQuery('');
+    lastPushedQ.current = '';
     updateFilterParams((p) => FILTER_PARAM_KEYS.forEach((k) => p.delete(k)));
+  };
 
   // Canonical querystring of the current filters, for the saved-view highlight.
   const currentViewParams = useMemo(
@@ -623,12 +676,19 @@ export default function Dashboard() {
           continue;
         }
         const prev = prevLocations[i];
-        const addressChanged = (prev?.address ?? '').trim() !== address;
+        const prevAddress = (prev?.address ?? '').trim();
+        // Only a change to a PREVIOUSLY SAVED address invalidates coordinates.
+        // A new location that already carries coords (seeded from a search /
+        // nearby candidate) keeps its precise POI point instead of being
+        // re-geocoded to a coarser — or failed — result.
+        const addressChanged = prevAddress !== '' && prevAddress !== address;
         const hasCoords = loc.lat != null && loc.lng != null;
-        if (!addressChanged && hasCoords) continue; // keep existing coordinates
+        if (hasCoords && !addressChanged) continue; // keep existing coordinates
         const point = await geocodeAddress(address);
-        locations[i] = { ...loc, lat: point?.lat, lng: point?.lng };
-        if (!point) geocodeFailed = true;
+        // On failure keep whatever coords we already had rather than wiping the
+        // pin — a slightly stale pin beats none.
+        locations[i] = { ...loc, lat: point?.lat ?? loc.lat, lng: point?.lng ?? loc.lng };
+        if (!point && !hasCoords) geocodeFailed = true;
       }
       dataToSave.locations = locations;
 
@@ -831,7 +891,13 @@ export default function Dashboard() {
 
   // --- saved views ---------------------------------------------------------
   const handleApplyView = (view: ListView) => {
-    setSearchParams(applyViewParams(searchParams, view.params));
+    const next = applyViewParams(searchParams, view.params);
+    // Adopt the view's q locally too — otherwise text typed within the debounce
+    // window survives the switch and the armed timer re-pushes it onto the view.
+    const q = next.get('q') ?? '';
+    setSearchQuery(q);
+    lastPushedQ.current = q;
+    setSearchParams(next);
   };
 
   const handleConfirmView = async () => {
@@ -1364,195 +1430,18 @@ export default function Dashboard() {
                 <Box sx={{ padding: '24px 0 40px' }}>
                   <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '20px' }}>
                     {sorted.map((r) => (
-                      <Box
+                      <PlaceCard
                         key={r.id}
-                        onClick={() => handleViewRestaurant(r)}
-                        sx={{
-                          border: `1px solid ${t.border}`,
-                          borderRadius: '18px',
-                          overflow: 'hidden',
-                          background: t.cardBg,
-                          cursor: 'pointer',
-                          boxShadow: t.cardShadow,
-                          transition: 'transform .15s, box-shadow .15s',
-                          '&:hover': { transform: 'translateY(-3px)', boxShadow: t.shadow2 },
-                          '&:hover .card-actions, &:focus-within .card-actions': { opacity: 1 },
-                          // Touch devices have no hover, so the edit/delete actions
-                          // would never appear — keep them visible there.
-                          '@media (hover: none)': { '& .card-actions': { opacity: 1 } },
-                        }}
-                      >
-                        <Box sx={{ position: 'relative', height: 158 }}>
-                          <RestaurantThumb
-                            image={r.image}
-                            alt={r.name}
-                            initial={r.initial}
-                            serifFont={serif}
-                            tokens={t}
-                            sx={{ height: '100%' }}
-                          />
-                          <Box
-                            component={canEdit ? 'button' : 'span'}
-                            type={canEdit ? 'button' : undefined}
-                            onClick={canEdit ? (e: React.MouseEvent) => { e.stopPropagation(); handleToggleStatus(r); } : undefined}
-                            title={canEdit ? tr('dashboard.toggleStatus') : undefined}
-                            aria-label={canEdit ? tr('dashboard.markAs', { name: r.name, status: r.isBeen ? tr('dashboard.markWant') : tr('dashboard.markBeen') }) : undefined}
-                            sx={{
-                              position: 'absolute',
-                              top: 12,
-                              right: 12,
-                              // Tinted-outline pill (the refined card): a translucent
-                              // wash of the status colour with a matching border.
-                              background: r.isBeen ? t.beenBg : t.wantBg,
-                              color: r.isBeen ? t.beenFg : t.wantFg,
-                              border: `1px solid ${r.isBeen ? t.beenFg : t.wantFg}33`,
-                              fontSize: '11.5px',
-                              fontWeight: 600,
-                              fontFamily: 'inherit',
-                              padding: '4px 11px',
-                              borderRadius: '999px',
-                              backdropFilter: 'blur(4px)',
-                              cursor: canEdit ? 'pointer' : 'default',
-                            }}
-                          >
-                            {r.isBeen ? tr('dashboard.statusBeen') : tr('dashboard.statusWant')}
-                          </Box>
-                          {/* price chip overlaid on the photo (DM Mono) */}
-                          {r.costStr && (
-                            <Box
-                              component="span"
-                              sx={{
-                                position: 'absolute',
-                                bottom: 10,
-                                right: 10,
-                                background: 'rgba(255,255,255,.9)',
-                                color: '#2B2420',
-                                fontFamily: "'DM Mono',monospace",
-                                fontSize: '11.5px',
-                                fontWeight: 600,
-                                padding: '3px 8px',
-                                borderRadius: '8px',
-                              }}
-                            >
-                              {r.costStr}
-                            </Box>
-                          )}
-                          {canEdit && (
-                            <Box className="card-actions" sx={{ position: 'absolute', top: 10, left: 10, display: 'flex', gap: '6px', opacity: 0, transition: 'opacity .15s' }}>
-                              <CardAction label={tr('dashboard.editX', { name: r.name })} onClick={() => handleEditRestaurant(r)} tokens={t}>
-                                <EditIcon sx={{ fontSize: 15 }} />
-                              </CardAction>
-                              <CardAction label={tr('dashboard.deleteX', { name: r.name })} onClick={() => r.id && handleDeleteClick(r.id)} tokens={t} danger>
-                                <DeleteIcon sx={{ fontSize: 15 }} />
-                              </CardAction>
-                            </Box>
-                          )}
-                        </Box>
-                        <Box sx={{ padding: '14px 16px 16px' }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                            <Box
-                              component="button"
-                              type="button"
-                              onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleViewRestaurant(r); }}
-                              sx={{
-                                fontFamily: serif,
-                                fontSize: 20,
-                                minWidth: 0,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                                border: 'none',
-                                background: 'transparent',
-                                p: 0,
-                                m: 0,
-                                color: 'inherit',
-                                textAlign: 'left',
-                                cursor: 'pointer',
-                                display: 'block',
-                                maxWidth: '100%',
-                              }}
-                            >{r.name}</Box>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 'none' }}>
-                              {canEdit ? (
-                                <IconButton
-                                  size="small"
-                                  onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleToggleFavorite(r); }}
-                                  aria-label={tr(r.favorite ? 'dashboard.unfavorite' : 'dashboard.favorite', { name: r.name })}
-                                  aria-pressed={r.favorite ?? false}
-                                  sx={{ color: r.favorite ? 'error.main' : t.faint, p: '2px' }}
-                                >
-                                  {r.favorite ? <Favorite sx={{ fontSize: 18 }} /> : <FavoriteBorder sx={{ fontSize: 18 }} />}
-                                </IconButton>
-                              ) : r.favorite ? (
-                                <Favorite role="img" aria-label={tr('dashboard.favorited')} sx={{ fontSize: 18, color: 'error.main' }} />
-                              ) : null}
-                            </Box>
-                          </Box>
-                          <Box sx={{ color: t.muted, fontSize: 13, mt: '4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                            <Box component="span">{r.meta}</Box>
-                            {(r.locations?.length ?? 0) > 1 && (
-                              <Box component="span" sx={{ fontSize: 11.5, color: t.faint }}>
-                                · {tr('dashboard.locationsCount', { count: r.locations?.length ?? 0 })}
-                              </Box>
-                            )}
-                            {(r.visitCount ?? 0) > 0 && (
-                              <Box component="span" sx={{ fontSize: 11.5, color: t.faint }}>
-                                · {tr('dashboard.visitsCount', { count: r.visitCount ?? 0 })}
-                              </Box>
-                            )}
-                          </Box>
-                          {r.comment?.trim() && (
-                            <Box
-                              sx={{
-                                mt: '10px',
-                                fontSize: 13.5,
-                                fontStyle: 'italic',
-                                color: t.muted,
-                                lineHeight: 1.4,
-                                display: '-webkit-box',
-                                WebkitLineClamp: 2,
-                                WebkitBoxOrient: 'vertical',
-                                overflow: 'hidden',
-                              }}
-                            >
-                              “{r.comment.trim()}”
-                            </Box>
-                          )}
-                          {((r.michelinStars ?? 0) > 0 || r.bibGourmand) && (
-                            <Box sx={{ display: 'flex', gap: '6px', mt: '6px', flexWrap: 'wrap' }}>
-                              {(r.michelinStars ?? 0) > 0 && (
-                                <Box
-                                  component="span"
-                                  sx={{ fontSize: 11, fontWeight: 600, color: t.accent, border: `1px solid ${t.accent}`, borderRadius: '999px', padding: '1px 8px' }}
-                                >
-                                  {'★'.repeat(r.michelinStars ?? 0)} {tr('dashboard.michelinChip')}
-                                </Box>
-                              )}
-                              {r.bibGourmand && (
-                                <Box
-                                  component="span"
-                                  sx={{ fontSize: 11, fontWeight: 600, color: t.accent, border: `1px solid ${t.accent}`, borderRadius: '999px', padding: '1px 8px' }}
-                                >
-                                  {tr('dashboard.bibGourmand')}
-                                </Box>
-                              )}
-                            </Box>
-                          )}
-                          <Box sx={{ mt: '11px', height: 18 }}>
-                            {r.rated ? (
-                              <Box component="span" sx={{ color: t.rating, fontSize: 15, letterSpacing: '2px' }}>{r.ratingStr}</Box>
-                            ) : (
-                              <Box component="span" sx={{ color: t.notRated, fontSize: 13, fontStyle: 'italic' }}>{tr('dashboard.notRated')}</Box>
-                            )}
-                          </Box>
-                          <CardReservations
-                            locations={r.locations ?? []}
-                            multi={(r.locations?.length ?? 0) > 1}
-                            tokens={t}
-                            tr={tr}
-                          />
-                        </Box>
-                      </Box>
+                        r={r}
+                        tokens={t}
+                        serifFont={serif}
+                        canEdit={canEdit}
+                        onView={handleViewRestaurant}
+                        onToggleStatus={handleToggleStatus}
+                        onToggleFavorite={handleToggleFavorite}
+                        onEdit={handleEditRestaurant}
+                        onDelete={handleDeleteClick}
+                      />
                     ))}
                   </Box>
                 </Box>
@@ -1650,15 +1539,13 @@ export default function Dashboard() {
                             </Box>
                           )}
                         </Box>
-                        <CardReservations
-                          locations={r.locations ?? []}
-                          multi={(r.locations?.length ?? 0) > 1}
-                          tokens={t}
-                          tr={tr}
-                          listMode
-                        />
+                        <Box sx={{ display: { xs: 'none', md: 'flex' }, flex: 'none' }}>
+                          <BookingPill locations={r.locations ?? []} tokens={t} />
+                        </Box>
                         <Box sx={{ width: 90, color: t.cost, fontSize: 14, fontWeight: 600, fontFamily: "'DM Mono',monospace", display: { xs: 'none', sm: 'block' } }}>{r.costStr}</Box>
-                        <Box sx={{ width: 110, color: t.rating, fontSize: 14, letterSpacing: '1px', display: { xs: 'none', sm: 'block' } }}>{r.ratingStr}</Box>
+                        <Box sx={{ width: 110, display: { xs: 'none', sm: 'block' } }}>
+                          {r.rated ? <Stars value={r.rating ?? 0} tokens={t} size={14} letterSpacing="1px" /> : null}
+                        </Box>
                         {canEdit ? (
                           <IconButton
                             size="small"
@@ -1999,114 +1886,5 @@ export default function Dashboard() {
         </Snackbar>
       </Box>
     </ThemeProvider>
-  );
-}
-
-/**
- * Reservation / walk-in info for a card, one entry per location. When a
- * restaurant has more than one location, each booking is prefixed with its
- * branch label so the buttons aren't ambiguous.
- */
-function CardReservations({
-  locations,
-  multi,
-  tokens: t,
-  tr,
-  listMode,
-}: {
-  locations: RestaurantLocation[];
-  multi: boolean;
-  tokens: (typeof listTokens)['light'];
-  tr: (key: string, opts?: Record<string, unknown>) => string;
-  listMode?: boolean;
-}) {
-  const booking = locations.filter(
-    (l) => l.reservationUrl || l.reservationPlatform === 'walkin'
-  );
-  if (booking.length === 0) return null;
-  return (
-    <Box
-      sx={{
-        display: listMode ? { xs: 'none', md: 'flex' } : 'flex',
-        flexDirection: 'column',
-        alignItems: 'flex-start',
-        gap: '6px',
-        mt: listMode ? 0 : '11px',
-        flex: listMode ? 'none' : undefined,
-      }}
-    >
-      {booking.map((l, i) => {
-        const prefix = multi && l.label?.trim() ? `${l.label.trim()}: ` : '';
-        if (l.reservationUrl) {
-          return (
-            <Button
-              key={i}
-              size="small"
-              variant="outlined"
-              component="a"
-              href={l.reservationUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e: React.MouseEvent) => e.stopPropagation()}
-              startIcon={<EventSeat sx={{ fontSize: 15 }} />}
-            >
-              {prefix}
-              {tr('dashboard.reserveOn', { platform: reservationLabel(l.reservationPlatform || '') })}
-            </Button>
-          );
-        }
-        return (
-          <Box
-            key={i}
-            component="span"
-            sx={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: 12.5, color: t.muted }}
-          >
-            <EventSeat sx={{ fontSize: 15 }} /> {prefix}
-            {tr('dashboard.walkinBadge')}
-          </Box>
-        );
-      })}
-    </Box>
-  );
-}
-
-/** Small circular hover action button used on cards and list rows. */
-function CardAction({
-  children,
-  label,
-  onClick,
-  tokens,
-  danger,
-  solid,
-}: {
-  children: React.ReactNode;
-  label: string;
-  onClick: () => void;
-  tokens: (typeof listTokens)['light'];
-  danger?: boolean;
-  solid?: boolean;
-}) {
-  return (
-    <IconButton
-      size="small"
-      aria-label={label}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-      sx={{
-        width: 28,
-        height: 28,
-        background: solid ? tokens.searchBg : 'rgba(255,255,255,0.9)',
-        border: `1px solid ${tokens.border}`,
-        color: danger ? '#C0492B' : tokens.chip,
-        '&:hover': {
-          background: solid ? tokens.pillBorder : '#fff',
-          color: danger ? '#C0492B' : tokens.accent,
-        },
-      }}
-    >
-      {children}
-    </IconButton>
   );
 }

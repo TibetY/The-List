@@ -170,6 +170,7 @@
     "deleteX": "Supprimer {{name}}",
     "loadingMap": "Chargement de la carte…",
     "reserveOn": "Réserver sur {{platform}}",
+    "bookOn": "Réserver · {{platform}}",
     "walkinBadge": "Sans réservation",
     "bibGourmand": "Bib Gourmand",
     "michelinChip": "Michelin",

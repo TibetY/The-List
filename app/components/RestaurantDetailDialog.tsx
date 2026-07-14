@@ -30,6 +30,7 @@ import { useTranslation } from 'react-i18next';
 import type { Restaurant } from '~/types/restaurant';
 import type { listTokens } from '~/listTheme';
 import RestaurantThumb from '~/components/RestaurantThumb';
+import Stars from '~/components/Stars';
 
 type Tokens = (typeof listTokens)['light'];
 
@@ -212,9 +213,7 @@ export default function RestaurantDetailDialog({
         {/* Rating */}
         <Box sx={{ mt: '8px', minHeight: 20 }}>
           {rating > 0 ? (
-            <Box component="span" sx={{ color: t.rating, fontSize: 17, letterSpacing: '2px' }}>
-              {'★'.repeat(rating)}{'☆'.repeat(5 - rating)}
-            </Box>
+            <Stars value={r.rating ?? 0} tokens={t} size={17} />
           ) : (
             <Box component="span" sx={{ color: t.notRated, fontSize: 13, fontStyle: 'italic' }}>
               {tr('detail.notRated')}
@@ -319,27 +318,30 @@ export default function RestaurantDetailDialog({
           </Tabs>
 
           <Box sx={{ pt: '14px' }}>
-            {tab === 'reservations' &&
-              (locations.length > 0 &&
-              (loc.address || loc.phone || loc.email || loc.reservationUrl || loc.reservationPlatform === 'walkin') ? (
+            {tab === 'reservations' && (
+              <Box>
+                {/* The location switcher lives OUTSIDE the has-details branch:
+                    selecting a detail-less branch must never remove the tabs
+                    (that trapped the user on the empty branch). */}
+                {locations.length > 1 && (
+                  <Tabs
+                    value={safeIdx}
+                    onChange={(_, v: number) => setActiveLoc(v)}
+                    variant="scrollable"
+                    scrollButtons="auto"
+                    sx={{ mb: '10px', minHeight: 36 }}
+                  >
+                    {locations.map((l, i) => (
+                      <Tab
+                        key={i}
+                        label={l.label?.trim() || tr('form.locationN', { n: i + 1 })}
+                        sx={{ minHeight: 36, textTransform: 'none', color: t.muted, '&.Mui-selected': { color: t.ink } }}
+                      />
+                    ))}
+                  </Tabs>
+                )}
+                {loc.address || loc.phone || loc.email || loc.reservationUrl || loc.reservationPlatform === 'walkin' ? (
                 <Box>
-                  {locations.length > 1 && (
-                    <Tabs
-                      value={safeIdx}
-                      onChange={(_, v: number) => setActiveLoc(v)}
-                      variant="scrollable"
-                      scrollButtons="auto"
-                      sx={{ mb: '10px', minHeight: 36 }}
-                    >
-                      {locations.map((l, i) => (
-                        <Tab
-                          key={i}
-                          label={l.label?.trim() || tr('form.locationN', { n: i + 1 })}
-                          sx={{ minHeight: 36, textTransform: 'none', color: t.muted, '&.Mui-selected': { color: t.ink } }}
-                        />
-                      ))}
-                    </Tabs>
-                  )}
                   {loc.address && (
                     <Box sx={{ mb: '10px' }}>
                       <Box component="span" sx={sectionLabel}>{tr('form.address')}</Box>
@@ -380,9 +382,11 @@ export default function RestaurantDetailDialog({
                     </Box>
                   )}
                 </Box>
-              ) : (
-                emptyTab(tr('detail.reservationsEmpty'))
-              ))}
+                ) : (
+                  emptyTab(tr('detail.reservationsEmpty'))
+                )}
+              </Box>
+            )}
 
             {tab === 'hours' && emptyTab(tr('detail.hoursEmpty'))}
 

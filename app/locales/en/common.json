@@ -170,6 +170,7 @@
     "deleteX": "Delete {{name}}",
     "loadingMap": "Loading map…",
     "reserveOn": "Reserve on {{platform}}",
+    "bookOn": "Book · {{platform}}",
     "walkinBadge": "Walk-ins welcome",
     "bibGourmand": "Bib Gourmand",
     "michelinChip": "Michelin",

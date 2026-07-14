@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Box, CircularProgress } from '@mui/material';
 import { NearMe } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +13,9 @@ interface NearbyAddsProps {
   tokens: Tokens;
   serifFont: string;
   onPick: (candidate: PlaceCandidate) => void;
+  /** Visibly blocks picks while the host is busy (e.g. onboarding mid-batch),
+   *  instead of silently dropping them. */
+  disabled?: boolean;
 }
 
 function initialOf(name: string): string {
@@ -31,10 +34,19 @@ function formatDistance(m: number | null | undefined): string {
  * them nearest-first with distance labels; tapping one adds it. Opt-in (we never
  * ask for location until the user taps), token-driven for both moods.
  */
-export default function NearbyAdds({ tokens: t, serifFont, onPick }: NearbyAddsProps) {
+export default function NearbyAdds({ tokens: t, serifFont, onPick, disabled }: NearbyAddsProps) {
   const { t: tr } = useTranslation();
   const [status, setStatus] = useState<Status>('idle');
   const [results, setResults] = useState<PlaceCandidate[]>([]);
+  // Geolocation + fetch resolve after the host dialog may have closed — never
+  // set state on an unmounted component.
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
 
   const request = () => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -44,22 +56,33 @@ export default function NearbyAdds({ tokens: t, serifFont, onPick }: NearbyAddsP
     setStatus('locating');
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
+        if (!alive.current) return;
         setStatus('loading');
         try {
           const res = await fetch(
             `/api/nearby-place?lat=${pos.coords.latitude}&lng=${pos.coords.longitude}`
           );
           const data = (await res.json()) as PlaceCandidate[];
+          if (!alive.current) return;
           const list = Array.isArray(data) ? data : [];
           setResults(list);
           setStatus(list.length ? 'ready' : 'empty');
         } catch {
-          setStatus('empty');
+          if (alive.current) setStatus('empty');
         }
       },
-      () => setStatus('denied'),
+      () => {
+        if (alive.current) setStatus('denied');
+      },
       { enableHighAccuracy: true, timeout: 8000 }
     );
+  };
+
+  // Picking removes the row (prevents accidental double-adds of the same place).
+  const pick = (c: PlaceCandidate) => {
+    if (disabled) return;
+    setResults((prev) => prev.filter((x) => x !== c));
+    onPick(c);
   };
 
   const heading = (
@@ -74,6 +97,7 @@ export default function NearbyAdds({ tokens: t, serifFont, onPick }: NearbyAddsP
       <Box
         component="button"
         type="button"
+        disabled={disabled}
         onClick={request}
         sx={{
           display: 'inline-flex',
@@ -128,12 +152,13 @@ export default function NearbyAdds({ tokens: t, serifFont, onPick }: NearbyAddsP
           <Box
             key={`${c.name}-${c.lat}-${c.lng}-${i}`}
             role="button"
-            tabIndex={0}
-            onClick={() => onPick(c)}
+            tabIndex={disabled ? -1 : 0}
+            aria-disabled={disabled || undefined}
+            onClick={() => pick(c)}
             onKeyDown={(e: React.KeyboardEvent) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                onPick(c);
+                pick(c);
               }
             }}
             sx={{
@@ -141,9 +166,10 @@ export default function NearbyAdds({ tokens: t, serifFont, onPick }: NearbyAddsP
               alignItems: 'center',
               gap: '12px',
               padding: '10px 14px',
-              cursor: 'pointer',
+              cursor: disabled ? 'default' : 'pointer',
+              opacity: disabled ? 0.55 : 1,
               borderBottom: i === results.length - 1 ? 'none' : `1px solid ${t.borderSoft}`,
-              '&:hover': { background: t.searchBg },
+              '&:hover': disabled ? {} : { background: t.searchBg },
             }}
           >
             <Box sx={{ width: 34, height: 34, borderRadius: '9px', flex: 'none' }}>

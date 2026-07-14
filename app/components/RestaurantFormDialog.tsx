@@ -189,6 +189,27 @@ export default function RestaurantFormDialog({
   // Price has a default ($$), so only autofill it if the user hasn't chosen one.
   const priceTouched = useRef(false);
 
+  // FRESH mirrors of the async-read state. The enrichment chain (candidate pick
+  // → lookup → scrape) resolves long after the render it was started from, so
+  // its "fill only if blank" guards must never read the render-time closures —
+  // stale-empty guards let a later, coarser result overwrite a candidate's
+  // precise values (address/placeTypes/url). Refs update after every commit.
+  const formDataRef = useRef(formData);
+  useEffect(() => {
+    formDataRef.current = formData;
+  }, [formData]);
+  const locationsRef = useRef(locations);
+  useEffect(() => {
+    locationsRef.current = locations;
+  }, [locations]);
+  const imageRef = useRef({ preview: '', hasFile: false });
+  useEffect(() => {
+    imageRef.current = { preview: imagePreview, hasFile: Boolean(imageFile) };
+  }, [imagePreview, imageFile]);
+  // URLs already scraped this dialog session — the automatic cascade must never
+  // fetch the same site twice (user-initiated blurs bypass this via `force`).
+  const scrapedUrls = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     if (restaurant) {
       setFormData({
@@ -242,6 +263,7 @@ export default function RestaurantFormDialog({
     setHighlighted(new Set());
     if (highlightTimer.current) clearTimeout(highlightTimer.current);
     priceTouched.current = false;
+    scrapedUrls.current = new Set();
     setImageFile(undefined);
   }, [restaurant, open]);
 
@@ -308,17 +330,21 @@ export default function RestaurantFormDialog({
     setResFetching(false);
   };
 
-  /** Fill blank brand/location fields from a scrape result (never overwrites). */
+  /** Fill blank brand/location fields from a scrape result (never overwrites).
+   *  All "is it blank?" guards read the FRESH refs, never the render closure —
+   *  this runs after async work, by which time a picked candidate may already
+   *  have filled the very fields a stale check would consider empty. */
   const applyScrape = (data: ScrapeData) => {
     const filled: string[] = [];
-    if (data.cuisineType && !formData.cuisineType) {
+    const fresh = formDataRef.current;
+    if (data.cuisineType && !fresh.cuisineType) {
       setFormData((prev) => ({ ...prev, cuisineType: prev.cuisineType || data.cuisineType || '' }));
       if (cuisineTypes.includes(data.cuisineType)) setCuisineChoice(data.cuisineType);
       filled.push('cuisine');
     }
 
     // Per-location enrichment targets the active location, filling only blanks.
-    const active = locations[activeLocation] ?? {};
+    const active = locationsRef.current[activeLocation] ?? {};
     const patch: Partial<RestaurantLocation> = {};
     if (!active.address && data.address) patch.address = data.address;
     if (!active.email && data.email) patch.email = data.email;
@@ -338,7 +364,7 @@ export default function RestaurantFormDialog({
       if (patch.reservationUrl) filled.push(`reservation@${activeLocation}`);
     }
 
-    if (data.image && !imagePreview && !imageFile) {
+    if (data.image && !imageRef.current.preview && !imageRef.current.hasFile) {
       setImagePreview(data.image);
       setFormData((prev) => ({ ...prev, image: data.image ?? undefined }));
       filled.push('image');
@@ -346,7 +372,7 @@ export default function RestaurantFormDialog({
 
     // Social links — fill each blank platform from the scrape.
     if (data.socialMedia) {
-      const current: SocialMediaLinks = formData.socialMedia ?? {};
+      const current: SocialMediaLinks = fresh.socialMedia ?? {};
       const patchSocial: Record<string, string> = {};
       for (const p of SOCIAL_PLATFORMS) {
         const found = data.socialMedia[p];
@@ -356,22 +382,26 @@ export default function RestaurantFormDialog({
         }
       }
       if (Object.keys(patchSocial).length > 0) {
-        setFormData((prev) => ({ ...prev, socialMedia: { ...prev.socialMedia, ...patchSocial } }));
+        setFormData((prev) => ({
+          ...prev,
+          // Fresh-guard again inside the updater: never replace an existing link.
+          socialMedia: { ...patchSocial, ...Object.fromEntries(Object.entries(prev.socialMedia ?? {}).filter(([, v]) => v)) },
+        }));
       }
     }
 
     // Price — only when the user hasn't set one (default is "$$").
-    if (data.priceRange && !priceTouched.current && data.priceRange !== formData.priceRange) {
+    if (data.priceRange && !priceTouched.current && data.priceRange !== fresh.priceRange) {
       setFormData((prev) => ({ ...prev, priceRange: data.priceRange ?? prev.priceRange }));
       filled.push('price');
     }
 
     // Michelin / Bib — only fill from a "none" state (0 stars / not a bib).
-    if (data.michelinStars && !formData.michelinStars) {
-      setFormData((prev) => ({ ...prev, michelinStars: data.michelinStars ?? 0 }));
+    if (data.michelinStars && !fresh.michelinStars) {
+      setFormData((prev) => ({ ...prev, michelinStars: prev.michelinStars || (data.michelinStars ?? 0) }));
       filled.push('michelin');
     }
-    if (data.bibGourmand && !formData.bibGourmand) {
+    if (data.bibGourmand && !fresh.bibGourmand) {
       setFormData((prev) => ({ ...prev, bibGourmand: true }));
       filled.push('michelin');
     }
@@ -381,17 +411,20 @@ export default function RestaurantFormDialog({
 
   /** Scrape a website URL and fill blanks. Takes an explicit URL so it can be
    *  called both from the website field's blur and from the name+address lookup
-   *  chain (where the URL was just discovered and isn't in state yet). */
-  const runScrape = async (rawUrl: string, reservationHint?: string) => {
+   *  chain (where the URL was just discovered and isn't in state yet). The
+   *  automatic cascade is deduped per URL; user-initiated blurs pass `force`. */
+  const runScrape = async (rawUrl: string, opts?: { force?: boolean }) => {
     const url = rawUrl.trim();
     if (!url || !/^https?:\/\/.+/i.test(url)) return;
+    if (!opts?.force && scrapedUrls.current.has(url)) return;
+    scrapedUrls.current.add(url);
 
     setFetchingInfo(true);
     setScrapeStatus('idle');
     try {
       // Pass the active location's reservation link so the server can fill gaps
       // from it even when the site itself doesn't link to it.
-      const activeRes = (reservationHint ?? locations[activeLocation]?.reservationUrl ?? '').trim();
+      const activeRes = (locationsRef.current[activeLocation]?.reservationUrl ?? '').trim();
       const qs =
         `url=${encodeURIComponent(url)}` +
         (activeRes ? `&reservation=${encodeURIComponent(activeRes)}` : '');
@@ -416,25 +449,35 @@ export default function RestaurantFormDialog({
     }
   };
 
-  const handleWebsiteBlur = () => runScrape(formData.url ?? '');
+  // A blur is a user action — always allowed to (re-)fetch.
+  const handleWebsiteBlur = () => runScrape(formData.url ?? '', { force: true });
 
   /** Fill blanks from a name+address lookup, then chain the website scrape if a
-   *  site was discovered (for the photo + reservation link). */
+   *  site was discovered (for the photo + reservation link). Guards read the
+   *  fresh refs and updaters fill-only-if-blank, so a candidate's richer values
+   *  are never replaced by this later, coarser result. */
   const applyLookup = (data: LookupData) => {
     applyScrape(data);
     const filled: string[] = [];
-    if (data.placeTypes && data.placeTypes.length > 0 && !(formData.placeTypes?.length)) {
-      setFormData((prev) => ({ ...prev, placeTypes: data.placeTypes ?? [] }));
+    const fresh = formDataRef.current;
+    if (data.placeTypes && data.placeTypes.length > 0 && !(fresh.placeTypes?.length)) {
+      setFormData((prev) => ({
+        ...prev,
+        placeTypes: prev.placeTypes?.length ? prev.placeTypes : data.placeTypes ?? [],
+      }));
       filled.push('placeTypes');
     }
-    if (data.dietaryTags && data.dietaryTags.length > 0 && !(formData.dietaryTags?.length)) {
-      setFormData((prev) => ({ ...prev, dietaryTags: data.dietaryTags ?? [] }));
+    if (data.dietaryTags && data.dietaryTags.length > 0 && !(fresh.dietaryTags?.length)) {
+      setFormData((prev) => ({
+        ...prev,
+        dietaryTags: prev.dietaryTags?.length ? prev.dietaryTags : data.dietaryTags ?? [],
+      }));
       filled.push('dietary');
     }
-    if (data.website && !formData.url?.trim()) {
-      setFormData((prev) => ({ ...prev, url: data.website ?? '' }));
+    if (data.website && !fresh.url?.trim()) {
+      setFormData((prev) => ({ ...prev, url: prev.url?.trim() ? prev.url : data.website ?? '' }));
       filled.push('website');
-      runScrape(data.website);
+      runScrape(data.website); // deduped if the candidate's site was already scraped
     }
     markFilled(filled);
   };
@@ -472,8 +515,8 @@ export default function RestaurantFormDialog({
   };
 
   const handlePlaceLookup = async (nameArg?: string, addressArg?: string) => {
-    const name = (nameArg ?? formData.name ?? '').trim();
-    const address = (addressArg ?? locations[activeLocation]?.address ?? '').trim();
+    const name = (nameArg ?? formDataRef.current.name ?? '').trim();
+    const address = (addressArg ?? locationsRef.current[activeLocation]?.address ?? '').trim();
     if (!name || !address) return;
     const key = `${name}|${address}`.toLowerCase();
     if (lookedUpKey.current === key) return; // already looked this up
@@ -699,6 +742,7 @@ export default function RestaurantFormDialog({
                 serifFont={serifFont}
                 onPick={applyCandidate}
                 placeholder={t('search.placeholder')}
+                clearOnPick
               />
               <Box sx={{ mt: 1.5 }}>
                 <NearbyAdds tokens={tokens} serifFont={serifFont} onPick={applyCandidate} />

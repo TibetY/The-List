@@ -87,11 +87,12 @@ const FOOD_TYPES = new Set([
 function isFoodVenue(place: NominatimPlace): boolean {
   const type = (place.type ?? '').toLowerCase();
   // `amenity`/`shop` come back as the jsonv2 `category`; the specific value is
-  // `type`. Accept the known food/drink types; be lenient when category is
-  // amenity and the type is unknown but there's a food-ish tag.
+  // `type`. Accept the known food/drink types; be lenient when the category is
+  // amenity and the type is unknown but a cuisine tag is declared — but never
+  // for other categories (a shop=convenience or a road can carry a cuisine tag).
   if (FOOD_TYPES.has(type)) return true;
-  const tags = place.extratags ?? {};
-  return Boolean(tags.cuisine);
+  const category = (place.category ?? '').toLowerCase();
+  return category === 'amenity' && Boolean(place.extratags?.cuisine);
 }
 
 function toCandidate(place: NominatimPlace): PlaceCandidate | null {
