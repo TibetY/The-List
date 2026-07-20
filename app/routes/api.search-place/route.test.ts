@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parsePlaceCandidates } from '~/routes/api.search-place/route';
+import { parsePlaceCandidates, parsePhotonCandidates } from '~/routes/api.search-place/route';
 
 // Representative jsonv2 rows from Nominatim (trimmed to the fields we read).
 const restaurantRow = {
@@ -71,5 +71,55 @@ describe('parsePlaceCandidates', () => {
     expect(bar.placeTypes).toEqual(['Bar']);
     expect(bar.cuisineType).toBeNull();
     expect(bar.website).toBeNull();
+  });
+});
+
+describe('parsePhotonCandidates', () => {
+  const photon = {
+    features: [
+      {
+        geometry: { coordinates: [-122.4194, 37.7749] },
+        properties: {
+          name: 'Zuni Café',
+          osm_key: 'amenity',
+          osm_value: 'restaurant',
+          housenumber: '1658',
+          street: 'Market Street',
+          city: 'San Francisco',
+          state: 'California',
+          country: 'United States',
+        },
+      },
+      // duplicate (same name + city) — must be deduped
+      {
+        geometry: { coordinates: [-122.42, 37.775] },
+        properties: { name: 'Zuni Café', osm_key: 'amenity', osm_value: 'restaurant', city: 'San Francisco' },
+      },
+      // non-food (a street named after a café) — must be dropped
+      {
+        geometry: { coordinates: [2.35, 48.85] },
+        properties: { name: 'Rue du Café', osm_key: 'highway', osm_value: 'residential', city: 'Paris' },
+      },
+      {
+        geometry: { coordinates: [2.37, 48.86] },
+        properties: { name: 'Du Pain et des Idées', osm_key: 'shop', osm_value: 'bakery', city: 'Paris', country: 'France' },
+      },
+    ],
+  };
+
+  it('returns [] for malformed input', () => {
+    expect(parsePhotonCandidates(null)).toEqual([]);
+    expect(parsePhotonCandidates({})).toEqual([]);
+  });
+
+  it('maps, filters, and dedupes Photon features', () => {
+    const out = parsePhotonCandidates(photon);
+    expect(out.map((c) => c.name)).toEqual(['Zuni Café', 'Du Pain et des Idées']);
+    const [zuni, bakery] = out;
+    expect(zuni.address).toBe('1658 Market Street, San Francisco, California, United States');
+    expect(zuni.lat).toBeCloseTo(37.7749);
+    expect(zuni.lng).toBeCloseTo(-122.4194);
+    expect(zuni.placeTypes).toEqual(['Restaurant']);
+    expect(bakery.placeTypes).toEqual(['Bakery']);
   });
 });

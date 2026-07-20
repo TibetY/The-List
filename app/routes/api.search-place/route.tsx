@@ -7,26 +7,71 @@ export type { PlaceCandidate };
 const FETCH_TIMEOUT_MS = 6000;
 const MAX_RESULTS = 6;
 
+/** The OSM amenity/shop tags Photon is asked to prefilter to (OR'd). */
+const PHOTON_TAG_FILTERS = [
+  'amenity:restaurant',
+  'amenity:cafe',
+  'amenity:bar',
+  'amenity:pub',
+  'amenity:fast_food',
+  'amenity:biergarten',
+  'amenity:food_court',
+  'amenity:ice_cream',
+  'shop:bakery',
+];
+
 /**
- * Search for restaurant/bar/cafe candidates by free-text query (name, or name +
- * city) using OpenStreetMap Nominatim. Mirrors /api/lookup-place: runs
- * server-side with the descriptive User-Agent Nominatim's policy requires, uses a
- * short timeout, and NEVER throws — any miss/error yields `[]` so the add flow
- * degrades gracefully. Returns up to MAX_RESULTS ranked candidates (Nominatim
- * orders by importance). The client seeds the form from a chosen candidate and
- * then passes its website to /api/scrape-website (where the SSRF guard lives).
+ * Search for restaurant/bar/cafe candidates by free-text query. Primary source
+ * is **Photon** (photon.komoot.io) — an OSM search built for autocomplete, with
+ * typo-tolerant prefix matching, which is far stronger for venue NAMES than
+ * Nominatim's address-geocoder search. When Photon errors or finds nothing, we
+ * fall back to the original Nominatim query. Both paths run server-side with a
+ * short timeout and NEVER throw — any miss yields `[]` so the add flow degrades
+ * gracefully. The client seeds the form from a chosen candidate and then runs
+ * the lookup + scrape chain (which discovers websites; /api/scrape-website
+ * carries the SSRF guard).
  */
 export async function loader({ request }: LoaderFunctionArgs) {
   const params = new URL(request.url).searchParams;
   const query = (params.get('query') ?? '').trim();
   const lang = params.get('lang') ?? 'en';
-  // Too-short queries just waste a Nominatim call and return noise.
+  // Too-short queries just waste an upstream call and return noise.
   if (query.length < 2) return json<PlaceCandidate[]>([]);
 
+  const photon = await searchPhoton(query, lang);
+  if (photon.length > 0) return json<PlaceCandidate[]>(photon);
+  return json<PlaceCandidate[]>(await searchNominatim(query, lang));
+}
+
+/** Photon query (never throws). */
+async function searchPhoton(query: string, lang: string): Promise<PlaceCandidate[]> {
+  // Photon only supports a handful of languages; anything else falls back to
+  // its default rather than erroring.
+  const langParam = ['en', 'fr', 'de'].includes(lang) ? `&lang=${lang}` : '';
+  const tagParams = PHOTON_TAG_FILTERS.map((t) => `&osm_tag=${encodeURIComponent(t)}`).join('');
+  const target =
+    `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}` +
+    `&limit=${MAX_RESULTS}${langParam}${tagParams}`;
+  try {
+    const res = await fetch(target, {
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'TheFoodiedex/1.0 (restaurant list app)',
+      },
+    });
+    if (!res.ok) return [];
+    return parsePhotonCandidates(await res.json());
+  } catch {
+    return [];
+  }
+}
+
+/** Original Nominatim query, kept as the fallback (never throws). */
+async function searchNominatim(query: string, lang: string): Promise<PlaceCandidate[]> {
   const target =
     `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=${MAX_RESULTS}` +
     `&extratags=1&addressdetails=1&namedetails=1&q=${encodeURIComponent(query)}`;
-
   try {
     const res = await fetch(target, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
@@ -36,12 +81,66 @@ export async function loader({ request }: LoaderFunctionArgs) {
         'User-Agent': 'TheFoodiedex/1.0 (restaurant list app)',
       },
     });
-    if (!res.ok) return json<PlaceCandidate[]>([]);
-    const data = await res.json();
-    return json<PlaceCandidate[]>(parsePlaceCandidates(data));
+    if (!res.ok) return [];
+    return parsePlaceCandidates(await res.json());
   } catch {
-    return json<PlaceCandidate[]>([]);
+    return [];
   }
+}
+
+interface PhotonFeature {
+  geometry?: { coordinates?: [number, number] } | null;
+  properties?: {
+    name?: string;
+    osm_key?: string;
+    osm_value?: string;
+    housenumber?: string;
+    street?: string;
+    city?: string;
+    state?: string;
+    country?: string;
+  } | null;
+}
+
+/**
+ * Map a Photon GeoJSON response into ranked candidates, keeping only food/drink
+ * venues. Exported for unit tests. Photon carries no cuisine/website tags — the
+ * client's lookup + scrape chain fills those after a pick.
+ */
+export function parsePhotonCandidates(data: unknown): PlaceCandidate[] {
+  const features =
+    data && typeof data === 'object' && Array.isArray((data as { features?: unknown }).features)
+      ? ((data as { features: PhotonFeature[] }).features)
+      : [];
+  const seen = new Set<string>();
+  const out: PlaceCandidate[] = [];
+  for (const f of features) {
+    const p = f.properties ?? {};
+    const name = p.name?.trim();
+    if (!name) continue;
+    const key = (p.osm_key ?? '').toLowerCase();
+    const value = (p.osm_value ?? '').toLowerCase();
+    const isFood =
+      (key === 'amenity' && FOOD_TYPES.has(value)) || (key === 'shop' && value === 'bakery');
+    if (!isFood) continue;
+    const [lng, lat] = f.geometry?.coordinates ?? [];
+    const streetLine = [p.housenumber, p.street].filter(Boolean).join(' ');
+    const address = [streetLine, p.city, p.state, p.country].filter(Boolean).join(', ');
+    const dedupeKey = `${name.toLowerCase()}|${(p.city ?? '').toLowerCase()}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    out.push({
+      name,
+      address,
+      lat: typeof lat === 'number' ? lat : null,
+      lng: typeof lng === 'number' ? lng : null,
+      cuisineType: null,
+      placeTypes: value === 'bakery' ? ['Bakery'] : mapPlaceTypes({ type: value }),
+      website: null,
+    });
+    if (out.length >= MAX_RESULTS) break;
+  }
+  return out;
 }
 
 /**
