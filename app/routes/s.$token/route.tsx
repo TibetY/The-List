@@ -311,7 +311,9 @@ export default function SharedListPage() {
               aria-label={tr('dashboard.searchLabel')}
               sx={{
                 background: t.searchBg, border: `1px solid ${t.border}`, borderRadius: '999px',
-                padding: '8px 16px', color: t.ink, fontFamily: "'DM Sans',sans-serif", fontSize: '13.5px',
+                padding: '8px 16px', color: t.ink, fontFamily: "'DM Sans',sans-serif",
+                // ≥16px on phones — iOS auto-zooms on smaller inputs.
+                fontSize: { xs: '16px', sm: '13.5px' },
                 outline: 'none', minWidth: { xs: '100%', sm: 200 }, '::placeholder': { color: t.faint },
               }}
             />

@@ -240,6 +240,7 @@
   "form": {
     "editTitle": "Modifier le restaurant",
     "addTitle": "Ajouter un restaurant",
+    "addManually": "Ou saisir les détails manuellement",
     "close": "Fermer la fenêtre",
     "name": "Nom du restaurant",
     "address": "Adresse",
