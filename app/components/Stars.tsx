@@ -20,7 +20,12 @@ interface StarsProps {
 export default function Stars({ value, tokens: t, size = 15, letterSpacing = '2px' }: StarsProps) {
   const clamped = Math.max(0, Math.min(5, value || 0));
   const pct = (clamped / 5) * 100;
+  // Both layers are display:block so neither participates in the surrounding
+  // baseline/line-height layout — an inline base layer gets pushed down by the
+  // parent's half-leading while the absolute overlay stays at top:0, which made
+  // the filled stars ride higher than the base row.
   const layer = {
+    display: 'block' as const,
     fontSize: size,
     letterSpacing,
     lineHeight: 1,
@@ -31,7 +36,7 @@ export default function Stars({ value, tokens: t, size = 15, letterSpacing = '2p
       component="span"
       role="img"
       aria-label={`${clamped} / 5`}
-      sx={{ position: 'relative', display: 'inline-block' }}
+      sx={{ position: 'relative', display: 'inline-block', verticalAlign: 'middle' }}
     >
       <Box component="span" aria-hidden sx={{ ...layer, color: t.notRated }}>
         ★★★★★
