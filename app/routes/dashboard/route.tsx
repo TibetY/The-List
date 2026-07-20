@@ -350,6 +350,7 @@ export default function Dashboard() {
     }
   }, [urlQ]);
   const cuisineFilter = searchParams.get('cuisine') ?? '';
+  const cityFilter = searchParams.get('city') ?? '';
   const costFilter = searchParams.get('cost') ?? '';
   const ratingFilter = Math.min(5, Math.max(0, Math.floor(Number(searchParams.get('rating')) || 0)));
   // Multi-select facets are comma-joined; memoize on the raw string so the array
@@ -389,6 +390,8 @@ export default function Dashboard() {
     updateFilterParams((p) => setOrDelete(p, 'status', v === 'all' ? '' : v));
   const setCuisineFilter = (v: string) =>
     updateFilterParams((p) => setOrDelete(p, 'cuisine', v));
+  const setCityFilter = (v: string) =>
+    updateFilterParams((p) => setOrDelete(p, 'city', v));
   const setCostFilter = (v: string) =>
     updateFilterParams((p) => setOrDelete(p, 'cost', v));
   const setRatingFilter = (v: number) =>
@@ -503,6 +506,11 @@ export default function Dashboard() {
       ).sort((a, b) => a.length - b.length),
     [restaurants]
   );
+  // Cities come from the decorated rows (heuristic, derived from addresses).
+  const cityOptions = useMemo(
+    () => Array.from(new Set(decorated.map((r) => r.city).filter(Boolean) as string[])).sort(),
+    [decorated]
+  );
   // Distinct multi-select facet values actually present in this list.
   const placeOptions = useMemo(
     () => Array.from(new Set(restaurants.flatMap((r) => r.placeTypes ?? []))).sort(),
@@ -530,6 +538,7 @@ export default function Dashboard() {
         r.cuisine.toLowerCase().includes(q) ||
         r.comment?.toLowerCase().includes(q);
       const matchesCuisine = !cuisineFilter || r.cuisineType === cuisineFilter;
+      const matchesCity = !cityFilter || r.city === cityFilter;
       const matchesCost = !costFilter || r.priceRange === costFilter;
       const matchesRating = ratingFilter === 0 || (r.rating ?? 0) >= ratingFilter;
       // AND within a facet: a place must carry every selected tag.
@@ -540,6 +549,7 @@ export default function Dashboard() {
         matchesStatus &&
         matchesSearch &&
         matchesCuisine &&
+        matchesCity &&
         matchesCost &&
         matchesRating &&
         matchesPlace &&
@@ -547,7 +557,7 @@ export default function Dashboard() {
         matchesMenu
       );
     });
-  }, [decorated, filter, searchQuery, cuisineFilter, costFilter, ratingFilter, placeFilter, dietFilter, menuFilter]);
+  }, [decorated, filter, searchQuery, cuisineFilter, cityFilter, costFilter, ratingFilter, placeFilter, dietFilter, menuFilter]);
 
   // Apply the chosen sort to the filtered set (order-independent metrics like
   // counts still read from `filtered`).
@@ -587,6 +597,7 @@ export default function Dashboard() {
     filter !== 'all' ||
     !!searchQuery ||
     !!cuisineFilter ||
+    !!cityFilter ||
     !!costFilter ||
     ratingFilter > 0 ||
     placeFilter.length > 0 ||
@@ -1328,6 +1339,7 @@ export default function Dashboard() {
             <FilterSheet
               tokens={t}
               cuisineOptions={cuisineOptions}
+              cityOptions={cityOptions}
               costOptions={costOptions}
               placeOptions={placeOptions}
               dietOptions={dietOptions}
@@ -1335,6 +1347,8 @@ export default function Dashboard() {
               sortModes={SORT_MODES}
               cuisineFilter={cuisineFilter}
               setCuisineFilter={setCuisineFilter}
+              cityFilter={cityFilter}
+              setCityFilter={setCityFilter}
               costFilter={costFilter}
               setCostFilter={setCostFilter}
               ratingFilter={ratingFilter}

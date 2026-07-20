@@ -12,7 +12,6 @@ import type { DecoratedRestaurant } from '~/utils/decorateRestaurant';
 import type { listTokens } from '~/listTheme';
 import RestaurantThumb from '~/components/RestaurantThumb';
 import Stars from '~/components/Stars';
-import { cityFromAddress } from '~/utils/foodStats';
 
 type Tokens = (typeof listTokens)['light'];
 
@@ -72,8 +71,7 @@ export default function PlaceCard({
   const { t: tr } = useTranslation();
 
   const metaParts: string[] = [tr(`cuisines.${r.cuisine}`, r.cuisine)];
-  const city = cityFromAddress((r.locations ?? []).find((l) => l.address?.trim())?.address);
-  if (city) metaParts.push(city);
+  if (r.city) metaParts.push(r.city);
   if ((r.visitCount ?? 0) > 0) metaParts.push(tr('dashboard.visitsCount', { count: r.visitCount ?? 0 }));
   if ((r.locations?.length ?? 0) > 1) metaParts.push(tr('dashboard.locationsCount', { count: r.locations?.length ?? 0 }));
   if ((r.michelinStars ?? 0) > 0) metaParts.push(`${'★'.repeat(r.michelinStars ?? 0)} ${tr('dashboard.michelinChip')}`);

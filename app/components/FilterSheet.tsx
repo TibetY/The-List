@@ -10,6 +10,7 @@ type MultiSetter = (updater: string[] | ((prev: string[]) => string[])) => void;
 interface FilterSheetProps {
   tokens: Tokens;
   cuisineOptions: string[];
+  cityOptions: string[];
   costOptions: string[];
   placeOptions: string[];
   dietOptions: string[];
@@ -17,6 +18,8 @@ interface FilterSheetProps {
   sortModes: readonly string[];
   cuisineFilter: string;
   setCuisineFilter: (v: string) => void;
+  cityFilter: string;
+  setCityFilter: (v: string) => void;
   costFilter: string;
   setCostFilter: (v: string) => void;
   ratingFilter: number;
@@ -54,6 +57,7 @@ export default function FilterSheet(props: FilterSheetProps) {
 
   const activeCount =
     (props.cuisineFilter ? 1 : 0) +
+    (props.cityFilter ? 1 : 0) +
     (props.costFilter ? 1 : 0) +
     (props.ratingFilter ? 1 : 0) +
     (props.placeFilter.length ? 1 : 0) +
@@ -131,6 +135,20 @@ export default function FilterSheet(props: FilterSheetProps) {
           {props.cuisineOptions.map((c) => (
             <Box component="button" key={c} type="button" onClick={() => props.setCuisineFilter(c)} sx={pillSx(props.cuisineFilter === c)}>
               {tr(`cuisines.${c}`, c)}
+            </Box>
+          ))}
+        </Section>
+      )}
+
+      {/* City */}
+      {props.cityOptions.length > 0 && (
+        <Section tokens={t} label={tr('dashboard.city')}>
+          <Box component="button" type="button" onClick={() => props.setCityFilter('')} sx={pillSx(!props.cityFilter)}>
+            {tr('dashboard.anyCity')}
+          </Box>
+          {props.cityOptions.map((c) => (
+            <Box component="button" key={c} type="button" onClick={() => props.setCityFilter(c)} sx={pillSx(props.cityFilter === c)}>
+              {c}
             </Box>
           ))}
         </Section>
