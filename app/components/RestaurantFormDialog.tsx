@@ -120,6 +120,15 @@ function isValidOptionalUrl(value: string | undefined): boolean {
   return !value?.trim() || /^https?:\/\/.+/i.test(value.trim());
 }
 
+/** Users type "restaurant.com" — prepend https:// to scheme-less domain-ish
+ *  input instead of rejecting it. Anything else is returned untouched. */
+function normalizeUrlInput(value: string | undefined): string {
+  const v = (value ?? '').trim();
+  if (!v || /^https?:\/\//i.test(v)) return v;
+  if (/^[\w-]+(\.[\w-]+)+([/?#].*)?$/i.test(v)) return `https://${v}`;
+  return v;
+}
+
 /** Optional email field: blank is fine, otherwise it must look like an email. */
 function isValidOptionalEmail(value: string | undefined): boolean {
   return !value?.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
@@ -449,8 +458,15 @@ export default function RestaurantFormDialog({
     }
   };
 
-  // A blur is a user action — always allowed to (re-)fetch.
-  const handleWebsiteBlur = () => runScrape(formData.url ?? '', { force: true });
+  // A blur is a user action — always allowed to (re-)fetch. Scheme-less input
+  // ("restaurant.com") is normalized to https:// before validation/scraping.
+  const handleWebsiteBlur = () => {
+    const normalized = normalizeUrlInput(formData.url);
+    if (normalized !== formData.url) {
+      setFormData((prev) => ({ ...prev, url: normalizeUrlInput(prev.url) }));
+    }
+    runScrape(normalized, { force: true });
+  };
 
   /** Fill blanks from a name+address lookup, then chain the website scrape if a
    *  site was discovered (for the photo + reservation link). Guards read the
@@ -544,9 +560,12 @@ export default function RestaurantFormDialog({
     }
   };
 
-  /** Scrape a reservation link directly to fill in any details we still miss. */
+  /** Scrape a reservation link directly to fill in any details we still miss.
+   *  Scheme-less input is normalized to https:// first. */
   const handleReservationBlur = async () => {
-    const resUrl = (locations[activeLocation]?.reservationUrl ?? '').trim();
+    const raw = (locationsRef.current[activeLocation]?.reservationUrl ?? '').trim();
+    const resUrl = normalizeUrlInput(raw);
+    if (resUrl !== raw) updateActiveLocation({ reservationUrl: resUrl });
     if (!resUrl || !/^https?:\/\/.+/i.test(resUrl)) {
       setResScrapeStatus('idle');
       return;
@@ -641,13 +660,22 @@ export default function RestaurantFormDialog({
     if (!formData.name?.trim()) {
       return;
     }
-    // Block obviously-malformed URLs/emails so we don't persist junk. The website
-    // field shows its own error; for a bad location field, jump to that tab so
-    // the inline error is visible.
-    if (!isValidOptionalUrl(formData.url)) {
+    // Normalize scheme-less URLs first (a keyboard submit can skip the blur
+    // handlers), then block obviously-malformed URLs/emails so we don't persist
+    // junk. The website field shows its own error; for a bad location field,
+    // jump to that tab so the inline error is visible.
+    const normalizedUrl = normalizeUrlInput(formData.url);
+    const normalizedLocations = locations.map((l) => ({
+      ...l,
+      reservationUrl: normalizeUrlInput(l.reservationUrl),
+    }));
+    if (normalizedUrl !== formData.url) {
+      setFormData((prev) => ({ ...prev, url: normalizeUrlInput(prev.url) }));
+    }
+    if (!isValidOptionalUrl(normalizedUrl)) {
       return;
     }
-    const badLocation = locations.findIndex(
+    const badLocation = normalizedLocations.findIndex(
       (l) => !isValidOptionalUrl(l.reservationUrl) || !isValidOptionalEmail(l.email)
     );
     if (badLocation >= 0) {
@@ -658,7 +686,7 @@ export default function RestaurantFormDialog({
     setLoading(true);
     try {
       // Keep been-status and visit count consistent regardless of edit path.
-      const payload: Partial<Restaurant> = { ...formData, locations };
+      const payload: Partial<Restaurant> = { ...formData, url: normalizedUrl, locations: normalizedLocations };
       if ((payload.visitCount ?? 0) >= 1) {
         payload.status = 'been';
       } else if (payload.status === 'been') {
