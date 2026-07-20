@@ -1297,7 +1297,8 @@ export default function Dashboard() {
                 background: 'transparent',
                 color: t.ink,
                 fontFamily: "'DM Sans',sans-serif",
-                fontSize: '14px',
+                // ≥16px so iOS doesn't auto-zoom (and stay zoomed) on focus.
+                fontSize: '16px',
                 width: '100%',
                 '::placeholder': { color: t.faint },
               }}

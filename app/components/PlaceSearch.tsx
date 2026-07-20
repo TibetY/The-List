@@ -156,7 +156,8 @@ export default function PlaceSearch({
             background: 'transparent',
             color: t.ink,
             fontFamily: "'DM Sans',sans-serif",
-            fontSize: '15px',
+            // ≥16px on phones — iOS auto-zooms (and stays zoomed) on smaller inputs.
+            fontSize: { xs: '16px', sm: '15px' },
             width: '100%',
             '::placeholder': { color: t.faint },
           }}

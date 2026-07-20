@@ -165,6 +165,10 @@ export default function RestaurantFormDialog({
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
 
+  // Adding starts as a choice: search (or nearby) seeds the form, or the user
+  // opts into manual entry. The full field set stays hidden until then; editing
+  // an existing place always shows the form.
+  const [entryMode, setEntryMode] = useState<'choose' | 'form'>('form');
   // Brand-level fields only; per-location data lives in `locations`.
   const [formData, setFormData] = useState<Partial<Restaurant>>({ ...EMPTY_BRAND });
   // One or more physical locations (address/pin/contact/booking). Always ≥1.
@@ -274,6 +278,7 @@ export default function RestaurantFormDialog({
     priceTouched.current = false;
     scrapedUrls.current = new Set();
     setImageFile(undefined);
+    setEntryMode(restaurant ? 'form' : 'choose');
   }, [restaurant, open]);
 
   // Clear the glow timer if the dialog unmounts mid-fade.
@@ -503,6 +508,8 @@ export default function RestaurantFormDialog({
    *  seed those immediately (with the glow) and hand off to the same lookup +
    *  scrape chain the manual flow uses. */
   const applyCandidate = (c: PlaceCandidate) => {
+    // A pick reveals the (pre-filled) form so the user continues from there.
+    setEntryMode('form');
     const filled: string[] = [];
     setFormData((prev) => ({
       ...prev,
@@ -702,6 +709,7 @@ export default function RestaurantFormDialog({
   };
 
   const dialogTitle = restaurant ? t('form.editTitle') : t('form.addTitle');
+  const choosing = !restaurant && entryMode === 'choose';
   const loc = locations[activeLocation] ?? {};
   const resInvalid = !isValidOptionalUrl(loc.reservationUrl);
   const emailInvalid = !isValidOptionalEmail(loc.email);
@@ -759,6 +767,28 @@ export default function RestaurantFormDialog({
         </IconButton>
       </DialogTitle>
       <DialogContent dividers sx={{ borderColor: 'divider' }}>
+        {choosing ? (
+          /* Step 1 of adding: search (or nearby) seeds the form; manual entry is
+             the explicit fallback. The full field set stays hidden until then. */
+          <Box sx={{ py: 1 }}>
+            <PlaceSearch
+              tokens={tokens}
+              serifFont={serifFont}
+              onPick={applyCandidate}
+              placeholder={t('search.placeholder')}
+              focusOnMount
+              clearOnPick
+            />
+            <Box sx={{ mt: 2 }}>
+              <NearbyAdds tokens={tokens} serifFont={serifFont} onPick={applyCandidate} />
+            </Box>
+            <Box sx={{ textAlign: 'center', mt: 3 }}>
+              <Button variant="text" onClick={() => setEntryMode('form')}>
+                {t('form.addManually')}
+              </Button>
+            </Box>
+          </Box>
+        ) : (
         <Grid container spacing={2.5} sx={{ mt: 0 }}>
           {/* Search accelerator — search-first "Add a place". Only when adding a
               new entry (editing already has the details); manual fields remain
@@ -1455,6 +1485,7 @@ export default function RestaurantFormDialog({
             </Grid>
           )}
         </Grid>
+        )}
       </DialogContent>
       <DialogActions sx={{ px: 3, py: 2 }}>
         <Button
@@ -1464,20 +1495,22 @@ export default function RestaurantFormDialog({
         >
           {t('form.cancel')}
         </Button>
-        <Button
-          onClick={handleSubmit}
-          variant="contained"
-          disabled={loading || !formData.name?.trim()}
-          sx={{ minWidth: 120 }}
-        >
-          {loading ? (
-            <CircularProgress size={24} color="inherit" />
-          ) : restaurant ? (
-            t('form.saveChanges')
-          ) : (
-            t('form.addRestaurant')
-          )}
-        </Button>
+        {!choosing && (
+          <Button
+            onClick={handleSubmit}
+            variant="contained"
+            disabled={loading || !formData.name?.trim()}
+            sx={{ minWidth: 120 }}
+          >
+            {loading ? (
+              <CircularProgress size={24} color="inherit" />
+            ) : restaurant ? (
+              t('form.saveChanges')
+            ) : (
+              t('form.addRestaurant')
+            )}
+          </Button>
+        )}
       </DialogActions>
     </Dialog>
   );

@@ -155,10 +155,20 @@ body {
   background: rgba(255, 255, 255, 0.2);
 }
 
-/* Focus visible styles for WCAG */
+/* Focus visible styles for WCAG. Uses the live brand accent (injected by
+   brandCssVars) so it follows the theme, not the legacy template orange. */
 *:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--accent, #B5532F);
   outline-offset: 2px;
+}
+
+/* Text fields already carry a strong focus treatment of their own (MUI's
+   focused fieldset border, or the pill containers' :focus-within ring), so the
+   global outline would draw a SECOND box inside them. */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
 }
 
 /* Reduced motion */
