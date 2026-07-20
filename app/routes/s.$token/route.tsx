@@ -250,7 +250,7 @@ export default function SharedListPage() {
             >
               <Box sx={{ width: 9, height: 9, background: t.panelBg, borderRadius: '50%', transform: 'rotate(-45deg)' }} />
             </Box>
-            <Box component={Link} to="/" sx={{ fontFamily: serif, fontSize: 26, letterSpacing: '.01em', color: t.ink, textDecoration: 'none' }}>
+            <Box component={Link} to="/" sx={{ fontFamily: serif, fontSize: { xs: 20, sm: 26 }, letterSpacing: '.01em', color: t.ink, textDecoration: 'none', whiteSpace: 'nowrap' }}>
               {tr('brand')}
             </Box>
           </Box>
@@ -401,8 +401,8 @@ export default function SharedListPage() {
               </Box>
             </Box>
           ) : (
-            <Box sx={{ padding: '24px 0 40px' }}>
-              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '20px' }}>
+            <Box sx={{ padding: { xs: '16px 0 40px', sm: '24px 0 40px' } }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(auto-fill, minmax(160px, 1fr))', sm: 'repeat(auto-fill, minmax(240px, 1fr))' }, gap: { xs: '12px', sm: '20px' } }}>
                 {sorted.map((r) => (
                   <PlaceCard key={r.id} r={r} tokens={t} serifFont={serif} onView={openDetail} />
                 ))}

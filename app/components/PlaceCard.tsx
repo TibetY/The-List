@@ -12,7 +12,6 @@ import type { DecoratedRestaurant } from '~/utils/decorateRestaurant';
 import type { listTokens } from '~/listTheme';
 import RestaurantThumb from '~/components/RestaurantThumb';
 import Stars from '~/components/Stars';
-import { cityFromAddress } from '~/utils/foodStats';
 
 type Tokens = (typeof listTokens)['light'];
 
@@ -72,8 +71,7 @@ export default function PlaceCard({
   const { t: tr } = useTranslation();
 
   const metaParts: string[] = [tr(`cuisines.${r.cuisine}`, r.cuisine)];
-  const city = cityFromAddress((r.locations ?? []).find((l) => l.address?.trim())?.address);
-  if (city) metaParts.push(city);
+  if (r.city) metaParts.push(r.city);
   if ((r.visitCount ?? 0) > 0) metaParts.push(tr('dashboard.visitsCount', { count: r.visitCount ?? 0 }));
   if ((r.locations?.length ?? 0) > 1) metaParts.push(tr('dashboard.locationsCount', { count: r.locations?.length ?? 0 }));
   if ((r.michelinStars ?? 0) > 0) metaParts.push(`${'★'.repeat(r.michelinStars ?? 0)} ${tr('dashboard.michelinChip')}`);
@@ -89,18 +87,22 @@ export default function PlaceCard({
         border: `1px solid ${t.border}`,
         borderRadius: '18px',
         overflow: 'hidden',
+        // Grid items default to min-width:auto, so the nowrap name/meta lines
+        // would force the card wider than its track on narrow (2-up phone)
+        // grids and clip the neighbouring column.
+        minWidth: 0,
         background: t.cardBg,
         cursor: 'pointer',
         boxShadow: t.cardShadow,
         transition: 'transform .15s, box-shadow .15s',
         '&:hover': { transform: 'translateY(-3px)', boxShadow: t.shadow2 },
+        // Hover-only quick actions. Touch devices don't get always-on buttons
+        // cluttering every photo — tap → detail dialog carries Edit/Delete.
         '&:hover .card-actions, &:focus-within .card-actions': { opacity: 1 },
-        // Touch devices have no hover — keep the edit/delete actions visible.
-        '@media (hover: none)': { '& .card-actions': { opacity: 1 } },
       }}
     >
       {/* image */}
-      <Box sx={{ position: 'relative', height: 158 }}>
+      <Box sx={{ position: 'relative', height: { xs: 110, sm: 158 } }}>
         <RestaurantThumb
           image={r.image}
           alt={r.name}
@@ -178,10 +180,10 @@ export default function PlaceCard({
         )}
       </Box>
 
-      {/* body — fixed slots */}
-      <Box sx={{ padding: '13px 16px 15px' }}>
+      {/* body — fixed slots (per breakpoint, so cards still align in the grid) */}
+      <Box sx={{ padding: { xs: '10px 12px 12px', sm: '13px 16px 15px' } }}>
         {/* name row */}
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', height: 26 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', height: { xs: 22, sm: 26 } }}>
           <Box
             component="button"
             type="button"
@@ -191,7 +193,7 @@ export default function PlaceCard({
             }}
             sx={{
               fontFamily: serifFont,
-              fontSize: 21,
+              fontSize: { xs: 17, sm: 21 },
               lineHeight: 1.15,
               minWidth: 0,
               overflow: 'hidden',
@@ -232,16 +234,16 @@ export default function PlaceCard({
         </Box>
 
         {/* meta row */}
-        <Box sx={{ height: 18, mt: '3px', color: t.muted, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <Box sx={{ height: { xs: 16, sm: 18 }, mt: '3px', color: t.muted, fontSize: { xs: 12, sm: 13 }, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {metaParts.join(' · ')}
         </Box>
 
         {/* note slot — reserved even when empty so rating/booking never move */}
         <Box
           sx={{
-            mt: '9px',
-            height: 38,
-            fontSize: 13.5,
+            mt: { xs: '7px', sm: '9px' },
+            height: { xs: 35, sm: 38 },
+            fontSize: { xs: 12.5, sm: 13.5 },
             fontStyle: 'italic',
             color: t.muted,
             lineHeight: 1.4,
@@ -255,7 +257,7 @@ export default function PlaceCard({
         </Box>
 
         {/* rating row */}
-        <Box sx={{ mt: '9px', height: 18 }}>
+        <Box sx={{ mt: { xs: '7px', sm: '9px' }, height: 18 }}>
           {r.rated ? (
             <Stars value={r.rating ?? 0} tokens={t} size={15} />
           ) : (
@@ -266,7 +268,7 @@ export default function PlaceCard({
         </Box>
 
         {/* action row */}
-        <Box sx={{ mt: '10px', height: 30, display: 'flex', alignItems: 'center' }}>
+        <Box sx={{ mt: { xs: '8px', sm: '10px' }, height: { xs: 28, sm: 30 }, display: 'flex', alignItems: 'center' }}>
           <BookingPill locations={r.locations ?? []} tokens={t} />
         </Box>
       </Box>
@@ -303,6 +305,11 @@ export function BookingPill({ locations, tokens: t }: { locations: RestaurantLoc
           fontWeight: 600,
           textDecoration: 'none',
           whiteSpace: 'nowrap',
+          // Long platform names (FR "Réserver · OpenTable") must never widen a
+          // narrow card — clip inside the pill instead.
+          maxWidth: '100%',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
           '&:hover': { filter: 'brightness(1.05)' },
         }}
       >

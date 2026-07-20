@@ -8,6 +8,7 @@ export const FILTER_PARAM_KEYS = [
   'q',
   'status',
   'cuisine',
+  'city',
   'cost',
   'rating',
   'place',
