@@ -153,10 +153,17 @@ function ClusterLayer({
   hoveredKeyRef.current = hoveredKey;
 
   useEffect(() => {
-    const group = L.markerClusterGroup({
-      showCoverageOnHover: false,
-      maxClusterRadius: 48,
-    });
+    // leaflet.markercluster is a UMD plugin that patches the Leaflet instance;
+    // under some bundler interop it can end up patching a different copy, and
+    // calling the missing factory would crash the whole map chunk. Clustering
+    // is an enhancement — fall back to a plain layer group so pins always show.
+    const clusterFactory = (
+      L as unknown as { markerClusterGroup?: (opts?: object) => L.LayerGroup }
+    ).markerClusterGroup;
+    const group =
+      typeof clusterFactory === 'function'
+        ? clusterFactory({ showCoverageOnHover: false, maxClusterRadius: 48 })
+        : L.layerGroup();
     const byKey = new Map<string, L.Marker[]>();
     for (const pin of points) {
       const active = pin.restaurantKey === hoveredKeyRef.current;

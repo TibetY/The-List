@@ -18,6 +18,10 @@ export default defineConfig({
       '@mui/material',
       '@emotion/react',
       '@emotion/styled',
+      // Pre-bundle Leaflet + the markercluster UMD plugin together so the
+      // plugin patches the SAME Leaflet instance the app imports.
+      'leaflet',
+      'leaflet.markercluster',
     ],
   },
   server: {
