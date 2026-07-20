@@ -1053,18 +1053,18 @@ export default function Dashboard() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: { xs: '14px 18px', md: '18px 40px' },
+            padding: { xs: '10px 14px', md: '18px 40px' },
             borderBottom: `1px solid ${t.border}`,
             background: t.panelBg,
             gap: 2,
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: '11px' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: '8px', sm: '11px' }, minWidth: 0 }}>
             <Box
               aria-hidden
               sx={{
-                width: 27,
-                height: 27,
+                width: { xs: 22, sm: 27 },
+                height: { xs: 22, sm: 27 },
                 background: t.accent,
                 borderRadius: '50% 50% 50% 3px',
                 transform: 'rotate(45deg)',
@@ -1074,14 +1074,15 @@ export default function Dashboard() {
                 flex: 'none',
               }}
             >
-              <Box sx={{ width: 9, height: 9, background: t.panelBg, borderRadius: '50%', transform: 'rotate(-45deg)' }} />
+              <Box sx={{ width: { xs: 7, sm: 9 }, height: { xs: 7, sm: 9 }, background: t.panelBg, borderRadius: '50%', transform: 'rotate(-45deg)' }} />
             </Box>
-            <Box component="span" sx={{ fontFamily: serif, fontSize: 26, letterSpacing: '.01em' }}>
+            {/* nowrap: the wordmark must never break into two lines on phones */}
+            <Box component="span" sx={{ fontFamily: serif, fontSize: { xs: 20, sm: 26 }, letterSpacing: '.01em', whiteSpace: 'nowrap' }}>
               {tr('brand')}
             </Box>
           </Box>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: '6px', sm: '14px' } }}>
             {/* search — a single <label> so clicking anywhere in the pill
                 (icon included) focuses the input, not two separate hit areas. */}
             <Box
@@ -1170,9 +1171,9 @@ export default function Dashboard() {
               </Tooltip>
             )}
 
-            {/* share */}
+            {/* share — hidden on phones (the account menu carries it) */}
             <Tooltip title={tr('dashboard.shareMembers')}>
-              <IconButton onClick={() => setShareOpen(true)} aria-label={tr('dashboard.shareMembersLabel')} sx={{ color: t.muted }}>
+              <IconButton onClick={() => setShareOpen(true)} aria-label={tr('dashboard.shareMembersLabel')} sx={{ color: t.muted, display: { xs: 'none', sm: 'inline-flex' } }}>
                 <PersonAddAlt1 />
               </IconButton>
             </Tooltip>
@@ -1226,7 +1227,7 @@ export default function Dashboard() {
         </Box>
 
         {/* body container */}
-        <Box sx={{ flexGrow: 1, width: '100%', maxWidth: 1320, mx: 'auto', padding: { xs: '24px 18px 0', md: '30px 40px 0' } }}>
+        <Box sx={{ flexGrow: 1, width: '100%', maxWidth: 1320, mx: 'auto', padding: { xs: '16px 14px 0', sm: '24px 18px 0', md: '30px 40px 0' } }}>
           {error && (
             <Alert severity="error" sx={{ mb: 3 }} role="alert">
               {tr('dashboard.loadError', { error })}
@@ -1268,7 +1269,7 @@ export default function Dashboard() {
               border: `1px solid ${t.border}`,
               borderRadius: '999px',
               padding: '10px 14px',
-              mt: '18px',
+              mt: '12px',
               cursor: 'text',
             }}
           >
@@ -1317,7 +1318,7 @@ export default function Dashboard() {
           />
 
           {/* filters */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: '10px', mt: '22px', flexWrap: 'wrap' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: '10px', mt: { xs: '12px', sm: '22px' }, flexWrap: 'wrap' }}>
             <Box role="group" aria-label={tr('dashboard.filterStatusLabel')} sx={{ display: 'contents' }}>
               <Box component="button" aria-pressed={filter === 'all'} onClick={() => setFilter('all')} sx={{ ...filterBtnStyle, ...pill('all') }}>{tr('dashboard.filterAll')}</Box>
               <Box component="button" aria-pressed={filter === 'been'} onClick={() => setFilter('been')} sx={{ ...filterBtnStyle, ...pill('been') }}>{tr('dashboard.filterBeen')}</Box>
@@ -1427,8 +1428,12 @@ export default function Dashboard() {
             <>
               {/* TILE */}
               {view === 'tile' && (
-                <Box sx={{ padding: '24px 0 40px' }}>
-                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '20px' }}>
+                // Extra bottom clearance on phones so the FAB never covers the
+                // last card's Book pill.
+                <Box sx={{ padding: { xs: '16px 0 96px', sm: '24px 0 40px' } }}>
+                  {/* Two-up on phones — 87 places at one giant card per screen
+                      is unbrowsable; the compact card keeps the same slots. */}
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(auto-fill, minmax(160px, 1fr))', sm: 'repeat(auto-fill, minmax(240px, 1fr))' }, gap: { xs: '12px', sm: '20px' } }}>
                     {sorted.map((r) => (
                       <PlaceCard
                         key={r.id}
@@ -1449,7 +1454,7 @@ export default function Dashboard() {
 
               {/* LIST */}
               {view === 'list' && (
-                <Box sx={{ padding: '24px 0 40px' }}>
+                <Box sx={{ padding: { xs: '16px 0 96px', sm: '24px 0 40px' } }}>
                   <Box sx={{ border: `1px solid ${t.border}`, borderRadius: '14px', overflow: 'hidden' }}>
                     {sorted.map((r) => (
                       <Box
@@ -1464,9 +1469,9 @@ export default function Dashboard() {
                           background: t.cardBg,
                           cursor: 'pointer',
                           '&:hover': { filter: 'brightness(0.98)' },
+                          // Hover-only quick actions; on touch, tapping the row
+                          // opens the detail dialog, which carries Edit/Delete.
                           '&:hover .row-actions, &:focus-within .row-actions': { opacity: 1 },
-                          // Touch devices have no hover — keep the row actions visible.
-                          '@media (hover: none)': { '& .row-actions': { opacity: 1 } },
                           '&:last-of-type': { borderBottom: 'none' },
                         }}
                       >
@@ -1599,7 +1604,7 @@ export default function Dashboard() {
 
               {/* MAP */}
               {view === 'map' && (
-                <Box sx={{ padding: '24px 0 40px', display: 'flex', gap: '18px', flexDirection: { xs: 'column', md: 'row' } }}>
+                <Box sx={{ padding: { xs: '16px 0 96px', sm: '24px 0 40px' }, display: 'flex', gap: '18px', flexDirection: { xs: 'column', md: 'row' } }}>
                   <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <Box
                       sx={{
@@ -1714,8 +1719,9 @@ export default function Dashboard() {
               alignItems: 'center',
               justifyContent: 'center',
               position: 'fixed',
-              bottom: 24,
-              right: 24,
+              // Clear the home indicator / browser chrome on phones.
+              bottom: 'calc(20px + env(safe-area-inset-bottom))',
+              right: 20,
               width: 56,
               height: 56,
               border: 'none',
