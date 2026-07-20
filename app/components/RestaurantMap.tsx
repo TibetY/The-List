@@ -35,11 +35,13 @@ const DEFAULT_CENTER: [number, number] = [45.4215, -75.6972];
  *  to the rating fraction (leaflet popups are always on a light surface). */
 function starsHtml(value: number): string {
   const pct = (Math.max(0, Math.min(5, value)) / 5) * 100;
-  const base = 'letter-spacing:1px;line-height:1;white-space:nowrap;font-size:13px';
+  // display:block on both layers keeps them origin-aligned (an inline base gets
+  // baseline-shifted by the popup's line-height while the overlay sits at top:0).
+  const base = 'display:block;letter-spacing:1px;line-height:1;white-space:nowrap;font-size:13px';
   return (
-    `<span style="position:relative;display:inline-block;${base}">` +
-    `<span style="color:rgba(43,36,32,.25)">★★★★★</span>` +
-    `<span style="position:absolute;left:0;top:0;width:${pct}%;overflow:hidden;color:#B5532F">★★★★★</span>` +
+    `<span style="position:relative;display:inline-block;vertical-align:middle">` +
+    `<span style="${base};color:rgba(43,36,32,.25)">★★★★★</span>` +
+    `<span style="${base};position:absolute;left:0;top:0;width:${pct}%;overflow:hidden;color:#B5532F">★★★★★</span>` +
     `</span>`
   );
 }
