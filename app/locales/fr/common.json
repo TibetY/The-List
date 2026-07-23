@@ -5,7 +5,9 @@
     "description": "Découvrez, notez et souvenez-vous de vos restaurants favoris. Votre compagnon culinaire personnel."
   },
   "a11y": {
-    "skipToMain": "Aller au contenu principal"
+    "skipToMain": "Aller au contenu principal",
+    "showPassword": "Afficher le mot de passe",
+    "hidePassword": "Masquer le mot de passe"
   },
   "nav": {
     "main": "Navigation principale",
@@ -242,6 +244,10 @@
     "addTitle": "Ajouter un restaurant",
     "addManually": "Ou saisir les détails manuellement",
     "close": "Fermer la fenêtre",
+    "sectionBasics": "L'essentiel",
+    "sectionDetails": "Détails et étiquettes",
+    "sectionLocation": "Lieu et réservation",
+    "sectionPhoto": "Photo",
     "name": "Nom du restaurant",
     "address": "Adresse",
     "addressPlaceholder": "123 rue Principale, Ottawa, ON",
@@ -291,6 +297,8 @@
     "notes": "Notes",
     "notesPlaceholder": "Qu'en avez-vous pensé ? Des plats à ne pas manquer ?",
     "socialMedia": "Réseaux sociaux",
+    "addSocialLinks": "+ Ajouter des réseaux sociaux",
+    "hideSocialLinks": "Masquer les réseaux sociaux",
     "facebook": "Facebook",
     "instagram": "Instagram",
     "twitter": "Twitter / X",

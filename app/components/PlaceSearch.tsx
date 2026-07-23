@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next';
 import type { PlaceCandidate } from '~/types/restaurant';
 import type { listTokens } from '~/listTheme';
 import RestaurantThumb from '~/components/RestaurantThumb';
+import { formatDistance } from '~/utils/geo';
+import { getSilentLocation } from '~/utils/userLocation.client';
 
 type Tokens = (typeof listTokens)['light'];
 
@@ -47,6 +49,19 @@ export default function PlaceSearch({
   const [loading, setLoading] = useState(false);
   const [active, setActive] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Resolved once per mount, never re-triggers the search effect below — this
+  // never prompts for permission (see getSilentLocation), so it's safe to
+  // fire on every place-search instance without surprising the user.
+  const biasRef = useRef<{ lat: number; lng: number } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getSilentLocation().then((loc) => {
+      if (!cancelled) biasRef.current = loc;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const q = query.trim();
   const open = q.length >= MIN_QUERY;
@@ -64,8 +79,10 @@ export default function PlaceSearch({
       try {
         const lang =
           typeof document !== 'undefined' ? document.documentElement.lang || 'en' : 'en';
+        const bias = biasRef.current;
+        const biasParams = bias ? `&lat=${bias.lat}&lng=${bias.lng}` : '';
         const res = await fetch(
-          `/api/search-place?query=${encodeURIComponent(q)}&lang=${encodeURIComponent(lang)}`,
+          `/api/search-place?query=${encodeURIComponent(q)}&lang=${encodeURIComponent(lang)}${biasParams}`,
           { signal: controller.signal }
         );
         const data = (await res.json()) as PlaceCandidate[];
@@ -242,6 +259,14 @@ export default function PlaceSearch({
                     {c.address}
                   </Box>
                 </Box>
+                {c.distanceM != null && (
+                  <Box
+                    component="span"
+                    sx={{ flex: 'none', fontFamily: "'DM Mono',monospace", fontSize: 11.5, color: t.faint }}
+                  >
+                    {formatDistance(c.distanceM)}
+                  </Box>
+                )}
                 {c.cuisineType && (
                   <Box
                     component="span"

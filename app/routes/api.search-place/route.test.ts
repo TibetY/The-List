@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { parsePlaceCandidates, parsePhotonCandidates } from '~/routes/api.search-place/route';
+import {
+  parsePlaceCandidates,
+  parsePhotonCandidates,
+  parseBias,
+  withDistances,
+} from '~/routes/api.search-place/route';
+import type { PlaceCandidate } from '~/types/restaurant';
 
 // Representative jsonv2 rows from Nominatim (trimmed to the fields we read).
 const restaurantRow = {
@@ -121,5 +127,48 @@ describe('parsePhotonCandidates', () => {
     expect(zuni.lng).toBeCloseTo(-122.4194);
     expect(zuni.placeTypes).toEqual(['Restaurant']);
     expect(bakery.placeTypes).toEqual(['Bakery']);
+  });
+});
+
+describe('parseBias', () => {
+  it('returns undefined when lat/lng are missing or malformed', () => {
+    expect(parseBias(new URLSearchParams())).toBeUndefined();
+    expect(parseBias(new URLSearchParams('lat=45.4'))).toBeUndefined();
+    expect(parseBias(new URLSearchParams('lat=abc&lng=-75.7'))).toBeUndefined();
+  });
+
+  it('parses valid lat/lng into a Bias', () => {
+    expect(parseBias(new URLSearchParams('lat=45.4&lng=-75.7'))).toEqual({
+      lat: 45.4,
+      lng: -75.7,
+    });
+  });
+});
+
+describe('withDistances', () => {
+  const candidate: PlaceCandidate = {
+    name: 'Union Local',
+    address: '315 Somerset Street West, Ottawa, Canada',
+    lat: 45.42,
+    lng: -75.7,
+    cuisineType: null,
+    placeTypes: ['Bar'],
+    website: null,
+  };
+
+  it('passes candidates through unchanged when there is no bias', () => {
+    expect(withDistances([candidate], undefined)).toEqual([candidate]);
+  });
+
+  it('attaches distanceM to candidates that have coordinates', () => {
+    const [out] = withDistances([candidate], { lat: 45.4112, lng: -75.6981 });
+    expect(out.distanceM).toBeGreaterThan(0);
+    expect(out.distanceM).toBeLessThan(2000); // ~1.3km apart, sanity bound
+  });
+
+  it('leaves candidates without coordinates untouched', () => {
+    const noCoords: PlaceCandidate = { ...candidate, lat: null, lng: null };
+    const [out] = withDistances([noCoords], { lat: 45.4112, lng: -75.6981 });
+    expect(out.distanceM).toBeUndefined();
   });
 });

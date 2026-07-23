@@ -5,7 +5,9 @@
     "description": "Discover, rate, and remember your favorite restaurants. Your personal dining companion."
   },
   "a11y": {
-    "skipToMain": "Skip to main content"
+    "skipToMain": "Skip to main content",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password"
   },
   "nav": {
     "main": "Main navigation",
@@ -242,6 +244,10 @@
     "addTitle": "Add New Restaurant",
     "addManually": "Or enter the details manually",
     "close": "Close dialog",
+    "sectionBasics": "Basics",
+    "sectionDetails": "Details & Tags",
+    "sectionLocation": "Location & Booking",
+    "sectionPhoto": "Photo",
     "name": "Restaurant Name",
     "address": "Address",
     "addressPlaceholder": "123 Main St, Ottawa, ON",
@@ -291,6 +297,8 @@
     "notes": "Notes",
     "notesPlaceholder": "What did you think? Any must-try dishes?",
     "socialMedia": "Social Media",
+    "addSocialLinks": "+ Add social links",
+    "hideSocialLinks": "Hide social links",
     "facebook": "Facebook",
     "instagram": "Instagram",
     "twitter": "Twitter / X",

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Box,
   Container,
@@ -5,7 +6,10 @@ import {
   TextField,
   Button,
   Alert,
+  IconButton,
+  InputAdornment,
 } from "@mui/material";
+import { Visibility, VisibilityOff } from "@mui/icons-material";
 import type { LoaderFunction, ActionFunction } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
 import { Form, useActionData, useLoaderData, Link } from "@remix-run/react";
@@ -96,6 +100,7 @@ export default function LoginPage() {
   const actionData = useActionData<ActionData>();
   const { next, error: loaderError } = useLoaderData<LoaderData>();
   const { t } = useTranslation();
+  const [showPassword, setShowPassword] = useState(false);
 
   return (
     <Container
@@ -196,9 +201,23 @@ export default function LoginPage() {
             name="password"
             id="password"
             label={t("login.password")}
-            type="password"
+            type={showPassword ? "text" : "password"}
             autoComplete="current-password"
             sx={{ mb: 3 }}
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    type="button"
+                    aria-label={t(showPassword ? "a11y.hidePassword" : "a11y.showPassword")}
+                    onClick={() => setShowPassword((v) => !v)}
+                    edge="end"
+                  >
+                    {showPassword ? <VisibilityOff /> : <Visibility />}
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
           />
           <Button
             type="submit"

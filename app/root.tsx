@@ -36,6 +36,13 @@ import tailwindHref from "~/tailwind.css?url";
 export const handle = { i18n: "common" };
 
 export const links: LinksFunction = () => [
+  // SVG favicon (evergreen browsers) — the same amber diamond mark used in the
+  // dashboard/shared-list headers, so the tab icon matches the in-app brand.
+  { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
+  // Rasterized fallbacks: legacy browsers without SVG favicon support, and iOS
+  // home-screen bookmarks.
+  { rel: "icon", href: "/favicon.ico", sizes: "32x32" },
+  { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
   { rel: "stylesheet", href: tailwindHref },
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
   {

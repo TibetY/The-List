@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { ActionFunction, LoaderFunction } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
 import { Form, useActionData, useLoaderData, Link } from "@remix-run/react";
@@ -14,7 +15,10 @@ import {
   TextField,
   Button,
   Alert,
+  IconButton,
+  InputAdornment,
 } from "@mui/material";
+import { Visibility, VisibilityOff } from "@mui/icons-material";
 
 type LoaderData = {
   next: string;
@@ -84,6 +88,8 @@ export default function SignUpPage() {
   const actionData = useActionData<ActionData>();
   const { next } = useLoaderData<LoaderData>();
   const { t } = useTranslation();
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   return (
     <Container
@@ -168,9 +174,23 @@ export default function SignUpPage() {
             name="password"
             id="password"
             label={t("signup.password")}
-            type="password"
+            type={showPassword ? "text" : "password"}
             autoComplete="new-password"
             sx={{ mb: 2 }}
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    type="button"
+                    aria-label={t(showPassword ? "a11y.hidePassword" : "a11y.showPassword")}
+                    onClick={() => setShowPassword((v) => !v)}
+                    edge="end"
+                  >
+                    {showPassword ? <VisibilityOff /> : <Visibility />}
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
           />
           <TextField
             variant="outlined"
@@ -180,9 +200,23 @@ export default function SignUpPage() {
             name="confirmPassword"
             id="confirmPassword"
             label={t("signup.confirmPassword")}
-            type="password"
+            type={showConfirm ? "text" : "password"}
             autoComplete="new-password"
             sx={{ mb: 3 }}
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    type="button"
+                    aria-label={t(showConfirm ? "a11y.hidePassword" : "a11y.showPassword")}
+                    onClick={() => setShowConfirm((v) => !v)}
+                    edge="end"
+                  >
+                    {showConfirm ? <VisibilityOff /> : <Visibility />}
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
           />
           <Button
             type="submit"

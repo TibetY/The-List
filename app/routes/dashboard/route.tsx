@@ -1329,7 +1329,10 @@ export default function Dashboard() {
             onDelete={handleDeleteView}
           />
 
-          {/* filters */}
+          {/* filters — a brand-new, empty-and-unfiltered list has nothing to
+              filter yet, so this bar stays hidden until there's data or an
+              active filter to clear (e.g. carried over from another list). */}
+          {(total > 0 || hasActiveFilters) && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: '10px', mt: { xs: '12px', sm: '22px' }, flexWrap: 'wrap' }}>
             <Box role="group" aria-label={tr('dashboard.filterStatusLabel')} sx={{ display: 'contents' }}>
               <Box component="button" aria-pressed={filter === 'all'} onClick={() => setFilter('all')} sx={{ ...filterBtnStyle, ...pill('all') }}>{tr('dashboard.filterAll')}</Box>
@@ -1378,6 +1381,7 @@ export default function Dashboard() {
             )}
             <Box sx={{ ml: 'auto', fontSize: 13, color: t.faint }}>{tr('dashboard.showing', { count: filtered.length })}</Box>
           </Box>
+          )}
 
           {/* empty state */}
           {filtered.length === 0 ? (

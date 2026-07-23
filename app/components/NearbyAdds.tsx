@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next';
 import type { PlaceCandidate } from '~/types/restaurant';
 import type { listTokens } from '~/listTheme';
 import RestaurantThumb from '~/components/RestaurantThumb';
+import { formatDistance } from '~/utils/geo';
+import { setCachedLocation } from '~/utils/userLocation.client';
 
 type Tokens = (typeof listTokens)['light'];
 type Status = 'idle' | 'locating' | 'loading' | 'ready' | 'empty' | 'denied' | 'unsupported';
@@ -20,12 +22,6 @@ interface NearbyAddsProps {
 
 function initialOf(name: string): string {
   return (name.replace(/^The /i, '')[0] || '?').toUpperCase();
-}
-
-/** Short distance label ("120 m" / "1.3 km"). */
-function formatDistance(m: number | null | undefined): string {
-  if (m == null) return '';
-  return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`;
 }
 
 /**
@@ -58,6 +54,9 @@ export default function NearbyAdds({ tokens: t, serifFont, onPick, disabled }: N
       async (pos) => {
         if (!alive.current) return;
         setStatus('loading');
+        // Cache it — plain text search can silently reuse this coordinate to
+        // bias its own results without ever prompting for location itself.
+        setCachedLocation(pos.coords.latitude, pos.coords.longitude);
         try {
           const res = await fetch(
             `/api/nearby-place?lat=${pos.coords.latitude}&lng=${pos.coords.longitude}`

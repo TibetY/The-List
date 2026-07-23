@@ -100,7 +100,10 @@ export const listTokens: Record<ListMode, ListTokens> = {
     footerBg: '#F4ECDF',
     ink: '#2B2420',
     muted: '#6F6353',
-    faint: '#8A7E70',
+    // ~5.3:1 on cardBg (#FFFFFF) / ~4.9:1 on panelBg (#FBF7F0) — the previous
+    // #8A7E70 measured ~3.7–4.0:1, below the 4.5:1 AA minimum for normal text
+    // (this token labels real content: counts, distance labels, placeholders).
+    faint: '#756B5C',
     chip: '#6F6353',
     border: '#E8DFD1',
     borderSoft: '#EFE7DA',

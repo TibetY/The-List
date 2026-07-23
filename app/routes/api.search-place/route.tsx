@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import { cuisineTypes, type PlaceCandidate } from '~/types/restaurant';
+import { haversineM } from '~/utils/geo';
 
 export type { PlaceCandidate };
 
@@ -20,6 +21,32 @@ const PHOTON_TAG_FILTERS = [
   'shop:bakery',
 ];
 
+/** The user's coordinates, when available — never required, only ever used to
+ *  softly re-rank results toward them (never to exclude distant matches). */
+export interface Bias {
+  lat: number;
+  lng: number;
+}
+
+/** Exported for testing. */
+export function parseBias(params: URLSearchParams): Bias | undefined {
+  const lat = parseFloat(params.get('lat') ?? '');
+  const lng = parseFloat(params.get('lng') ?? '');
+  return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : undefined;
+}
+
+/** Attach `distanceM` to every candidate that has coordinates, so the client
+ *  can show "0.4 km" the same way the Nearby endpoint does. Exported for
+ *  testing. */
+export function withDistances(candidates: PlaceCandidate[], bias: Bias | undefined): PlaceCandidate[] {
+  if (!bias) return candidates;
+  return candidates.map((c) =>
+    typeof c.lat === 'number' && typeof c.lng === 'number'
+      ? { ...c, distanceM: Math.round(haversineM(bias.lat, bias.lng, c.lat, c.lng)) }
+      : c
+  );
+}
+
 /**
  * Search for restaurant/bar/cafe candidates by free-text query. Primary source
  * is **Photon** (photon.komoot.io) — an OSM search built for autocomplete, with
@@ -35,23 +62,27 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const params = new URL(request.url).searchParams;
   const query = (params.get('query') ?? '').trim();
   const lang = params.get('lang') ?? 'en';
+  const bias = parseBias(params);
   // Too-short queries just waste an upstream call and return noise.
   if (query.length < 2) return json<PlaceCandidate[]>([]);
 
-  const photon = await searchPhoton(query, lang);
-  if (photon.length > 0) return json<PlaceCandidate[]>(photon);
-  return json<PlaceCandidate[]>(await searchNominatim(query, lang));
+  const photon = await searchPhoton(query, lang, bias);
+  if (photon.length > 0) return json<PlaceCandidate[]>(withDistances(photon, bias));
+  return json<PlaceCandidate[]>(withDistances(await searchNominatim(query, lang, bias), bias));
 }
 
 /** Photon query (never throws). */
-async function searchPhoton(query: string, lang: string): Promise<PlaceCandidate[]> {
+async function searchPhoton(query: string, lang: string, bias?: Bias): Promise<PlaceCandidate[]> {
   // Photon only supports a handful of languages; anything else falls back to
   // its default rather than erroring.
   const langParam = ['en', 'fr', 'de'].includes(lang) ? `&lang=${lang}` : '';
   const tagParams = PHOTON_TAG_FILTERS.map((t) => `&osm_tag=${encodeURIComponent(t)}`).join('');
+  // Photon re-ranks toward lat/lon (soft bias — it still returns strong
+  // name matches from anywhere) rather than excluding distant results.
+  const biasParams = bias ? `&lat=${bias.lat}&lon=${bias.lng}` : '';
   const target =
     `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}` +
-    `&limit=${MAX_RESULTS}${langParam}${tagParams}`;
+    `&limit=${MAX_RESULTS}${langParam}${tagParams}${biasParams}`;
   try {
     const res = await fetch(target, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
@@ -68,10 +99,16 @@ async function searchPhoton(query: string, lang: string): Promise<PlaceCandidate
 }
 
 /** Original Nominatim query, kept as the fallback (never throws). */
-async function searchNominatim(query: string, lang: string): Promise<PlaceCandidate[]> {
+async function searchNominatim(query: string, lang: string, bias?: Bias): Promise<PlaceCandidate[]> {
+  // `bounded=0` keeps the viewbox a soft preference — Nominatim ranks matches
+  // inside it higher but still returns strong matches from outside it, so a
+  // uniquely-named place across the world is never hidden, just outranked.
+  const viewboxParams = bias
+    ? `&viewbox=${bias.lng - 0.35},${bias.lat + 0.35},${bias.lng + 0.35},${bias.lat - 0.35}&bounded=0`
+    : '';
   const target =
     `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=${MAX_RESULTS}` +
-    `&extratags=1&addressdetails=1&namedetails=1&q=${encodeURIComponent(query)}`;
+    `&extratags=1&addressdetails=1&namedetails=1&q=${encodeURIComponent(query)}${viewboxParams}`;
   try {
     const res = await fetch(target, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),

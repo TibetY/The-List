@@ -20,6 +20,8 @@ import {
   ToggleButtonGroup,
   Tabs,
   Tab,
+  Collapse,
+  Divider,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
@@ -33,6 +35,8 @@ import {
   DeleteOutline,
   Favorite,
   FavoriteBorder,
+  ExpandMore,
+  ExpandLess,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import type {
@@ -201,6 +205,10 @@ export default function RestaurantFormDialog({
   const highlightTimer = useRef<ReturnType<typeof setTimeout>>();
   // Price has a default ($$), so only autofill it if the user hasn't chosen one.
   const priceTouched = useRef(false);
+  // Social links are the most skippable fields in the form — collapsed by
+  // default so they don't take up four full rows for places that have none.
+  // Auto-expands (below) when editing a restaurant that already has some.
+  const [socialOpen, setSocialOpen] = useState(false);
 
   // FRESH mirrors of the async-read state. The enrichment chain (candidate pick
   // → lookup → scrape) resolves long after the render it was started from, so
@@ -259,6 +267,14 @@ export default function RestaurantFormDialog({
       );
       setPlatformChoice(platformChoiceFor(locs[0]));
       setImagePreview(restaurant.image || '');
+      setSocialOpen(
+        Boolean(
+          restaurant.socialMedia?.facebook ||
+            restaurant.socialMedia?.instagram ||
+            restaurant.socialMedia?.twitter ||
+            restaurant.socialMedia?.tiktok
+        )
+      );
     } else {
       setFormData({ ...EMPTY_BRAND });
       setLocations([{}]);
@@ -266,6 +282,7 @@ export default function RestaurantFormDialog({
       setCuisineChoice('');
       setPlatformChoice('');
       setImagePreview('');
+      setSocialOpen(false);
     }
     setScrapeStatus('idle');
     setResScrapeStatus('idle');
@@ -738,6 +755,25 @@ export default function RestaurantFormDialog({
     fontSize: '0.875rem',
   } as const;
 
+  const sectionHeadingSx = {
+    fontWeight: 600,
+    color: 'text.secondary',
+    textTransform: 'uppercase',
+    fontSize: '0.75rem',
+    letterSpacing: '0.05em',
+  } as const;
+
+  /** A labeled divider between field groups — breaks the long form into
+   *  scannable sections (Basics / Details & Tags / Location & Booking / Photo). */
+  const SectionHeading = ({ children }: { children: React.ReactNode }) => (
+    <Grid item xs={12}>
+      <Divider sx={{ mb: 1.5 }} />
+      <Typography variant="subtitle2" sx={{ ...sectionHeadingSx, mb: 1 }}>
+        {children}
+      </Typography>
+    </Grid>
+  );
+
   return (
     <Dialog
       open={open}
@@ -813,6 +849,9 @@ export default function RestaurantFormDialog({
               </Typography>
             </Grid>
           )}
+
+          {/* ============ Basics — identity + personal take ============ */}
+          <SectionHeading>{t('form.sectionBasics')}</SectionHeading>
 
           {/* Restaurant Name */}
           <Grid item xs={12}>
@@ -904,6 +943,40 @@ export default function RestaurantFormDialog({
               inputProps={{ min: 0, 'aria-label': t('form.visitCount') }}
             />
           </Grid>
+
+          {/* Rating */}
+          <Grid item xs={12}>
+            <Typography component="label" id="rating-label" sx={sectionLabelSx}>
+              {t('form.rating')}
+            </Typography>
+            <Rating
+              value={formData.rating || 0}
+              onChange={(_, value) =>
+                setFormData({ ...formData, rating: value || 0 })
+              }
+              precision={0.5}
+              size="large"
+              aria-labelledby="rating-label"
+            />
+          </Grid>
+
+          {/* Comment */}
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              multiline
+              rows={3}
+              label={t('form.notes')}
+              value={formData.comment}
+              onChange={(e) =>
+                setFormData({ ...formData, comment: e.target.value })
+              }
+              placeholder={t('form.notesPlaceholder')}
+            />
+          </Grid>
+
+          {/* ============ Details & Tags ============ */}
+          <SectionHeading>{t('form.sectionDetails')}</SectionHeading>
 
           {/* Cuisine + Price */}
           <Grid item xs={12} sm={6}>
@@ -1060,21 +1133,8 @@ export default function RestaurantFormDialog({
             </Box>
           </Grid>
 
-          {/* Rating */}
-          <Grid item xs={12}>
-            <Typography component="label" id="rating-label" sx={sectionLabelSx}>
-              {t('form.rating')}
-            </Typography>
-            <Rating
-              value={formData.rating || 0}
-              onChange={(_, value) =>
-                setFormData({ ...formData, rating: value || 0 })
-              }
-              precision={0.5}
-              size="large"
-              aria-labelledby="rating-label"
-            />
-          </Grid>
+          {/* ============ Location & Booking ============ */}
+          <SectionHeading>{t('form.sectionLocation')}</SectionHeading>
 
           {/* Website URL — auto-fetches image/cuisine/reservation link on blur */}
           <Grid item xs={12}>
@@ -1300,109 +1360,8 @@ export default function RestaurantFormDialog({
             </Box>
           </Grid>
 
-          {/* Comment */}
-          <Grid item xs={12}>
-            <TextField
-              fullWidth
-              multiline
-              rows={3}
-              label={t('form.notes')}
-              value={formData.comment}
-              onChange={(e) =>
-                setFormData({ ...formData, comment: e.target.value })
-              }
-              placeholder={t('form.notesPlaceholder')}
-            />
-          </Grid>
-
-          {/* Social Media */}
-          <Grid item xs={12}>
-            <Typography
-              variant="subtitle2"
-              sx={{
-                fontWeight: 600,
-                color: 'text.secondary',
-                mb: 1,
-                textTransform: 'uppercase',
-                fontSize: '0.75rem',
-                letterSpacing: '0.05em',
-              }}
-            >
-              {t('form.socialMedia')}
-            </Typography>
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label={t('form.facebook')}
-              value={formData.socialMedia?.facebook}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  socialMedia: {
-                    ...formData.socialMedia,
-                    facebook: e.target.value,
-                  },
-                })
-              }
-              placeholder="https://facebook.com/..."
-              sx={glowSx('social.facebook')}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label={t('form.instagram')}
-              value={formData.socialMedia?.instagram}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  socialMedia: {
-                    ...formData.socialMedia,
-                    instagram: e.target.value,
-                  },
-                })
-              }
-              placeholder="https://instagram.com/..."
-              sx={glowSx('social.instagram')}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label={t('form.twitter')}
-              value={formData.socialMedia?.twitter}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  socialMedia: {
-                    ...formData.socialMedia,
-                    twitter: e.target.value,
-                  },
-                })
-              }
-              placeholder="https://x.com/..."
-              sx={glowSx('social.twitter')}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label={t('form.tiktok')}
-              value={formData.socialMedia?.tiktok}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  socialMedia: {
-                    ...formData.socialMedia,
-                    tiktok: e.target.value,
-                  },
-                })
-              }
-              placeholder="https://tiktok.com/@..."
-              sx={glowSx('social.tiktok')}
-            />
-          </Grid>
+          {/* ============ Photo ============ */}
+          <SectionHeading>{t('form.sectionPhoto')}</SectionHeading>
 
           {/* Image Upload — file picker, drag-and-drop, or a pasted URL */}
           <Grid item xs={12}>
@@ -1484,6 +1443,97 @@ export default function RestaurantFormDialog({
               </Box>
             </Grid>
           )}
+
+          {/* Social Media — collapsed by default: the most skippable fields in
+              the form, so they no longer cost four full rows for a place that
+              has none. Auto-expands when editing a place that already has some. */}
+          <Grid item xs={12}>
+            <Button
+              type="button"
+              onClick={() => setSocialOpen((v) => !v)}
+              endIcon={socialOpen ? <ExpandLess /> : <ExpandMore />}
+              aria-expanded={socialOpen}
+              sx={{ ...sectionHeadingSx, color: 'text.secondary', p: 0, minWidth: 0 }}
+            >
+              {socialOpen ? t('form.hideSocialLinks') : t('form.addSocialLinks')}
+            </Button>
+            <Collapse in={socialOpen} unmountOnExit>
+              <Grid container spacing={2.5} sx={{ mt: 0.5 }}>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label={t('form.facebook')}
+                    value={formData.socialMedia?.facebook}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        socialMedia: {
+                          ...formData.socialMedia,
+                          facebook: e.target.value,
+                        },
+                      })
+                    }
+                    placeholder="https://facebook.com/..."
+                    sx={glowSx('social.facebook')}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label={t('form.instagram')}
+                    value={formData.socialMedia?.instagram}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        socialMedia: {
+                          ...formData.socialMedia,
+                          instagram: e.target.value,
+                        },
+                      })
+                    }
+                    placeholder="https://instagram.com/..."
+                    sx={glowSx('social.instagram')}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label={t('form.twitter')}
+                    value={formData.socialMedia?.twitter}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        socialMedia: {
+                          ...formData.socialMedia,
+                          twitter: e.target.value,
+                        },
+                      })
+                    }
+                    placeholder="https://x.com/..."
+                    sx={glowSx('social.twitter')}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label={t('form.tiktok')}
+                    value={formData.socialMedia?.tiktok}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        socialMedia: {
+                          ...formData.socialMedia,
+                          tiktok: e.target.value,
+                        },
+                      })
+                    }
+                    placeholder="https://tiktok.com/@..."
+                    sx={glowSx('social.tiktok')}
+                  />
+                </Grid>
+              </Grid>
+            </Collapse>
+          </Grid>
         </Grid>
         )}
       </DialogContent>
