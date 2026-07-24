@@ -105,7 +105,7 @@ export const links: LinksFunction = () => [
   { rel: 'stylesheet', href: leafletStylesHref },
 ];
 import { useTranslation } from 'react-i18next';
-import { listTokens, makeListTheme, getStoredMode, storeMode, type ListMode } from '~/listTheme';
+import { listTokens, makeListTheme, getStoredMode, storeMode, roundedFont, type ListMode } from '~/listTheme';
 
 /**
  * Turn whatever was thrown into a human-readable message. Supabase/PostgREST
@@ -969,9 +969,9 @@ export default function Dashboard() {
   const segBtnStyle = {
     border: 'none',
     cursor: 'pointer',
-    fontFamily: "'DM Sans',sans-serif",
+    fontFamily: roundedFont,
     fontSize: '13.5px',
-    fontWeight: 500,
+    fontWeight: 600,
     padding: '7px 18px',
     borderRadius: '999px',
   } as const;
@@ -979,9 +979,9 @@ export default function Dashboard() {
   const filterBtnStyle = {
     border: `1px solid ${t.pillBorder}`,
     cursor: 'pointer',
-    fontFamily: "'DM Sans',sans-serif",
+    fontFamily: roundedFont,
     fontSize: '13px',
-    fontWeight: 500,
+    fontWeight: 600,
     padding: '7px 15px',
     borderRadius: '999px',
   } as const;

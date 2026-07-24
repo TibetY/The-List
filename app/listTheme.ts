@@ -10,6 +10,13 @@ import { createTheme, type Theme } from '@mui/material/styles';
  */
 export type ListMode = 'light' | 'dark';
 
+/**
+ * The "bubbly" UI voice: Quicksand's rounded terminals for labels, buttons,
+ * chips and pills. Dense body/meta text stays DM Sans (Quicksand loses
+ * legibility below ~13px), and display stays Instrument Serif.
+ */
+export const roundedFont = "'Quicksand','DM Sans',system-ui,sans-serif";
+
 const THEME_STORAGE_KEY = 'thelist.theme';
 
 /** Read the user's saved theme preference (client only; defaults to light). */
@@ -60,6 +67,13 @@ export interface ListTokens {
   thumbStripeB: string;
   // Warm, deep card shadow (the refined place card).
   cardShadow: string;
+  // Soft ambient "bubble" shadow for floating tiles/pills (gentler than cardShadow).
+  bubbleShadow: string;
+  // The cuisine-tile tints — a deliberately small family (3, assigned by hash)
+  // instead of one tint per cuisine, so tile grids read calm, not carnival.
+  tileTint: string;
+  tileTint2: string;
+  tileTint3: string;
   beenBg: string;
   beenFg: string;
   wantBg: string;
@@ -94,10 +108,12 @@ export interface ListTokens {
 
 export const listTokens: Record<ListMode, ListTokens> = {
   light: {
-    pageBg: '#EFE7D8',
+    // Washi-paper cream: a touch airier than the original #EFE7D8 so Daylight
+    // breathes (ma) — panels/cards keep their step-up hierarchy on top of it.
+    pageBg: '#F6F0E4',
     panelBg: '#FBF7F0',
     cardBg: '#FFFFFF',
-    footerBg: '#F4ECDF',
+    footerBg: '#F1EADC',
     ink: '#2B2420',
     muted: '#6F6353',
     // ~5.3:1 on cardBg (#FFFFFF) / ~4.9:1 on panelBg (#FBF7F0) — the previous
@@ -128,6 +144,10 @@ export const listTokens: Record<ListMode, ListTokens> = {
     thumbStripeA: '#E9DAC2',
     thumbStripeB: '#E0CFB2',
     cardShadow: '0 22px 46px -28px rgba(35,25,16,.4)',
+    bubbleShadow: '0 14px 34px -20px rgba(35,25,16,.35)',
+    tileTint: '#F6E0C4',
+    tileTint2: '#F0D4CE',
+    tileTint3: '#E9E7C6',
     beenBg: '#EBEFDD',
     beenFg: '#4A5639',
     wantBg: '#F6E2D8',
@@ -189,6 +209,10 @@ export const listTokens: Record<ListMode, ListTokens> = {
     thumbStripeA: '#243029',
     thumbStripeB: '#1D2A23',
     cardShadow: '0 22px 46px -28px rgba(0,0,0,.6)',
+    bubbleShadow: '0 14px 34px -20px rgba(0,0,0,.55)',
+    tileTint: '#3A3327',
+    tileTint2: '#3A2E2A',
+    tileTint3: '#333628',
     beenBg: '#24402F',
     beenFg: '#9FD3A6',
     wantBg: '#3A2A1A',
@@ -221,19 +245,20 @@ export const listTokens: Record<ListMode, ListTokens> = {
 };
 
 /**
- * Warm-dark "hero" treatment for marketing/auth drama — the same Supper palette
- * lit with terracotta + amber radial glows instead of cold near-black. Used by
- * the landing hero and the sign-up bridge so the first impression is already
- * the app's night mode, never a different brand.
+ * Washi "hero" treatment for marketing/auth — Daylight cream lit with the
+ * faintest terracotta + amber washes, so the first impression is airy paper,
+ * not a dark theatre. `glass` is now a plain white floating card (the old
+ * translucent glassmorphism disappeared on light ground); the name is kept so
+ * every consumer restyles in lockstep.
  */
 export const heroTokens = {
   bg:
-    'radial-gradient(120% 120% at 12% 8%, rgba(181,83,47,.34), transparent 46%),' +
-    ' radial-gradient(110% 110% at 92% 96%, rgba(217,145,63,.22), transparent 52%), #0E150D',
-  ink: '#F3EAD9',
-  muted: '#B9AE9B',
-  glass: 'rgba(243,234,217,.05)',
-  glassBorder: 'rgba(243,234,217,.12)',
+    'radial-gradient(120% 120% at 12% 8%, rgba(181,83,47,.09), transparent 46%),' +
+    ' radial-gradient(110% 110% at 92% 96%, rgba(217,145,63,.12), transparent 52%), #F6F0E4',
+  ink: '#2B2420',
+  muted: '#6F6353',
+  glass: '#FFFFFF',
+  glassBorder: '#EAE0CF',
   ember: 'linear-gradient(135deg,#C2603B,#A8472A)',
 };
 
@@ -280,6 +305,10 @@ const CSS_VAR_MAP: [cssVar: string, token: keyof ListTokens][] = [
   ['--shadow-2', 'shadow2'],
   ['--shadow-3', 'shadow3'],
   ['--card-shadow', 'cardShadow'],
+  ['--bubble-shadow', 'bubbleShadow'],
+  ['--tile-tint', 'tileTint'],
+  ['--tile-tint-2', 'tileTint2'],
+  ['--tile-tint-3', 'tileTint3'],
   ['--thumb-stripe-a', 'thumbStripeA'],
   ['--thumb-stripe-b', 'thumbStripeB'],
 ];
@@ -293,7 +322,7 @@ const CSS_VAR_MAP: [cssVar: string, token: keyof ListTokens][] = [
 export function brandCssVars(): string {
   const block = (mode: ListMode) =>
     CSS_VAR_MAP.map(([cssVar, token]) => `${cssVar}:${listTokens[mode][token]}`).join(';');
-  const statics = '--radius:12px;--radius-pill:999px;--space:4px';
+  const statics = '--radius:16px;--radius-card:22px;--radius-pill:999px;--space:4px';
   return (
     `:root,[data-theme="light"]{${block('light')};${statics}}` +
     `[data-theme="dark"]{${block('dark')}}`
@@ -302,9 +331,11 @@ export function brandCssVars(): string {
 
 /**
  * Build an MUI theme for a brand mode. Used for the dashboard subtree (dialogs,
- * buttons, inputs, snackbars) and, via theme.ts, the public pages. Buttons are
- * soft rectangles (radius 12); pills are reserved for selection controls, which
- * are styled inline where they're used.
+ * buttons, inputs, snackbars) and, via theme.ts, the public pages.
+ *
+ * Radius grammar (the bubbly system, kept disciplined so it never turns to
+ * mush): interactive bubbles — buttons, chips, pills — are fully round;
+ * containers — cards, dialogs — sit at 20–24; fields and menus at 16–18.
  */
 export function makeListTheme(mode: ListMode): Theme {
   const t = listTokens[mode];
@@ -341,21 +372,28 @@ export function makeListTheme(mode: ListMode): Theme {
       h2: { fontFamily: ['Instrument Serif', 'serif'].join(','), fontWeight: 400 },
       h3: { fontFamily: ['Instrument Serif', 'serif'].join(','), fontWeight: 400 },
       h4: { fontFamily: ['Instrument Serif', 'serif'].join(','), fontWeight: 400 },
+      // Sub-heads and controls speak in the rounded voice.
+      h5: { fontFamily: roundedFont, fontWeight: 700 },
+      h6: { fontFamily: roundedFont, fontWeight: 700 },
       button: {
+        fontFamily: roundedFont,
         textTransform: 'none',
-        fontWeight: 600,
+        fontWeight: 700,
       },
     },
     shape: {
-      borderRadius: 12,
+      borderRadius: 16,
     },
     spacing: 4,
     components: {
       MuiButton: {
         styleOverrides: {
           root: ({ ownerState }) => ({
-            borderRadius: 12,
-            padding: '9px 18px',
+            borderRadius: 999,
+            padding: '9px 20px',
+            // The "squish": buttons compress a touch when pressed.
+            transition: 'transform .12s ease, background-color .15s ease, border-color .15s ease',
+            '&:active': { transform: 'scale(.97)' },
             // ≥44px tap target for primary actions; small buttons stay compact.
             ...(ownerState.size !== 'small' ? { minHeight: 44 } : {}),
           }),
@@ -388,7 +426,7 @@ export function makeListTheme(mode: ListMode): Theme {
             backgroundColor: t.panelBg,
             backgroundImage: 'none',
             border: `1px solid ${t.border}`,
-            borderRadius: 16,
+            borderRadius: 22,
             boxShadow: t.shadow3,
           },
         },
@@ -396,7 +434,7 @@ export function makeListTheme(mode: ListMode): Theme {
       MuiMenu: {
         styleOverrides: {
           paper: {
-            borderRadius: 14,
+            borderRadius: 18,
             border: `1px solid ${t.border}`,
             boxShadow: t.shadow2,
           },
@@ -406,7 +444,7 @@ export function makeListTheme(mode: ListMode): Theme {
         styleOverrides: {
           root: {
             '& .MuiOutlinedInput-root': {
-              borderRadius: 12,
+              borderRadius: 16,
               backgroundColor: t.field,
               '& fieldset': { borderColor: t.fieldBorder },
               '&:hover fieldset': { borderColor: t.borderStrong },
@@ -418,12 +456,12 @@ export function makeListTheme(mode: ListMode): Theme {
       },
       MuiChip: {
         styleOverrides: {
-          root: { borderRadius: 999, fontWeight: 500 },
+          root: { borderRadius: 999, fontFamily: roundedFont, fontWeight: 600 },
         },
       },
       MuiAlert: {
         styleOverrides: {
-          root: { borderRadius: 12 },
+          root: { borderRadius: 16 },
         },
       },
       MuiRating: {

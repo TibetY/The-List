@@ -36,7 +36,7 @@ import tailwindHref from "~/tailwind.css?url";
 export const handle = { i18n: "common" };
 
 export const links: LinksFunction = () => [
-  // SVG favicon (evergreen browsers) — the same amber diamond mark used in the
+  // SVG favicon (evergreen browsers) — the same Marker pin used in the
   // dashboard/shared-list headers, so the tab icon matches the in-app brand.
   { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
   // Rasterized fallbacks: legacy browsers without SVG favicon support, and iOS
@@ -52,7 +52,7 @@ export const links: LinksFunction = () => [
   },
   {
     rel: "stylesheet",
-    href: "https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Instrument+Serif:ital@0;1&display=swap",
+    href: "https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Instrument+Serif:ital@0;1&family=Quicksand:wght@500;600;700&display=swap",
   },
 ];
 
@@ -64,7 +64,7 @@ export const meta: MetaFunction = ({ data }) => {
     { title: m.title },
     { name: "description", content: m.description },
     { name: "viewport", content: "width=device-width,initial-scale=1" },
-    { name: "theme-color", content: "#0E150D" },
+    { name: "theme-color", content: "#F6F0E4" },
   ];
 };
 
@@ -86,12 +86,12 @@ export default function App() {
   useChangeLanguage(locale);
 
   return (
-    <html lang={locale} dir={i18n.dir(locale)} data-theme="dark">
+    <html lang={locale} dir={i18n.dir(locale)} data-theme="light">
       <head>
         <Meta />
         <Links />
         {/* Brand design tokens as CSS custom properties (generated from the same
-            source as the MUI theme). Public pages inherit the dark set; the
+            source as the MUI theme). Public pages inherit the light set; the
             dashboard/profile override with data-theme on their own root. */}
         <style dangerouslySetInnerHTML={{ __html: brandCssVars() }} />
       </head>
@@ -157,7 +157,7 @@ export function ErrorBoundary() {
               px: 3,
             }}
           >
-            <Typography variant="h3" component="h1" sx={{ fontWeight: 800 }}>
+            <Typography variant="h3" component="h1">
               {title}
             </Typography>
             <Typography variant="body1" sx={{ color: "text.secondary", maxWidth: 440 }}>

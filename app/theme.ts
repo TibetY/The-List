@@ -1,14 +1,14 @@
 import { createTheme } from '@mui/material/styles';
-import { listTokens, heroTokens } from '~/listTheme';
+import { listTokens, heroTokens, roundedFont } from '~/listTheme';
 
 /**
  * Public-surface theme (landing, auth, nav, error pages). This is the brand's
- * "Supper" night mode — the SAME warm editorial system as the app, lit with
- * terracotta + amber over deep green-black, never cold #0a0a0f. Built from the
- * shared dark tokens so the two never drift apart, with a few marketing-only
- * extras (warm frosted glass, hero accents) exposed on the palette.
+ * "Daylight" washi mode — airy cream paper, ink text, terracotta as the single
+ * accent, buttons as soft pills. Built from the shared light tokens so the
+ * public pages and the app never drift apart, with a few marketing-only
+ * extras (floating white cards, hero washes) exposed on the palette.
  */
-const d = listTokens.dark;
+const l = listTokens.light;
 
 declare module '@mui/material/styles' {
   interface Palette {
@@ -43,30 +43,30 @@ declare module '@mui/material/styles' {
 
 const theme = createTheme({
   palette: {
-    mode: 'dark',
+    mode: 'light',
     background: {
-      default: d.pageBg,
-      paper: d.cardBg,
+      default: l.pageBg,
+      paper: l.cardBg,
     },
     primary: {
-      main: d.accent,
-      light: d.accentHover,
-      dark: '#C77C34',
-      contrastText: d.accentText,
+      main: l.accent,
+      light: '#C2603B',
+      dark: l.accentHover,
+      contrastText: l.accentText,
     },
     secondary: {
-      main: d.secondary,
+      main: l.secondary,
     },
     accent: {
-      main: d.accent,
-      light: d.accentHover,
-      dark: '#C77C34',
-      contrastText: d.accentText,
+      main: l.accent,
+      light: '#C2603B',
+      dark: l.accentHover,
+      contrastText: l.accentText,
     },
     glass: {
       background: heroTokens.glass,
       border: heroTokens.glassBorder,
-      hover: 'rgba(243,234,217,0.08)',
+      hover: '#FFFDF9',
     },
     hero: {
       background: heroTokens.bg,
@@ -75,13 +75,13 @@ const theme = createTheme({
       ember: heroTokens.ember,
     },
     text: {
-      primary: d.ink,
-      secondary: d.muted,
-      disabled: d.faint,
+      primary: l.ink,
+      secondary: l.muted,
+      disabled: l.faint,
     },
-    error: { main: d.error },
-    success: { main: d.success },
-    divider: d.border,
+    error: { main: l.error },
+    success: { main: l.success },
+    divider: l.border,
   },
   typography: {
     fontFamily: ['DM Sans', 'system-ui', '-apple-system', 'sans-serif'].join(','),
@@ -90,27 +90,28 @@ const theme = createTheme({
     h2: { fontFamily: ['Instrument Serif', 'serif'].join(','), fontWeight: 400, letterSpacing: '-0.01em' },
     h3: { fontFamily: ['Instrument Serif', 'serif'].join(','), fontWeight: 400 },
     h4: { fontFamily: ['Instrument Serif', 'serif'].join(','), fontWeight: 400 },
-    h5: { fontWeight: 600 },
-    h6: { fontWeight: 600 },
+    h5: { fontFamily: roundedFont, fontWeight: 700 },
+    h6: { fontFamily: roundedFont, fontWeight: 700 },
     button: {
+      fontFamily: roundedFont,
       textTransform: 'none',
-      fontWeight: 600,
+      fontWeight: 700,
     },
   },
   shape: {
-    borderRadius: 12,
+    borderRadius: 16,
   },
   components: {
     MuiCssBaseline: {
       styleOverrides: {
         body: {
-          backgroundColor: d.pageBg,
-          color: d.ink,
+          backgroundColor: l.pageBg,
+          color: l.ink,
           scrollbarWidth: 'thin',
-          scrollbarColor: 'rgba(239,228,210,0.18) transparent',
+          scrollbarColor: 'rgba(43,36,32,0.18) transparent',
         },
         '*:focus-visible': {
-          // Terracotta reads on both the cream app and this warm-dark chrome.
+          // Terracotta reads on both the cream chrome and the Supper app mode.
           outline: '2px solid #B5532F',
           outlineOffset: '2px',
         },
@@ -119,33 +120,33 @@ const theme = createTheme({
     MuiButton: {
       styleOverrides: {
         root: ({ ownerState }) => ({
-          borderRadius: 12,
-          padding: '10px 22px',
+          borderRadius: 999,
+          padding: '10px 24px',
           fontSize: '0.95rem',
-          transition: 'all 0.2s ease',
+          transition: 'transform .12s ease, background-color .15s ease, border-color .15s ease, box-shadow .15s ease',
+          '&:active': { transform: 'scale(.97)' },
           ...(ownerState.size !== 'small' ? { minHeight: 44 } : {}),
         }),
         contained: {
-          backgroundColor: d.accent,
-          color: d.accentText,
+          backgroundColor: l.accent,
+          color: l.accentText,
           boxShadow: 'none',
           '&:hover': {
-            backgroundColor: d.accentHover,
-            boxShadow: '0 6px 20px rgba(217,145,63,0.28)',
-            transform: 'translateY(-1px)',
+            backgroundColor: l.accentHover,
+            boxShadow: '0 10px 24px -12px rgba(181,83,47,.5)',
           },
         },
         outlined: {
-          borderColor: d.borderStrong,
-          color: d.ink,
+          borderColor: l.borderStrong,
+          color: l.ink,
           '&:hover': {
-            borderColor: d.accent,
-            backgroundColor: 'rgba(217,145,63,0.08)',
+            borderColor: l.accent,
+            backgroundColor: 'rgba(181,83,47,0.06)',
           },
         },
         text: {
-          color: d.ink,
-          '&:hover': { backgroundColor: 'rgba(243,234,217,0.06)' },
+          color: l.ink,
+          '&:hover': { backgroundColor: 'rgba(43,36,32,0.05)' },
         },
       },
     },
@@ -153,14 +154,13 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           background: heroTokens.glass,
-          backdropFilter: 'blur(16px)',
           border: `1px solid ${heroTokens.glassBorder}`,
-          borderRadius: 20,
-          transition: 'all 0.3s ease',
+          borderRadius: 22,
+          boxShadow: l.bubbleShadow,
+          transition: 'transform 0.25s ease, box-shadow 0.25s ease',
           '&:hover': {
-            border: '1px solid rgba(243,234,217,0.2)',
             transform: 'translateY(-4px)',
-            boxShadow: '0 20px 40px rgba(0,0,0,0.35)',
+            boxShadow: l.shadow2,
           },
         },
       },
@@ -168,11 +168,11 @@ const theme = createTheme({
     MuiDialog: {
       styleOverrides: {
         paper: {
-          background: d.cardBg,
+          background: l.panelBg,
           backgroundImage: 'none',
-          border: `1px solid ${d.border}`,
-          borderRadius: 16,
-          boxShadow: d.shadow3,
+          border: `1px solid ${l.border}`,
+          borderRadius: 22,
+          boxShadow: l.shadow3,
         },
       },
     },
@@ -180,41 +180,41 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           '& .MuiOutlinedInput-root': {
-            borderRadius: 12,
-            backgroundColor: d.field,
-            '& fieldset': { borderColor: d.fieldBorder },
-            '&:hover fieldset': { borderColor: d.borderStrong },
-            '&.Mui-focused fieldset': { borderColor: d.accent },
+            borderRadius: 16,
+            backgroundColor: l.field,
+            '& fieldset': { borderColor: l.fieldBorder },
+            '&:hover fieldset': { borderColor: l.borderStrong },
+            '&.Mui-focused fieldset': { borderColor: l.accent },
           },
-          '& .MuiInputLabel-root': { color: d.muted },
-          '& .MuiInputLabel-root.Mui-focused': { color: d.accent },
+          '& .MuiInputLabel-root': { color: l.muted },
+          '& .MuiInputLabel-root.Mui-focused': { color: l.accent },
         },
       },
     },
     MuiChip: {
       styleOverrides: {
-        root: { borderRadius: 999, fontWeight: 500 },
+        root: { borderRadius: 999, fontFamily: roundedFont, fontWeight: 600 },
       },
     },
     MuiAppBar: {
       styleOverrides: {
         root: {
-          background: 'rgba(14,21,13,0.8)',
-          backdropFilter: 'blur(20px)',
-          borderBottom: `1px solid ${d.border}`,
+          background: 'rgba(246,240,228,0.82)',
+          backdropFilter: 'blur(14px)',
+          borderBottom: `1px solid ${l.border}`,
           boxShadow: 'none',
         },
       },
     },
     MuiRating: {
       styleOverrides: {
-        iconFilled: { color: d.rating },
-        iconHover: { color: d.accentHover },
+        iconFilled: { color: l.rating },
+        iconHover: { color: l.accentHover },
       },
     },
     MuiAlert: {
       styleOverrides: {
-        root: { borderRadius: 12 },
+        root: { borderRadius: 16 },
       },
     },
   },

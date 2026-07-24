@@ -120,16 +120,16 @@ export default function LoginPage() {
           maxWidth: 440,
           p: { xs: 3, sm: 5 },
           borderRadius: "24px",
-          background: "rgba(243, 234, 217, 0.05)",
-          backdropFilter: "blur(20px)",
-          border: "1px solid rgba(243, 234, 217, 0.12)",
+          background: "#FFFFFF",
+          border: "1px solid #EAE0CF",
+          boxShadow: "0 22px 46px -28px rgba(35,25,16,.4)",
         }}
         className="animate-fade-in-up"
       >
         <Typography
           variant="h4"
           component="h1"
-          sx={{ fontWeight: 800, mb: 1, letterSpacing: "-0.02em" }}
+          sx={{ fontFamily: "'Instrument Serif', serif", fontWeight: 400, mb: 1, letterSpacing: "-0.01em" }}
         >
           {t("login.title")}
         </Typography>

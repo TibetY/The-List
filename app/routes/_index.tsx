@@ -8,9 +8,8 @@ import {
   Star,
   Share,
 } from "@mui/icons-material";
-import Logo from "~/components/Logo";
 import { createSupabaseServerClient } from "~/supabase.server";
-import { heroTokens } from "~/listTheme";
+import { heroTokens, listTokens, roundedFont } from "~/listTheme";
 
 // Signed-in users don't need the marketing page — send them straight to their
 // lists so the hero's CTAs are never shown out of context.
@@ -23,7 +22,20 @@ export const loader: LoaderFunction = async ({ request }) => {
   return json({});
 };
 
-const ACCENT = "#D9913F"; // amber — the app's "Supper" accent, used on the warm-dark hero
+const t0 = listTokens.light;
+const ACCENT = t0.accent; // terracotta — Daylight's single accent
+
+/** The decorative cuisine bubbles floating under the hero. Emoji's one job in
+ *  the brand is cuisine glyphs; the tint family is deliberately tiny (3). */
+const CUISINE_BUBBLES: { glyph: string; tint: string }[] = [
+  { glyph: "🍣", tint: t0.tileTint },
+  { glyph: "🍜", tint: t0.tileTint2 },
+  { glyph: "🍝", tint: t0.tileTint3 },
+  { glyph: "🥐", tint: t0.tileTint2 },
+  { glyph: "🌮", tint: t0.tileTint },
+  { glyph: "🍷", tint: t0.tileTint3 },
+  { glyph: "🍰", tint: t0.tileTint2 },
+];
 
 /** A small decorative restaurant card for the hero cluster (not interactive). */
 function PreviewCard({
@@ -50,9 +62,9 @@ function PreviewCard({
         alignItems: "center",
         gap: 1.5,
         p: 1.5,
-        borderRadius: "14px",
-        background: "#1C2A23",
-        border: `1px solid ${heroTokens.glassBorder}`,
+        borderRadius: "18px",
+        background: t0.panelBg,
+        border: `1px solid ${t0.border}`,
       }}
     >
       <Box
@@ -61,9 +73,9 @@ function PreviewCard({
           width: 44,
           height: 44,
           flex: "none",
-          borderRadius: "11px",
-          background: "linear-gradient(135deg,#2A3A2F,#1A241E)",
-          color: "rgba(217,145,63,.7)",
+          borderRadius: "14px",
+          background: t0.monoGrad,
+          color: t0.monoInitial,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -75,27 +87,28 @@ function PreviewCard({
       </Box>
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
-          <Box sx={{ fontFamily: "'Instrument Serif', serif", fontSize: 17, color: heroTokens.ink }}>
+          <Box sx={{ fontFamily: "'Instrument Serif', serif", fontSize: 17, color: t0.ink }}>
             {name}
           </Box>
-          <Box sx={{ fontFamily: "'DM Mono', monospace", fontSize: 13, fontWeight: 600, color: "#9FD3A6" }}>
+          <Box sx={{ fontFamily: "'DM Mono', monospace", fontSize: 13, fontWeight: 600, color: t0.cost }}>
             {price}
           </Box>
         </Box>
-        <Box sx={{ color: heroTokens.muted, fontSize: 12.5, mt: "1px" }}>{meta}</Box>
+        <Box sx={{ color: t0.muted, fontSize: 12.5, mt: "1px" }}>{meta}</Box>
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mt: "5px" }}>
           <Box sx={{ color: ACCENT, fontSize: 13, letterSpacing: "1px" }}>
             {rating ? "★★★★★".slice(0, rating) + "☆☆☆☆☆".slice(0, 5 - rating) : ""}
           </Box>
           <Box
             sx={{
+              fontFamily: roundedFont,
               fontSize: 10.5,
-              fontWeight: 600,
-              px: "9px",
+              fontWeight: 700,
+              px: "10px",
               py: "3px",
               borderRadius: "999px",
-              background: been ? "#24402F" : "#3A2A1A",
-              color: been ? "#9FD3A6" : "#E0A85C",
+              background: been ? t0.beenBg : t0.wantBg,
+              color: been ? t0.beenFg : t0.wantFg,
             }}
           >
             {statusLabel}
@@ -144,24 +157,24 @@ export default function Index() {
         sx={{
           flex: 1,
           pt: { xs: 14, sm: 18 },
-          pb: { xs: 8, sm: 12 },
+          pb: { xs: 6, sm: 8 },
           px: { xs: 3, sm: 4 },
         }}
       >
         <Grid container spacing={{ xs: 6, md: 8 }} alignItems="center">
           {/* Left — copy + CTAs */}
           <Grid item xs={12} md={7}>
-            <Box className="animate-fade-in-up" sx={{ mb: 3 }}>
-              <Logo />
-            </Box>
+            {/* The navbar already carries the wordmark — repeating it here read
+                as clutter, so the hero opens straight on the eyebrow. */}
             <Typography
               component="p"
               className="animate-fade-in-up delay-100"
               sx={{
+                fontFamily: roundedFont,
                 textTransform: "uppercase",
-                letterSpacing: "0.16em",
-                fontSize: "0.78rem",
-                fontWeight: 600,
+                letterSpacing: "0.18em",
+                fontSize: "0.76rem",
+                fontWeight: 700,
                 color: ACCENT,
                 mb: 2,
               }}
@@ -195,7 +208,7 @@ export default function Index() {
                 fontSize: { xs: "1rem", sm: "1.15rem" },
                 maxWidth: 520,
                 mb: 4,
-                lineHeight: 1.6,
+                lineHeight: 1.65,
               }}
             >
               {t("landing.subtitle")}
@@ -218,14 +231,13 @@ export default function Index() {
                   px: 4.5,
                   py: 1.5,
                   fontSize: "1.05rem",
-                  fontWeight: 600,
                   color: "#fff",
                   background: heroTokens.ember,
-                  borderRadius: "12px",
+                  boxShadow: "0 14px 30px -14px rgba(168,71,42,.55)",
                   "&:hover": {
                     background: heroTokens.ember,
                     filter: "brightness(1.05)",
-                    transform: "translateY(-1px)",
+                    boxShadow: "0 16px 34px -14px rgba(168,71,42,.6)",
                   },
                 }}
               >
@@ -240,16 +252,43 @@ export default function Index() {
                   px: 4.5,
                   py: 1.5,
                   fontSize: "1.05rem",
-                  color: heroTokens.ink,
-                  borderColor: heroTokens.glassBorder,
-                  "&:hover": {
-                    borderColor: ACCENT,
-                    backgroundColor: "rgba(217,145,63,0.08)",
-                  },
                 }}
               >
                 {t("landing.ctaSecondary")}
               </Button>
+            </Box>
+
+            {/* Cuisine bubbles — pure decoration, gently bobbing. */}
+            <Box
+              aria-hidden
+              className="animate-fade-in-up delay-400"
+              sx={{
+                display: "flex",
+                gap: { xs: 1.25, sm: 1.75 },
+                mt: { xs: 5, sm: 7 },
+                flexWrap: "wrap",
+              }}
+            >
+              {CUISINE_BUBBLES.map((b, i) => (
+                <Box
+                  key={`${b.glyph}-${i}`}
+                  className={i % 2 === 0 ? "animate-bob" : "animate-bob-alt"}
+                  sx={{
+                    width: { xs: 46, sm: 54 },
+                    height: { xs: 46, sm: 54 },
+                    borderRadius: "18px",
+                    background: b.tint,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: { xs: 22, sm: 26 },
+                    boxShadow: t0.bubbleShadow,
+                    animationDelay: `${(i % 5) * 0.7}s`,
+                  }}
+                >
+                  {b.glyph}
+                </Box>
+              ))}
             </Box>
           </Grid>
 
@@ -259,11 +298,10 @@ export default function Index() {
               className="animate-fade-in-up delay-200"
               sx={{
                 p: 2.5,
-                borderRadius: "22px",
+                borderRadius: "26px",
                 background: heroTokens.glass,
                 border: `1px solid ${heroTokens.glassBorder}`,
-                backdropFilter: "blur(14px)",
-                boxShadow: "0 24px 60px rgba(0,0,0,.45)",
+                boxShadow: t0.cardShadow,
               }}
             >
               <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 2, px: 0.5 }}>
@@ -277,9 +315,9 @@ export default function Index() {
                         height: 30,
                         borderRadius: "50%",
                         ml: i === 0 ? 0 : "-9px",
-                        border: "2px solid #15201B",
-                        background: i === 0 ? ACCENT : i === 1 ? "#4F7A5A" : "#2F3E33",
-                        color: i === 0 ? "#15201B" : "#EFE7D6",
+                        border: "2px solid #FFFFFF",
+                        background: i === 0 ? ACCENT : i === 1 ? t0.avatar2 : t0.avatar3,
+                        color: i === 2 ? t0.ink : "#FFF9EE",
                         fontSize: 12,
                         fontWeight: 600,
                         display: "flex",
@@ -342,20 +380,33 @@ export default function Index() {
               <Box
                 sx={{
                   p: 4,
-                  borderRadius: "20px",
+                  borderRadius: "22px",
                   background: heroTokens.glass,
                   border: `1px solid ${heroTokens.glassBorder}`,
-                  backdropFilter: "blur(12px)",
-                  transition: "all 0.3s ease",
+                  boxShadow: t0.bubbleShadow,
+                  transition: "transform 0.25s ease, box-shadow 0.25s ease",
                   height: "100%",
                   "&:hover": {
-                    background: "rgba(243,234,217,0.08)",
-                    border: "1px solid rgba(243,234,217,0.2)",
                     transform: "translateY(-4px)",
+                    boxShadow: t0.shadow2,
                   },
                 }}
               >
-                <Box sx={{ mb: 2 }}>{feature.icon}</Box>
+                <Box
+                  aria-hidden
+                  sx={{
+                    mb: 2,
+                    width: 56,
+                    height: 56,
+                    borderRadius: "18px",
+                    background: t0.wantBg,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {feature.icon}
+                </Box>
                 <Typography
                   component="h3"
                   sx={{
@@ -384,6 +435,7 @@ export default function Index() {
           textAlign: "center",
           py: 4,
           borderTop: `1px solid ${heroTokens.glassBorder}`,
+          background: t0.footerBg,
         }}
       >
         <Typography variant="body2" sx={{ color: heroTokens.muted }}>

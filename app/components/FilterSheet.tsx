@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Box, Popover, Drawer, useMediaQuery, useTheme } from '@mui/material';
 import { FilterList, ArrowUpward, ArrowDownward } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import type { listTokens } from '~/listTheme';
+import { roundedFont, type listTokens } from '~/listTheme';
+import { cuisineEmoji } from '~/utils/cuisineEmoji';
 
 type Tokens = (typeof listTokens)['light'];
 type MultiSetter = (updater: string[] | ((prev: string[]) => string[])) => void;
@@ -73,9 +74,12 @@ export default function FilterSheet(props: FilterSheetProps) {
     borderRadius: '999px',
     padding: '6px 13px',
     fontSize: '13px',
-    fontFamily: "'DM Sans',sans-serif",
+    fontFamily: roundedFont,
+    fontWeight: 600,
     cursor: 'pointer',
     lineHeight: 1.4,
+    transition: 'transform .12s ease',
+    '&:active': { transform: 'scale(.96)' },
   });
 
   const content = (
@@ -134,6 +138,9 @@ export default function FilterSheet(props: FilterSheetProps) {
           </Box>
           {props.cuisineOptions.map((c) => (
             <Box component="button" key={c} type="button" onClick={() => props.setCuisineFilter(c)} sx={pillSx(props.cuisineFilter === c)}>
+              <Box component="span" aria-hidden sx={{ mr: '5px' }}>
+                {cuisineEmoji(c)}
+              </Box>
               {tr(`cuisines.${c}`, c)}
             </Box>
           ))}
@@ -202,7 +209,7 @@ export default function FilterSheet(props: FilterSheetProps) {
           component="button"
           type="button"
           onClick={() => setAnchor(null)}
-          sx={{ border: 'none', background: t.accent, color: t.accentText, fontFamily: "'DM Sans',sans-serif", fontWeight: 600, fontSize: '13.5px', padding: '8px 18px', borderRadius: '10px', cursor: 'pointer' }}
+          sx={{ border: 'none', background: t.accent, color: t.accentText, fontFamily: roundedFont, fontWeight: 700, fontSize: '13.5px', padding: '8px 20px', borderRadius: '999px', cursor: 'pointer', transition: 'transform .12s ease', '&:active': { transform: 'scale(.96)' } }}
         >
           {tr('filters.done')}
         </Box>
@@ -228,8 +235,8 @@ export default function FilterSheet(props: FilterSheetProps) {
           borderRadius: '999px',
           padding: '7px 15px',
           fontSize: '13px',
-          fontWeight: 500,
-          fontFamily: "'DM Sans',sans-serif",
+          fontWeight: 600,
+          fontFamily: roundedFont,
           cursor: 'pointer',
         }}
       >
@@ -247,7 +254,7 @@ export default function FilterSheet(props: FilterSheetProps) {
           anchor="bottom"
           open={open}
           onClose={() => setAnchor(null)}
-          PaperProps={{ sx: { background: t.panelBg, borderRadius: '18px 18px 0 0', maxHeight: '82vh' } }}
+          PaperProps={{ sx: { background: t.panelBg, borderRadius: '22px 22px 0 0', maxHeight: '82vh' } }}
         >
           {content}
         </Drawer>
@@ -258,7 +265,7 @@ export default function FilterSheet(props: FilterSheetProps) {
           onClose={() => setAnchor(null)}
           anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
           transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-          slotProps={{ paper: { sx: { mt: 1, background: t.panelBg, border: `1px solid ${t.border}`, borderRadius: '14px' } } }}
+          slotProps={{ paper: { sx: { mt: 1, background: t.panelBg, border: `1px solid ${t.border}`, borderRadius: '18px' } } }}
         >
           {content}
         </Popover>

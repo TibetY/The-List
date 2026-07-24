@@ -9,7 +9,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { Restaurant, RestaurantLocation } from '~/types/restaurant';
 import type { DecoratedRestaurant } from '~/utils/decorateRestaurant';
-import type { listTokens } from '~/listTheme';
+import { roundedFont, type listTokens } from '~/listTheme';
 import RestaurantThumb from '~/components/RestaurantThumb';
 import Stars from '~/components/Stars';
 
@@ -85,7 +85,7 @@ export default function PlaceCard({
       onClick={() => onView(r)}
       sx={{
         border: `1px solid ${t.border}`,
-        borderRadius: '18px',
+        borderRadius: '22px',
         overflow: 'hidden',
         // Grid items default to min-width:auto, so the nowrap name/meta lines
         // would force the card wider than its track on narrow (2-up phone)
@@ -139,8 +139,8 @@ export default function PlaceCard({
             color: r.isBeen ? t.beenFg : t.wantFg,
             border: `1px solid ${r.isBeen ? t.beenFg : t.wantFg}33`,
             fontSize: '11.5px',
-            fontWeight: 600,
-            fontFamily: 'inherit',
+            fontWeight: 700,
+            fontFamily: roundedFont,
             padding: '4px 11px',
             borderRadius: '999px',
             backdropFilter: 'blur(4px)',
@@ -298,11 +298,11 @@ export function BookingPill({ locations, tokens: t }: { locations: RestaurantLoc
           alignItems: 'center',
           background: t.accent,
           color: t.accentText,
-          borderRadius: '10px',
-          padding: '6px 11px',
-          fontFamily: "'DM Sans',sans-serif",
+          borderRadius: '999px',
+          padding: '6px 13px',
+          fontFamily: roundedFont,
           fontSize: '12px',
-          fontWeight: 600,
+          fontWeight: 700,
           textDecoration: 'none',
           whiteSpace: 'nowrap',
           // Long platform names (FR "Réserver · OpenTable") must never widen a

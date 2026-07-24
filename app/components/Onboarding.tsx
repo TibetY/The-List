@@ -3,7 +3,7 @@ import { Box, CircularProgress } from '@mui/material';
 import { Check, ErrorOutline, Add } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import type { PlaceCandidate } from '~/types/restaurant';
-import type { listTokens } from '~/listTheme';
+import { roundedFont, type listTokens } from '~/listTheme';
 import PlaceSearch from '~/components/PlaceSearch';
 import NearbyAdds from '~/components/NearbyAdds';
 import RestaurantThumb from '~/components/RestaurantThumb';
@@ -28,6 +28,8 @@ interface OnboardingProps {
 interface StarterPack {
   id: string;
   labelKey: string;
+  /** The pack's food glyph — emoji's one job in this UI is cuisine/pack tiles. */
+  glyph: string;
   places: PlaceSeed[];
 }
 
@@ -35,6 +37,7 @@ const STARTER_PACKS: StarterPack[] = [
   {
     id: 'paris-wine',
     labelKey: 'onboarding.packParisWine',
+    glyph: '🍷',
     places: [
       { name: 'Septime', address: '80 Rue de Charonne, 75011 Paris, France' },
       { name: 'Clamato', address: '80 Rue de Charonne, 75011 Paris, France' },
@@ -44,6 +47,7 @@ const STARTER_PACKS: StarterPack[] = [
   {
     id: 'sf-classics',
     labelKey: 'onboarding.packSfClassics',
+    glyph: '🥖',
     places: [
       { name: 'Zuni Café', address: '1658 Market St, San Francisco, CA' },
       { name: 'Tartine Bakery', address: '600 Guerrero St, San Francisco, CA' },
@@ -53,6 +57,7 @@ const STARTER_PACKS: StarterPack[] = [
   {
     id: 'date-night',
     labelKey: 'onboarding.packDateNight',
+    glyph: '🍾',
     places: [
       { name: 'Le Bernardin', address: '155 West 51st St, New York, NY' },
       { name: 'Alinea', address: '1723 North Halsted St, Chicago, IL' },
@@ -154,7 +159,7 @@ export default function Onboarding({
               key={c.key}
               sx={{
                 border: `1px solid ${t.border}`,
-                borderRadius: '14px',
+                borderRadius: '16px',
                 overflow: 'hidden',
                 background: t.cardBg,
                 transition: 'box-shadow .5s ease',
@@ -210,12 +215,30 @@ export default function Onboarding({
       </Box>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3,1fr)' }, gap: '12px', textAlign: 'left' }}>
-        {STARTER_PACKS.map((pack) => (
+        {STARTER_PACKS.map((pack, i) => (
           <Box
             key={pack.id}
-            sx={{ border: `1px solid ${t.border}`, borderRadius: '14px', background: t.cardBg, padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}
+            sx={{ border: `1px solid ${t.border}`, borderRadius: '22px', background: t.cardBg, boxShadow: t.bubbleShadow, padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}
           >
-            <Box sx={{ fontFamily: serifFont, fontSize: 18, color: t.ink }}>{tr(pack.labelKey)}</Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Box
+                aria-hidden
+                sx={{
+                  width: 40,
+                  height: 40,
+                  flex: 'none',
+                  borderRadius: '14px',
+                  background: [t.tileTint, t.tileTint2, t.tileTint3][i % 3],
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 20,
+                }}
+              >
+                {pack.glyph}
+              </Box>
+              <Box sx={{ fontFamily: serifFont, fontSize: 18, color: t.ink }}>{tr(pack.labelKey)}</Box>
+            </Box>
             <Box sx={{ color: t.muted, fontSize: 12.5, lineHeight: 1.5, flex: 1 }}>
               {pack.places.map((p) => p.name).join(' · ')}
             </Box>
@@ -230,14 +253,16 @@ export default function Onboarding({
                 justifyContent: 'center',
                 gap: '6px',
                 border: `1px solid ${t.pillBorder}`,
-                borderRadius: '10px',
+                borderRadius: '999px',
                 background: 'transparent',
                 color: busy ? t.faint : t.accent,
-                fontFamily: "'DM Sans',sans-serif",
-                fontWeight: 600,
+                fontFamily: roundedFont,
+                fontWeight: 700,
                 fontSize: '13.5px',
-                padding: '8px 12px',
+                padding: '8px 14px',
                 cursor: busy ? 'default' : 'pointer',
+                transition: 'transform .12s ease, background-color .15s ease',
+                '&:active': busy ? {} : { transform: 'scale(.97)' },
                 '&:hover': busy ? {} : { background: t.searchBg },
               }}
             >
